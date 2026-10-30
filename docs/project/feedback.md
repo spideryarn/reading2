@@ -12,6 +12,7 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
   microphone is on, the one-minute deadline) and
   [§ The draft survives a reload](#the-draft-survives-a-reload-since-2026-10-10)
 - [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark), [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07) (an admin's four statuses, the `#number`, and the note's comment), and [§ Questions for an admin](#questions-for-an-admin-and-replies-to-them-since-2026-10-07) (an agent's questions at the top of *Needs a decision*, the reply box and its microphone, where a reply is stored), and [§ Adding to an earlier report](#adding-to-an-earlier-report-since-2026-10-10) (an admin's addendum to their own report)
+- [§ How old the release is](#how-old-the-release-is-for-an-admin-since-2026-10-30) — an admin's line under the title: the release's age and a link to `/changelog`
 - [§ The thank-you](#the-thank-you-and-getting-out-of-it) — the message after sending, and the toast
 - [§ The keyboard](#the-keyboard-and-the-button-under-it) — the phone keyboard's Done/Send, and shortcuts
 - [§ Where it came from](#where-it-came-from) — Greg's original request, verbatim
@@ -643,6 +644,23 @@ box shows again.
 
 [261010o](../plans/261010o-addendum-to-an-earlier-feedback-report.md) has the design, what the
 review changed, and what was deferred (other readers, `/admin/feedback`).
+
+### How old the release is, for an admin, since 2026-10-30
+
+> In the feedback dialogue, for admins: at the top, can we include a link to the changelog and some
+> kind of indication of when the most recent release came out? You know, three hours ago, six hours
+> ago, whatever.
+>
+> — Greg, 2026-10-30 (`spya-hgpctx`)
+
+Under the title, for an admin only: *"Released 3 hours ago · Changelog"*, the link opening
+`/changelog` in a new tab. The time is the build time, which is what a release's `version` is
+([changelog.md § The pending release](changelog.md#the-pending-release)); when the deploy watcher
+has seen a different build live, that one is dated. The line says whether this tab is older or an
+older release is live after a rollback; it does not mistake every difference for a newer deploy.
+It sits under the head, not in it, so Close is still what the dialog focuses first.
+`FeedbackDialog.tsx § ReleaseLine`;
+[261030d](../plans/261030d-feedback-dialog-shows-admins-the-release-age-and-a-changelog-link.md).
 
 ## The thank-you, and getting out of it
 
