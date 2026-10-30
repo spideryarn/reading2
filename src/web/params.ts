@@ -154,6 +154,11 @@ export function currentAt(): string | null {
  * renders `null`. A diagnostic switched on by a link has no reason to react to
  * the URL changing under it either.
  *
+ * **One way in of three since 2026-10-30**, and the only one that needs a
+ * reload: the administrator's command bar starts the probe on the page as it
+ * stands (probe-switch.ts), and ViewportProbe.tsx § Off unless asked for says
+ * why that had to exist.
+ *
  * `parseAsBit` rather than `=== "1"` so the spelling is the app's — `probe=0`
  * means off rather than "some string I did not recognise", the same as `text`
  * and `spine`.

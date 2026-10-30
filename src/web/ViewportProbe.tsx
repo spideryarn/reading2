@@ -66,19 +66,41 @@
  * reading as another's value, which is precisely the failure this instrument
  * exists to rule out.
  *
- * ## Off unless asked for
+ * ## Off unless asked for, and three ways to ask
  *
  * `?probe=1`, read **once at mount and never subscribed to** — `currentAt()` in
- * params.ts is the same trick and gives the same reason. Without it this
- * renders `null`, registers no listener and adds nothing to the DOM. There is
- * no other way in: an installed iOS web app has no address bar, so the URL has
- * to be there when the app cold-starts.
+ * params.ts is the same trick and gives the same reason. An installed iOS web
+ * app has no address bar, so that URL has to be there when the app
+ * cold-starts.
+ *
+ * **That was the only way in until 2026-10-30, and it could not catch the bug
+ * it was waiting for.** Greg's iPad leaves the bottom bar partway up the screen
+ * *sometimes* (spya-u0vb0a), and adding the flag reloads the page, which very
+ * probably clears the state. So now:
+ *
+ * - **The administrator's reading view records silently from page load**, the
+ *   newest `RING` samples, with nothing on screen (never a reader's, never
+ *   under *view as*).
+ * - **The command bar's *Viewport probe* row** (admin-commands.ts) shows the
+ *   panel over that recording, through probe-switch.ts. Opening the command
+ *   bar focuses a text field, which on an iPad can bring up the keyboard that
+ *   is itself a suspect — which is why the recording has to have started
+ *   before it (GPT Sol, plan review of 261030e, P1).
+ *
+ * For everybody else, with no flag, this renders `null`, registers no viewport
+ * listener and adds nothing to the DOM; what it costs is one session read and
+ * one subscription to a flag that never changes for them.
+ * docs/plans/261030e-the-bottom-bar-floats-on-an-ipad-after-a-rotation-and-the-probe-that-can-catch-it.md.
  */
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { isAdmin } from "../admin.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { currentProbe } from "./params.js";
+import { useProbeMounted, useProbeStarted } from "./probe-switch.js";
 import { controlsBar } from "./scroll.js";
 import { useCopy } from "./useCopy.js";
+import { useSession } from "./useSession.js";
 
 /** How many samples are kept before recording stops. */
 const CAP = 600;
@@ -93,6 +115,28 @@ const CAP = 600;
 function full(count: number): boolean {
   return count >= CAP;
 }
+
+/**
+ * **Until the panel is shown, the newest samples are kept instead**, and only
+ * this many. The administrator's probe records from page load with nothing on
+ * screen (`record` below), so that the minutes *before* he notices the bar
+ * floating are already in the trace when he opens the command bar to show it
+ * — and opening the command bar focuses a text field, which on an iPad brings
+ * up the keyboard that is one of the suspects (GPT Sol, plan review of 261030e,
+ * P1). A recorder that ran for a whole reading session with the oldest-kept
+ * rule would be full of the first five minutes, so the silent phase is a ring
+ * and the shown phase keeps the rule above.
+ */
+const RING = 200;
+
+/**
+ * **A rotation's numbers are not final when its event fires** (WebKit bug
+ * 237851), so each window resize, orientation change and visual-viewport
+ * resize books a `settled` sample this long afterwards. Coalesced: a later
+ * event moves the booking rather than adding one, or a keyboard's slide would
+ * fill the trace with delayed rows (Sol P4).
+ */
+const SETTLE_MS = [300, 1000] as const;
 
 type Vis = "gone" | "off" | "on";
 
@@ -119,6 +163,7 @@ interface Sample {
     | "window-resize"
     | "orientationchange"
     | "laid-out"
+    | "settled"
     | "mark";
   /** `[innerWidth, innerHeight, scrollX, scrollY]`. */
   readonly win: Box;
@@ -145,6 +190,30 @@ interface Sample {
   readonly dm: string;
   /** `:root[data-bars]` — the switch that takes `--dock-bottom` to `0px` while you read. */
   readonly bars: string;
+  /**
+   * **What tells a floating bottom bar's causes apart, as far as script can**
+   * (plan 261030e § Diagnosis, from spya-u0vb0a). Traces taken before
+   * 2026-10-30 have none of it, which scripts/viewport-trace.ts tolerates.
+   *
+   * - `rect.floor` (above, in `rect`) is an untransformed, invisible
+   *   `position: fixed; bottom: 0` box beside the dock: where `bottom: 0`
+   *   really lands, apart from the dock's own slide. Its bottom against
+   *   `vv.offsetTop + vv.height` is the gap a stale pan or a stale height
+   *   leaves.
+   * - `root`: `[documentElement.clientHeight, scrollHeight, scrollingElement.scrollTop]`,
+   *   the layout viewport's height beside `win`'s visual one.
+   * - `vvp`: `visualViewport.[pageTop, pageLeft]`, a pan in page coordinates.
+   * - `dockT`: the dock's computed `transform`, so a bar mid-slide is not
+   *   read as a misplaced one.
+   * - `hit`: what `elementFromPoint` finds at the middle of the dock's
+   *   rectangle. **A comparison of hit-testing with the CSSOM, not with where
+   *   the pixels are**: something covering the dock fails it too, and only a
+   *   screenshot shows painting (Sol P3).
+   */
+  readonly root: [number, number, number];
+  readonly vvp: [number, number] | null;
+  readonly dockT: string | null;
+  readonly hit: { readonly at: [number, number]; readonly sig: string | null; readonly inDock: boolean } | null;
 }
 
 const round = (n: number): number => Math.round(n * 10) / 10;
@@ -238,6 +307,31 @@ const SPAN_B: CSSProperties = {
   paddingBottom: "var(--safe-top, 0px)",
 };
 
+/**
+ * **Where `bottom: 0` lands**, with no transform of its own — `Sample.rect.floor`.
+ * A box rather than a zero-height line so every engine reports a rectangle.
+ */
+const FLOOR: CSSProperties = {
+  position: "fixed",
+  bottom: 0,
+  left: 0,
+  width: 1,
+  height: 1,
+  visibility: "hidden",
+  pointerEvents: "none",
+};
+
+/** The silent recorder's wrapper: laid out, invisible, untouchable. */
+const SILENT: CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  width: 0,
+  height: 0,
+  visibility: "hidden",
+  pointerEvents: "none",
+};
+
 const TOKENS_A = ["--bar-bottom", "--dock-bottom", "--safe-bottom", "--hint-h"] as const;
 const TOKENS_B = ["--mode-w", "--spine-w", "--kb-inset", "--safe-top"] as const;
 
@@ -294,6 +388,7 @@ function take(
   spanA: HTMLElement | null,
   spanB: HTMLElement | null,
   laidOutWidth: number | null,
+  floor: HTMLElement | null,
 ): Sample {
   const vv = window.visualViewport ?? null;
   const band = document.querySelector(".mode-band");
@@ -337,12 +432,36 @@ function take(
       body: box(body),
       composer: box(composer),
       focus: box(focused),
+      floor: box(floor),
+      root: box(document.documentElement),
+      /* `body` is taken, by the band's scroller, in traces older than this. */
+      page: box(document.body),
     },
     of: { body: sig(body), composer: sig(composer), focus: sig(focused) },
     vis: { dock: visible(dock), hint: visible(hint), band: visible(band) },
     dm: displayMode(),
     bars: document.documentElement.dataset.bars ?? "",
+    root: [
+      round(document.documentElement.clientHeight),
+      round(document.documentElement.scrollHeight),
+      round(document.scrollingElement?.scrollTop ?? 0),
+    ],
+    vvp: vv ? [round(vv.pageTop), round(vv.pageLeft)] : null,
+    dockT: dock ? getComputedStyle(dock).transform : null,
+    hit: hitTest(dock),
   };
+}
+
+/**
+ * What a tap at the middle of the dock's rectangle would land on — see
+ * `Sample.hit` for what this can and cannot show.
+ */
+function hitTest(dock: Element | null): Sample["hit"] {
+  if (!dock || typeof document.elementFromPoint !== "function") return null;
+  const r = dock.getBoundingClientRect();
+  const at: [number, number] = [round(r.x + r.width / 2), round(r.y + r.height / 2)];
+  const el = document.elementFromPoint(at[0], at[1]);
+  return { at, sig: sig(el), inDock: el !== null && dock.contains(el) };
 }
 
 /**
@@ -356,13 +475,14 @@ function serialise(samples: readonly Sample[], head: Record<string, unknown>): s
 }
 
 /**
- * **`?probe=1`, or nothing at all.**
+ * **The address flag, the administrator's silent recorder, or nothing at all.**
  *
  * The flag is read once with a lazy initialiser rather than through
  * `useQueryState`, so an ordinary reader pays for no address subscription and
  * no re-render; a diagnostic has no reason to react to the URL changing under
- * it. Everything else lives in the child, which is not mounted when the flag is
- * off — so there is nothing in the DOM and no listener anywhere.
+ * it. The child is also mounted for the administrator's silent recording. For
+ * an ordinary reader without the flag it is not mounted, so there is nothing
+ * in the DOM and no viewport listener anywhere.
  */
 export function ViewportProbe({
   laidOutWidth,
@@ -370,14 +490,35 @@ export function ViewportProbe({
   /** `useWindowWidth`'s answer — the width the reader actually laid out for. */
   laidOutWidth?: number;
 }) {
-  const [on] = useState(currentProbe);
-  if (!on) return null;
-  return <ProbePanel laidOutWidth={laidOutWidth ?? null} />;
+  const [fromAddress] = useState(currentProbe);
+  /* The command bar's way in (probe-switch.ts): a subscription to one module
+     flag that changes at most once, not to the address. */
+  const started = useProbeStarted();
+  useProbeMounted();
+  const shown = fromAddress || started;
+  /* **The administrator's reading view records from page load with nothing on
+     screen**, never a reader's, and never under *view as* (CommandBar's own
+     test for its admin rows). Then the *Viewport probe* row shows a trace that
+     already holds the moments before the command bar was opened. See `RING`. */
+  const { user } = useSession();
+  const silently = isAdmin(user?.id) && viewAsNonce() === null;
+  if (!shown && !silently) return null;
+  return <ProbePanel laidOutWidth={laidOutWidth ?? null} shown={shown} />;
 }
 
-function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
+function ProbePanel({ laidOutWidth, shown }: { laidOutWidth: number | null; shown: boolean }) {
   const spanA = useRef<HTMLSpanElement>(null);
   const spanB = useRef<HTMLSpanElement>(null);
+  const floor = useRef<HTMLSpanElement>(null);
+  /* Read by `record`, which is stable, so through a ref like `laidOut`. */
+  const showing = useRef(shown);
+  /* Commit this alongside the wrapper change. Writing it during render can
+     expose an uncommitted `shown` value to a viewport event during a concurrent
+     render, making the silent ring start behaving like the visible, capped
+     trace before the panel and its replacement instrument refs exist. */
+  useLayoutEffect(() => {
+    showing.current = shown;
+  }, [shown]);
   /* **The samples live in a ref and only the count is state.** iOS fires
      visual-viewport `scroll` continuously while the keyboard slides, and this
      panel is on screen at the time: re-rendering an array of six hundred
@@ -386,6 +527,7 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
      asked for. */
   const samples = useRef<Sample[]>([]);
   const since = useRef(0);
+  const settleTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -399,18 +541,36 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
   const said =
     copyState === "copied" ? "copied" : copyState === "failed" ? "copy refused — select the box" : "";
 
+  const cancelSettled = useCallback(() => {
+    for (const id of settleTimers.current) clearTimeout(id);
+    settleTimers.current = [];
+  }, []);
+
   const record = useCallback((ev: Sample["ev"]) => {
-    if (full(samples.current.length)) return;
+    /* A `mark` is always taken, even into a full trace: it is the one row
+       somebody asked for by hand, usually at the moment that matters (Sol P4). */
+    if (showing.current && ev !== "mark" && full(samples.current.length)) return;
     /* One reading of the clock, used both to start it and to stamp the row, so
        the first sample is `t: 0` rather than however long a first `take()`
        happened to run for. A trace is read as an offset from the tap. */
     const now = performance.now();
     if (since.current === 0) since.current = now;
     samples.current.push(
-      take(ev, now - since.current, spanA.current, spanB.current, laidOut.current),
+      take(ev, now - since.current, spanA.current, spanB.current, laidOut.current, floor.current),
     );
+    /* Silent, the newest `RING` are kept and nothing re-renders: there is no
+       count on screen to update. */
+    if (!showing.current) {
+      if (samples.current.length > RING) samples.current.splice(0, samples.current.length - RING);
+      return;
+    }
     setCount(samples.current.length);
   }, []);
+
+  /* The count catches up when the panel appears over a silent recording. */
+  useEffect(() => {
+    if (shown) setCount(samples.current.length);
+  }, [shown]);
 
   /* **The reader's width, through a ref**, so `record` can stay stable. A
      window event's row therefore carries the width *before* the reader has
@@ -420,17 +580,32 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
 
   useEffect(() => {
     /* One sample before anything moves, so every trace has a keyboard-closed
-       row to compare the rest against. */
-    record("start");
+       row to compare the rest against. Once: Strict Mode runs this effect
+       twice, and a second `start` would read as a second page load (Sol P4). */
+    if (samples.current.length === 0) record("start");
+    /* The `settled` bookings — see `SETTLE_MS`. One pair at a time. */
+    const settle = () => {
+      cancelSettled();
+      settleTimers.current = SETTLE_MS.map((ms) => setTimeout(() => record("settled"), ms));
+    };
     /* **The window's events, installed whether or not there is a visual
        viewport** — a rotation is the window's news, and an early return for a
        missing `visualViewport` would drop it (Sol F4). */
-    const onWindowResize = () => record("window-resize");
-    const onOrientation = () => record("orientationchange");
+    const onWindowResize = () => {
+      record("window-resize");
+      settle();
+    };
+    const onOrientation = () => {
+      record("orientationchange");
+      settle();
+    };
     window.addEventListener("resize", onWindowResize);
     window.addEventListener("orientationchange", onOrientation);
     const vv = window.visualViewport;
-    const onResize = () => record("resize");
+    const onResize = () => {
+      record("resize");
+      settle();
+    };
     const onScroll = () => record("scroll");
     vv?.addEventListener("resize", onResize);
     vv?.addEventListener("scroll", onScroll);
@@ -439,8 +614,9 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
       window.removeEventListener("orientationchange", onOrientation);
       vv?.removeEventListener("resize", onResize);
       vv?.removeEventListener("scroll", onScroll);
+      cancelSettled();
     };
-  }, [record]);
+  }, [cancelSettled, record]);
 
   /* A `laid-out` row each time the reader's stored width changes, after the
      render that used it. Compared with the last width seen rather than skipped
@@ -497,6 +673,28 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
     write(t);
   };
 
+  /* The two lengths-in-disguise, and the floor. Inside the panel, which is
+     inside `.reader`, so both the `:root` tokens and the two `.reader` ones
+     resolve here — and the floor has the dock's own ancestry, so a containing
+     block some later ancestor makes would move both (Sol P5). */
+  const instruments = (
+    <>
+      <span ref={spanA} style={SPAN_A} aria-hidden="true" />
+      <span ref={spanB} style={SPAN_B} aria-hidden="true" />
+      <span ref={floor} style={FLOOR} aria-hidden="true" />
+    </>
+  );
+
+  /* Recording with nothing on screen: the instruments need a layout to be
+     measured in, so they are hidden rather than not drawn. */
+  if (!shown) {
+    return (
+      <div aria-hidden="true" style={SILENT}>
+        {instruments}
+      </div>
+    );
+  }
+
   return (
     <div
       /* Inline styles rather than a stylesheet rule on purpose: this is an
@@ -519,11 +717,7 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
         padding: 3,
       }}
     >
-      {/* The two lengths-in-disguise. Inside the panel, which is inside
-          `.reader`, so both the `:root` tokens and the two `.reader` ones
-          resolve here. */}
-      <span ref={spanA} style={SPAN_A} aria-hidden="true" />
-      <span ref={spanB} style={SPAN_B} aria-hidden="true" />
+      {instruments}
 
       <button
         type="button"
@@ -545,6 +739,10 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
             <ProbeButton onClick={copy} label="copy" />
             <ProbeButton
               onClick={() => {
+                /* A delayed row booked by the attempt being cleared belongs
+                   to that attempt too; otherwise Clear silently repopulates a
+                   supposedly fresh trace up to a second later. */
+                cancelSettled();
                 samples.current = [];
                 since.current = 0;
                 setCount(0);
