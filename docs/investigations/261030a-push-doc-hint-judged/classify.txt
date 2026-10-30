@@ -1,0 +1,12 @@
+My hand classification of the 46 push episodes in episodes.tsv whose 4th column (docs/project edits) is non-empty.
+"yes" = right after the push the agent checked docs for a sentence its change made false, and edited one.
+"no"  = the edit was planned work, a merge/rename clash, or unrelated, not a post-push doc check.
+yes: 1fb98b41 248c23a0 5b65ad9f 6b267ddf a4a4bd3f 3937dbe9 03b6d114(23:02 episode) 65dc815d 670995c8 4aefb845
+     25a7dffa 62d63c94 354d9ca7 f83e23db fc68855b 3b671c6d 3447fe13
+     5c317a73 ce29d82e 1c6217ab c825365e 236f6794 2c5168ba 9cf6c819 99548bab 1eebf9d3 942977f4 24cb29bc
+     22936b58 d27e777c 95854abb 2cecdee2                                                    -> 32
+no:  03b6d114(22:05) 33348e46 f680f03d 4490fef4 188d559f 011e6731 0602205c 5c09b6ea edd72f57 8deb0af2
+     ef8a9b0e 799245cc 82630029                                                             -> 13
+out: f4e08c1a — the hint did prompt a fix, but to CLAUDE.md (docs/project/../../CLAUDE.md), outside the measure;
+     the corrected detector no longer counts it, so 45 episodes with an edit, not 46.
+Of the 32, the doc fixed was one the hint itself named (in its first ten) in 15.
