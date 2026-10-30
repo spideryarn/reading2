@@ -189,6 +189,7 @@ function keptFrom(attempt: Attempt | null | undefined): UseQuiz["kept"] {
         saved: attempt.notSaved !== true,
         attemptId: attempt.attemptId ?? null,
         ...(attempt.verdict ? { verdict: attempt.verdict } : {}),
+        recallAfterDays: 3,
       },
     ],
   ]);
@@ -1025,6 +1026,74 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
     expect(premiseShown()).toBeNull();
     /* Hiding the premise is not hiding the step. */
     expect(stem()).toBe("Question number 2?");
+  });
+
+  it("shows the next premise after a stored right that has come due (plan 261030c, Sol's F5)", () => {
+    /* A right from eight days ago, kept on the server: due to be recalled
+       again, so it is no evidence the reader still has it, and the next step
+       carries its premise. The same right one day old hides it. */
+    for (const [daysOld, shown] of [
+      [8, P2],
+      [1, null],
+    ] as const) {
+      const kept: UseQuiz["kept"] = new Map([
+        [
+          first.id,
+          {
+            answer: "what they wrote",
+            reply: "That tracks the piece.",
+            answeredAt: new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000).toISOString(),
+            saved: true,
+            attemptId: null,
+            verdict: "right" as const,
+            recallAfterDays: 7,
+          },
+        ],
+      ]);
+      paint(owner({ quiz: PATH, kept, answered: new Set([first.id]) }));
+      /* The walk opens at the first unanswered (or due) question; go to the
+         second from the first either way. */
+      if (stem() !== "Question number 1?") press("Previous question");
+      press("Next question");
+      expect(stem(), `${daysOld} days old`).toBe("Question number 2?");
+      expect(premiseShown(), `${daysOld} days old`).toBe(shown);
+      remount();
+    }
+  });
+
+  it("stops using a stored right once it crosses due on an unrelated render", () => {
+    const day = 24 * 60 * 60 * 1000;
+    let now = Date.parse("2026-10-30T12:00:00.000Z");
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const kept: UseQuiz["kept"] = new Map([
+        [
+          first.id,
+          {
+            answer: "what they wrote",
+            reply: "That tracks the piece.",
+            answeredAt: new Date(now - 7 * day + 1).toISOString(),
+            saved: true,
+            attemptId: null,
+            verdict: "right",
+            recallAfterDays: 7,
+          },
+        ],
+      ]);
+      const o = owner({ quiz: PATH, kept, answered: new Set([first.id]) });
+      paint(o);
+      press("Previous question");
+      press("Next question");
+      expect(premiseShown()).toBeNull();
+
+      /* The kept map is the same object. A render for any other reason must
+         still read the clock again and stop letting the old right steer help. */
+      now += 2;
+      paint(o);
+      expect(premiseShown()).toBe(P2);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("hands the reader the thread after a wrong answer, above the question and apart from it", () => {

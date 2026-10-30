@@ -6531,8 +6531,9 @@ export interface QuizResponse {
  * One finished mark, as the owner's read returns it: the answer, the mark it
  * was given, and when. A row of `quiz_attempts` (src/db/schema.ts) less the
  * batch — the read is scoped to one — and the question's words, which the
- * client already has. **No verdict**: whether the reader got it right is not
- * stored.
+ * client already has. With the hidden check's verdict since 2026-10-30, and
+ * when the question is due again, which the server works out from the
+ * question's whole history (src/quiz-spacing.ts; plan 261030c).
  */
 export interface QuizKeptAnswer {
   questionId: QuizQuestionId;
@@ -6544,6 +6545,10 @@ export interface QuizKeptAnswer {
   reply: string;
   /** ISO time the mark finished — the row's `created_at`. */
   answeredAt: string;
+  /** The hidden check's word on this mark; absent when it failed or declined. Never shown as a word. */
+  verdict?: QuizVerdict;
+  /** Days after `answeredAt` that the question is due to be tried again from memory. */
+  recallAfterDays: number;
 }
 
 /**

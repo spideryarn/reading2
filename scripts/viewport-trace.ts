@@ -86,6 +86,9 @@ export type VV = readonly [number, number, number, number, number];
  * events, and the reader re-laying-out), and are listed here so a trace that
  * contains one still reads —
  * docs/plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md.
+ * `settled` is 2026-10-30: the same numbers again 300ms and 1000ms after a
+ * rotation or a resize, because they are not final when its event fires —
+ * docs/plans/261030e-the-bottom-bar-floats-on-an-ipad-after-a-rotation-and-the-probe-that-can-catch-it.md.
  */
 export const EVENTS = [
   "start",
@@ -94,6 +97,7 @@ export const EVENTS = [
   "window-resize",
   "orientationchange",
   "laid-out",
+  "settled",
   "mark",
 ] as const;
 export type Ev = (typeof EVENTS)[number];

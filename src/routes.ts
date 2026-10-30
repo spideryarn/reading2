@@ -2704,8 +2704,11 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  * - **A save that fails does not fail the mark.** The reader has watched it
  *   arrive. It is reported, and `done` goes with `kept: false` and no
  *   `answeredAt`, so the panel can say the answer will not be there later.
- * - **The verdict is not stored**, and neither the answer nor the mark is
- *   logged — from here or from the store.
+ * - **The verdict is stored with the row since 2026-10-30** (Greg's option B
+ *   on q-m9zkx3, plan 261030c): `NULL` when the check failed or declined,
+ *   never "wrong". With it the store works out when the question is due
+ *   again, which `done` carries as `recallAfterDays`. Neither the verdict,
+ *   the answer nor the mark is logged — from here or from the store.
  */
 async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const { batchId, questionId, answer } = (body ?? {}) as Record<string, unknown>;
@@ -2822,16 +2825,16 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
 
          `verdict` rides here and only here — never on a `delta` — so the word
          that decides how hard the next question is cannot reach the reader's
-         screen even by accident, because nothing renders this frame's fields
-         except the tick. It is often absent, which is normal: the ladder reads
-         absence as *hold the band*. docs/plans/260907d-make-the-quiz-adaptive.md. */
+         screen even by accident: the client draws it only as the deeper green
+         of plan 261029m. It is often absent, which is normal: the walk reads
+         absence as *show the premise*. docs/plans/260907d-make-the-quiz-adaptive.md. */
       /* **Kept first, then told.** In this order so that `answeredAt` is the
          row's own time, and so that a `done` the reader receives without
          `kept: false` is a mark that really is in the table. Not gated on
          `alive()`: a mark that finished is kept whether or not anybody is
          still there to hear so. The catch reports the failure and nothing
          else — `captureFailure` gets the slug and the phase, never the words. */
-      let kept: { id: string; answeredAt: string } | null = null;
+      let kept: { id: string; answeredAt: string; recallAfterDays: number } | null = null;
       try {
         kept = await quizAttemptStore.record(slug, {
           batchId: found.quiz.batchId,
@@ -2839,6 +2842,7 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
           question: question.question,
           answer: written,
           reply: event.reply,
+          ...(event.verdict ? { verdict: event.verdict } : {}),
         });
       } catch (keepErr) {
         captureFailure(keepErr, { route: "quiz-mark", slug, phase: "keep-answer" });
@@ -2849,7 +2853,9 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
         ...(event.verdict ? { verdict: event.verdict } : {}),
         /* The row's id beside its time: what *Discuss this in chat* names
            the mark by (`QuizOrigin`, plan 261024i stage 2). */
-        ...(kept ? { answeredAt: kept.answeredAt, attemptId: kept.id } : { kept: false }),
+        ...(kept
+          ? { answeredAt: kept.answeredAt, attemptId: kept.id, recallAfterDays: kept.recallAfterDays }
+          : { kept: false }),
       });
     }
   } catch (err) {

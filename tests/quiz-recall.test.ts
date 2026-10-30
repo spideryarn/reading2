@@ -4,7 +4,7 @@
  * recall it again" once the answer has gone stale.
  */
 import { describe, expect, it } from "vitest";
-import { agoWords, daysSince, quizLook, quizLookClass, quizLookFor, quizLookSpoken, RECALL_AFTER_DAYS } from "../src/web/quiz-recall.js";
+import { agoWords, daysSince, quizLook, quizLookClass, quizLookFor, quizLookSpoken } from "../src/web/quiz-recall.js";
 
 const NOW = Date.parse("2026-10-29T12:00:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -15,20 +15,26 @@ describe("quizLook", () => {
     expect(quizLook(undefined, NOW)).toBe("none");
   });
   it("is answered for a fresh answer with no verdict, or a wrong one", () => {
-    expect(quizLook({ answeredAt: ago(60_000) }, NOW)).toBe("answered");
-    expect(quizLook({ answeredAt: ago(60_000), verdict: "wrong" }, NOW)).toBe("answered");
+    expect(quizLook({ answeredAt: ago(60_000), recallAfterDays: 3 }, NOW)).toBe("answered");
+    expect(quizLook({ answeredAt: ago(60_000), verdict: "wrong", recallAfterDays: 3 }, NOW)).toBe("answered");
   });
   it("is right only for a right verdict", () => {
-    expect(quizLook({ answeredAt: ago(60_000), verdict: "right" }, NOW)).toBe("right");
+    expect(quizLook({ answeredAt: ago(60_000), verdict: "right", recallAfterDays: 3 }, NOW)).toBe("right");
   });
-  it("turns due at exactly RECALL_AFTER_DAYS, not a minute before", () => {
-    expect(RECALL_AFTER_DAYS).toBe(3);
-    expect(quizLook({ answeredAt: ago(3 * DAY - 1) }, NOW)).toBe("answered");
-    expect(quizLook({ answeredAt: ago(3 * DAY) }, NOW)).toBe("due");
-    expect(quizLook({ answeredAt: ago(3 * DAY), verdict: "right" }, NOW)).toBe("due");
+  it("turns due at exactly recallAfterDays, not a millisecond before", () => {
+    expect(quizLook({ answeredAt: ago(3 * DAY - 1), recallAfterDays: 3 }, NOW)).toBe("answered");
+    expect(quizLook({ answeredAt: ago(3 * DAY), recallAfterDays: 3 }, NOW)).toBe("due");
+    expect(quizLook({ answeredAt: ago(3 * DAY), verdict: "right", recallAfterDays: 3 }, NOW)).toBe("due");
+  });
+  it("follows the server's schedule: a wrong due in a day, a right not before its week (plan 261030c)", () => {
+    expect(quizLook({ answeredAt: ago(DAY - 1), verdict: "wrong", recallAfterDays: 1 }, NOW)).toBe("answered");
+    expect(quizLook({ answeredAt: ago(DAY), verdict: "wrong", recallAfterDays: 1 }, NOW)).toBe("due");
+    /* A stored right, three days old: still the deeper green, not due. */
+    expect(quizLook({ answeredAt: ago(3 * DAY), verdict: "right", recallAfterDays: 7 }, NOW)).toBe("right");
+    expect(quizLook({ answeredAt: ago(7 * DAY), verdict: "right", recallAfterDays: 7 }, NOW)).toBe("due");
   });
   it("is never due for an answer stamped in the future (a fast clock)", () => {
-    expect(quizLook({ answeredAt: new Date(NOW + 10 * DAY).toISOString() }, NOW)).toBe("answered");
+    expect(quizLook({ answeredAt: new Date(NOW + 10 * DAY).toISOString(), recallAfterDays: 3 }, NOW)).toBe("answered");
   });
 });
 
@@ -41,6 +47,10 @@ describe("the words and classes", () => {
     expect(daysSince(ago(5 * DAY + 3600_000), NOW)).toBe(5);
     expect(daysSince("not a date", NOW)).toBe(0);
     expect(agoWords(4)).toBe("4 days ago");
+    /* Reachable since 261030c, when a wrong answer comes due after one day:
+       the screenshot check read "You answered this 1 days ago". */
+    expect(agoWords(1)).toBe("a day ago");
+    expect(quizLookSpoken("due", 1)).toBe(" (answered a day ago: worth trying again from memory)");
     expect(agoWords(9)).toBe("a week ago");
     expect(agoWords(22)).toBe("3 weeks ago");
     expect(quizLookSpoken("due", 4)).toBe(" (answered 4 days ago: worth trying again from memory)");
@@ -49,7 +59,7 @@ describe("the words and classes", () => {
 });
 
 describe("quizLookFor: right belongs to the words that were judged", () => {
-  const kept = { answer: "Judged words.", answeredAt: ago(60_000), verdict: "right" as const };
+  const kept = { answer: "Judged words.", answeredAt: ago(60_000), verdict: "right" as const, recallAfterDays: 7 };
   it("keeps right with an empty box or the same words", () => {
     expect(quizLookFor(kept, NOW, "")).toBe("right");
     expect(quizLookFor(kept, NOW, " Judged words. ")).toBe("right");
@@ -58,6 +68,6 @@ describe("quizLookFor: right belongs to the words that were judged", () => {
     expect(quizLookFor(kept, NOW, "Something else.")).toBe("answered");
   });
   it("leaves due alone", () => {
-    expect(quizLookFor({ ...kept, answeredAt: ago(4 * DAY) }, NOW, "Something else.")).toBe("due");
+    expect(quizLookFor({ ...kept, answeredAt: ago(7 * DAY) }, NOW, "Something else.")).toBe("due");
   });
 });

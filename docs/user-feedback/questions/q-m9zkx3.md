@@ -1,10 +1,11 @@
 ---
 id: q-m9zkx3
 report: spya-fytjtf
-status: open
+status: answered
 asked: 2026-10-29
 title: Should Quiz store whether an answer was judged right, so the deeper green lasts and spacing can adapt?
-refs: q-cj0fv8 (reply spya-v2aehw) · qi-pc9ekn26 · docs/plans/261029m-quiz-green-for-right-and-a-quiet-time-to-recall-again.md · docs/user-feedback/261029_0037-quiz-runs-with-the-margin-and-its-questions-sit-there.md
+refs: q-cj0fv8 (reply spya-v2aehw) · qi-pc9ekn26 · docs/plans/261029m-quiz-green-for-right-and-a-quiet-time-to-recall-again.md · docs/user-feedback/261029_0037-quiz-runs-with-the-margin-and-its-questions-sit-there.md · docs/plans/261030c-quiz-keeps-right-or-wrong-and-spacing-adapts.md · qi-ehnr2hsh
+acted: spya-dxhyu2
 ---
 Built from your reply (on dev, not yet deployed): answered is pale green, judged right is a deeper green, and an answer three days old fades with a small clock and opens with an empty box so you try it from memory. The deeper green lasts only until you reload, because whether you got it right is deliberately not saved. Should we start saving it?
 
@@ -35,3 +36,9 @@ No red, no score, no count. A failed check just leaves plain green. "Show my ear
 Why three days, and the same every time: it is worked out from when the answer was saved, which we already store, so nothing new is kept. A schedule that grows (a day, then three, then a week) needs to know how each try went, which is B. The research does not settle the exact interval; three days is a judgement, short enough that you meet it while reading an article over a week.
 
 Why B is a question for you: it changes what we keep about a reader, and the privacy record says right/wrong is not kept. The check that decides "right" is a cheap model reading the mark; it was built on the understanding that its mistakes are invisible and harmless. Showing its answer as colour for one visit is a small step; saving it and letting it steer the spacing is a bigger one.
+
+## Greg's answer, 2026-10-30 (in the Feedback dialog, reply `spya-dxhyu2`)
+
+> B
+
+Done, on dev, not yet deployed (plan 261030c). Each Quiz answer now keeps whether the check judged it right or wrong. A check that failed or declined keeps nothing, never "wrong". So the deeper green lasts after a reload, and when a question comes back depends on how it went: wrong, a day; right, a week, then two, four and eight weeks (the most) each time it is right again. A new answer is judged again, and an answer the check could not judge comes back in three days. Answers from before today come back in three days, as now. Still no red, no score, no visible "right" or "wrong". The public privacy page says so (updated 30 October): "When an automatic check can decide, we also keep whether it judged a quiz answer right or wrong. It can be mistaken; we use it to colour the question, to decide when to ask it again, and to adapt the help around it." Your export includes it. One more change: a right answer that has come due no longer hides the next question's lead-in.

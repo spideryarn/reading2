@@ -162,8 +162,11 @@ list again), and the plan names the trigger for doing more.
 The mark [may not say how the reader did](#what-a-mark-says-and-what-it-may-not), and the walk has
 to know. So the judgement is made by a **separate, small call that reads the finished mark** —
 [`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) — and its one-word answer rides the terminal `done`
-frame. The word is never logged and never stored; the shared quiz read holds it in memory, on the
-kept answer it was judged with (`KeptAnswer.verdict`), for the length of the visit. It may choose
+frame. The word is never logged. **Since 2026-10-30 it is stored** on the answer's row
+(`quiz_attempts.verdict`, `NULL` when the check could not decide — never "wrong"), at Greg's choice
+on [q-m9zkx3](../user-feedback/questions/q-m9zkx3.md), so the shared quiz read hands it back on the
+kept answer (`KeptAnswer.verdict`) on later visits too
+([§ Deeper for right](#deeper-for-right-and-time-to-recall-it-again-since-2026-10-29)). It may choose
 scaffolding and navigation — whether a premise is shown, and which sections
 [Where to look again](#where-to-look-again) names — and, **since 2026-10-29 at Greg's request, a
 deeper green** on the question ([§ Answered in the margin](#answered-in-the-margin-and-a-quiet-green)).
@@ -413,11 +416,12 @@ what was passed over (`localStorage`; a client `PUT` after the mark) are
   the box and move nothing. With every question answered it opens at the first. A question pressed
   in the prose still wins. The interactions are in
   [the plan § Opening at the first unanswered question](../plans/261005b-quiz-answers-are-kept-and-restored.md#opening-at-the-first-unanswered-question).
-- **Whether you got it right is not kept.** After a return the next step shows its premise (the
-  "no verdict" case, which errs towards help) and [Where to look again](#where-to-look-again) starts
-  empty until something is answered this visit. Storing it is the plan's other open question
-  (Q-quiz-verdict), and [privacy.md § Quiz answers](privacy.md#quiz-answers) says why it is not a
-  detail.
+- **Whether you got it right is kept too, since 2026-10-30** (plan
+  [261030c](../plans/261030c-quiz-keeps-right-or-wrong-and-spacing-adapts.md)). Until then a
+  return showed the next premise and an empty [Where to look again](#where-to-look-again); now both
+  read the stored verdicts — except a **due** answer's, which counts as unjudged until it is tried
+  again, so a week-old *right* does not hide a premise the reader may need.
+  [privacy.md § Quiz answers](privacy.md#quiz-answers) says why it was not a detail.
 - **No new words on screen** beyond two failure lines: the one above, and *"Your earlier answers
   could not be loaded"* with *Try again*, when the questions arrived and the answers could not be
   read. That is told apart from "none" on the wire (`attempts: null`, not `[]`), or a flaky read
@@ -526,17 +530,23 @@ the band:
 | Look | When | Drawn as |
 |---|---|---|
 | answered | a kept answer | tick, pale green |
-| right | answered **this visit** and the hidden check said right | ringed tick, deeper green |
-| due | the latest answer is 72 hours old or more | clock, the green faded to a wash |
+| right | the latest answer's stored verdict is right, and it is not yet due | ringed tick, deeper green |
+| due | the latest answer is `recallAfterDays` old or more | clock, the green faded to a wash |
 
-- **Right is this visit only**, because the verdict is not stored: after a reload it is plain
-  answered again. A failed or declined check is plain answered, never less, and there is no look for
-  wrong. *Right* belongs to the words that were judged: with other words in the box it steps down to
-  answered (`quizLookFor`).
-- **Due is a basic spacing effect**: a fixed three days, read from the kept answer's own time, so
-  nothing new is stored and nothing schedules it. Fixed rather than expanding because expanding needs
-  each try's history and how well it went. Three days is a product heuristic, not a number the
-  research picks.
+- **Right lasts across visits since 2026-10-30**, because the verdict is stored (until then it was
+  this visit only). A failed or declined check is plain answered, never less, and there is no look
+  for wrong. *Right* belongs to the words that were judged: with other words in the box it steps down
+  to answered (`quizLookFor`).
+- **Due adapts to how it went, since 2026-10-30** — Greg's option B on
+  [q-m9zkx3](../user-feedback/questions/q-m9zkx3.md) (`spya-dxhyu2`): *"got it wrong, back in a day;
+  got it right, back in a week, then longer each time you get it right again"*. Wrong, a day; right,
+  a week, then two, four, eight (the ceiling); rights within a day of each other count once.
+  Nothing judged yet — every answer from before that day — or the newest try unjudged: the neutral
+  three days, 261029m's original flat rule. Worked out on the server from the question's history
+  ([`src/quiz-spacing.ts`](../../src/quiz-spacing.ts)) and sent as `recallAfterDays`; the browser
+  only compares it with the clock. The numbers are product heuristics, not ones the research picks;
+  the plan is [261030c](../plans/261030c-quiz-keeps-right-or-wrong-and-spacing-adapts.md). A wrong
+  *right* from the check costs a question a week's absence, and one wrong brings it back in a day.
 - **A due question opens with an empty box**, in the margin and the band, under *You answered this
   N days ago. Try it from memory first.* and *Show my earlier answer*. That puts the earlier answer
   in an empty box, or beside a draft, never over it. The band opens at the first question that is
@@ -680,7 +690,7 @@ Greg, 2026-09-30 (SPIDERYARN-READING2-6R):
 
 **A join, not a model call.** Each verdict is counted against the sections its question's evidence
 blocks are in — the reading view's own Sections (`buildSections`, the level one above the leaves),
-so the names are the ones on the spine. Once an answer this visit has been judged wrong, a block
+so the names are the ones on the spine. Once an answer has been judged wrong, a block
 under the step row names up to three sections, weakest first (the largest share of judged answers
 wrong). Each name jumps the prose there — the (re-)read — and an icon beside it goes back to that
 section's first missed question — the steer. The plan and GPT Sol's review are
@@ -691,19 +701,19 @@ section's first missed question — the steer. The plan and GPT Sol's review are
 - **The path is still never reordered.** The steer is a jump back through `pick`, so the step shows
   its premise, a jump to the question already open does nothing, and only questions the reading
   filter lets the reader land on are offered.
-- **Per visit, like the verdicts it is made of**: nothing stored, logged or sent, so the privacy page
-  did not change. A stored per-section picture, new questions aimed at a weak section, and a
+- **Computed from the stored verdicts** since 2026-10-30, so it survives a reload; a due answer's
+  verdict is left out. The advice itself is never stored, logged or sent. A stored per-section picture, new questions aimed at a weak section, and a
   "read these next" list of unread sections are deferred, with the reasons, in the plan.
 
 ## What is deliberately not here
 
-- **The verdict is not stored, and neither is where you were.** Answers and their marks are kept
-  since 2026-10-05 ([§ Answers are kept](#answers-are-kept)); until then this bullet read "Attempts
-  are not stored. A reload starts fresh." What still dies with the visit is the position on the
-  path — coming back opens at the first unanswered question, which is worked out from the kept
-  answers, not remembered — and the hidden verdict map (which also resets on a new batch). The verdict is not written to
-  a log either — a per-answer right/wrong on a log line is a stored grade wearing a different hat,
-  and [privacy.md § Quiz answers](privacy.md#quiz-answers) records the decision not to keep one.
+- **Where you were is not stored.** Answers and their marks are kept since 2026-10-05
+  ([§ Answers are kept](#answers-are-kept)), and their verdicts since 2026-10-30; until 2026-10-05
+  this bullet read "Attempts are not stored. A reload starts fresh." What still dies with the visit
+  is the position on the path — coming back opens at the first unanswered or due question, which is
+  worked out from the kept answers, not remembered. The verdict is not written to a log — a
+  per-answer right/wrong on a log line is a stored grade wearing a different hat — and
+  [privacy.md § Quiz answers](privacy.md#quiz-answers) records the decision to keep it on the row.
 - **No reader profile in the stamp.** The response's `profileChanged` (since 2026-10-02, above) is
   a label for the badge; nothing re-runs on it.
 - **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,

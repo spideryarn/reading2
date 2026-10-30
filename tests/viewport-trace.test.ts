@@ -257,13 +257,14 @@ describe("settled, not sliding", () => {
   });
 
   /**
-   * The three rotation/layout events added by 260912b are observations, not
+   * The rotation/layout events and the delayed `settled` reading are
+   * observations, not
    * evidence that the visual viewport is in motion. Before they existed,
    * `ev !== "mark"` happened to mean the visual viewport's `resize`/`scroll`;
    * accepting the new names must not make that old shorthand lie.
    */
   it("does not call rotation or layout samples keyboard-sliding frames", () => {
-    for (const ev of ["orientationchange", "window-resize", "laid-out"] as const) {
+    for (const ev of ["orientationchange", "window-resize", "laid-out", "settled"] as const) {
       const observed = sample({
         t: 200,
         ev,

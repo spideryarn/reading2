@@ -111,6 +111,8 @@ const server = {
   batchId: "spya-batch1",
   attempts: [] as QuizKeptAnswer[],
   verdict: undefined as "right" | "wrong" | undefined,
+  /** Override only the `done` frame's schedule; old/malformed-server cases. */
+  doneSchedule: "computed" as unknown,
   marks: [] as { batchId: string; questionId: string; answer: string }[],
   /** Hold every mark's stream open until released, to have two in flight at once. */
   hold: false,
@@ -133,12 +135,21 @@ function markResponse(body: { batchId: string; questionId: string; answer: strin
   server.clock += 1000;
   const answeredAt = new Date(server.clock).toISOString();
   const attemptId = `00000000-0000-4000-8000-${String(server.clock).padStart(12, "0")}`;
+  /* The server's schedule for a first try, as src/quiz-spacing.ts gives it. */
+  const recallAfterDays = server.verdict === "wrong" ? 1 : server.verdict === "right" ? 7 : 3;
+  const sentSchedule =
+    server.doneSchedule === "computed"
+      ? { recallAfterDays }
+      : server.doneSchedule === "missing"
+        ? {}
+        : { recallAfterDays: server.doneSchedule };
+  const judged = server.verdict ? { verdict: server.verdict } : {};
   server.attempts = [
     ...server.attempts.filter((a) => a.questionId !== body.questionId),
-    { questionId: body.questionId, attemptId, answer: body.answer, reply, answeredAt },
+    { questionId: body.questionId, attemptId, answer: body.answer, reply, answeredAt, ...judged, recallAfterDays },
   ];
   const finish = (c: ReadableStreamDefaultController<Uint8Array>) => {
-    c.enqueue(frame("done", { reply, model: "m", answeredAt, attemptId, ...(server.verdict ? { verdict: server.verdict } : {}) }));
+    c.enqueue(frame("done", { reply, model: "m", answeredAt, attemptId, ...judged, ...sentSchedule }));
     c.close();
   };
   return new Response(
@@ -251,7 +262,7 @@ function visibleText(scope: Element): string {
 }
 
 beforeEach(() => {
-  Object.assign(server, { batchId: "spya-batch1", attempts: [], verdict: undefined, marks: [], hold: false, release: [], clock: Date.now() });
+  Object.assign(server, { batchId: "spya-batch1", attempts: [], verdict: undefined, doneSchedule: "computed", marks: [], hold: false, release: [], clock: Date.now() });
   opened.length = 0;
   withBand = false;
   dictationBusy = false;
@@ -328,7 +339,7 @@ describe("a Quiz question in the margin", () => {
 
   it("is green, ticked and put back when it was answered on an earlier visit", async () => {
     server.attempts = [
-      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Kept words.", reply: "A mark of “Kept words.”.", answeredAt: daysAgo(1) },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Kept words.", reply: "A mark of “Kept words.”.", answeredAt: daysAgo(1), recallAfterDays: 3 },
     ];
     await paint();
     expect(item(2).classList.contains("quiz-answered")).toBe(true);
@@ -480,19 +491,76 @@ describe("right, and time to recall it again", () => {
     ).toBe(true);
   });
 
-  it("is not right after a reload: the verdict is never stored", async () => {
+  it("is still right after a reload, from the stored verdict (plan 261030c)", async () => {
+    /* Until 261030c this said the opposite: the verdict was never stored, so a
+       reload dropped the deeper green. Greg's option B on q-m9zkx3 keeps it. */
     server.attempts = [
-      { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Kept.", reply: "A mark.", answeredAt: daysAgo(1) },
+      { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Kept.", reply: "A mark.", answeredAt: daysAgo(3), verdict: "right", recallAfterDays: 7 },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a2", answer: "Kept too.", reply: "A mark.", answeredAt: daysAgo(1), verdict: "wrong", recallAfterDays: 1 },
     ];
-    server.verdict = "right";
     await paint();
-    expect(item(1).classList.contains("quiz-answered")).toBe(true);
-    expect(item(1).classList.contains("quiz-right")).toBe(false);
+    /* Three days old and right: a week's interval, so the deeper green, not due. */
+    expect(item(1).classList.contains("quiz-right")).toBe(true);
+    expect(item(1).classList.contains("quiz-due")).toBe(false);
+    /* A day old and wrong: due, the faded clock; never a look of its own for wrong. */
+    expect(item(2).classList.contains("quiz-due")).toBe(true);
+    expect(item(2).classList.contains("quiz-right")).toBe(false);
+    /* Only the right one's spoken suffix ("the check thought it looked right")
+       names a verdict; nothing ever says wrong. */
+    expect(margin().textContent).not.toMatch(/\b(wrong|incorrect)\b/i);
+  });
+
+  it("falls back to three days for a kept answer from a server that sends no schedule", async () => {
+    /* An offline copy, or a server from before 261030c: no `recallAfterDays`
+       and no verdict. `undefined` must not make it never due (Sol's F4). */
+    const old = (questionId: string, n: number) =>
+      ({ questionId, attemptId: `00000000-0000-4000-8000-0000000000${n}0`, answer: "Old.", reply: "A mark.", answeredAt: daysAgo(n) }) as unknown as QuizKeptAnswer;
+    server.attempts = [old(Q1, 2), old(Q2, 4)];
+    await paint();
+    expect(item(1).classList.contains("quiz-due")).toBe(false);
+    expect(item(2).classList.contains("quiz-due")).toBe(true);
+  });
+
+  it("schedules a mark made this visit from its done frame: wrong is due a day later", async () => {
+    server.verdict = "wrong";
+    await paint();
+    await click(line(1));
+    type(box()!, "Something mistaken.");
+    await click(answerButton(margin()));
+    expect(item(1).classList.contains("quiz-due")).toBe(false);
+    /* A day on, without a reload: the `done` frame's `recallAfterDays: 1` is
+       what makes it due, not the three-day fallback. */
+    const realNow = Date.now;
+    const later = realNow() + DAY + 60_000;
+    vi.spyOn(Date, "now").mockImplementation(() => later);
+    try {
+      await click(line(2));
+      expect(item(1).classList.contains("quiz-due")).toBe(true);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it.each(["missing", "nonsense"])("falls back to three days for a %s done-frame schedule", async (schedule) => {
+    server.doneSchedule = schedule;
+    await paint();
+    await click(line(1));
+    type(box()!, "An answer from this visit.");
+    await click(answerButton(margin()));
+
+    const realNow = Date.now;
+    vi.spyOn(Date, "now").mockImplementation(() => realNow() + 2 * DAY);
+    try {
+      await click(line(2));
+      expect(item(1).classList.contains("quiz-due"), "the malformed value skipped the three-day fallback").toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it("drains to due after three days, and opens empty, for recall, with the earlier answer one press away", async () => {
     server.attempts = [
-      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark of “Old words.”.", answeredAt: daysAgo(4) },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark of “Old words.”.", answeredAt: daysAgo(4), recallAfterDays: 3 },
     ];
     await paint();
     expect(item(2).classList.contains("quiz-due")).toBe(true);
@@ -522,7 +590,7 @@ describe("right, and time to recall it again", () => {
 
   it("disables Show my earlier answer while dictation owns the box", async () => {
     server.attempts = [
-      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(4) },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(4), recallAfterDays: 3 },
     ];
     await paint();
     await click(line(2));
@@ -533,7 +601,7 @@ describe("right, and time to recall it again", () => {
 
   it("is no longer due once answered again", async () => {
     server.attempts = [
-      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(5) },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(5), recallAfterDays: 3 },
     ];
     await paint();
     await click(line(2));
@@ -546,7 +614,7 @@ describe("right, and time to recall it again", () => {
 
   it("shows the earlier answer beside a draft written from memory, never over it", async () => {
     server.attempts = [
-      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark of “Old words.”.", answeredAt: daysAgo(4) },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark of “Old words.”.", answeredAt: daysAgo(4), recallAfterDays: 3 },
     ];
     await paint();
     await click(line(2));
@@ -563,7 +631,7 @@ describe("right, and time to recall it again", () => {
   it("binds a one-press dictation on a due question to that question's empty box", async () => {
     dictationSupported = true;
     server.attempts = [
-      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(4) },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(4), recallAfterDays: 3 },
     ];
     await paint();
     const mic = item(2).querySelector<HTMLButtonElement>('button[aria-label="Answer out loud"]')!;
@@ -592,10 +660,10 @@ describe("right, and time to recall it again", () => {
   it("shows the band's question as due too", async () => {
     withBand = true;
     server.attempts = [
-      { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(6) },
+      { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(6), recallAfterDays: 3 },
       /* Q2 answered too, so the band, which opens at the first unanswered
          question, opens at the first. */
-      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a2", answer: "New.", reply: "A mark.", answeredAt: daysAgo(0) },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a2", answer: "New.", reply: "A mark.", answeredAt: daysAgo(0), recallAfterDays: 3 },
     ];
     await paint();
     const band = host.querySelector(".band")!;
@@ -617,8 +685,8 @@ describe("right, and time to recall it again", () => {
   it("opens the band at a due question, as at an unanswered one", async () => {
     withBand = true;
     server.attempts = [
-      { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Fresh.", reply: "A mark.", answeredAt: daysAgo(0) },
-      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a2", answer: "Old.", reply: "A mark.", answeredAt: daysAgo(4) },
+      { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Fresh.", reply: "A mark.", answeredAt: daysAgo(0), recallAfterDays: 3 },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a2", answer: "Old.", reply: "A mark.", answeredAt: daysAgo(4), recallAfterDays: 3 },
     ];
     await paint();
     expect(host.querySelector(".band .quiz-question")!.textContent).toContain("Question number 2?");
@@ -647,7 +715,7 @@ describe("right, and time to recall it again", () => {
       }
 
       server.attempts = [
-        { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a9", answer: "Late old words.", reply: "Late old mark.", answeredAt: daysAgo(4) },
+        { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a9", answer: "Late old words.", reply: "Late old mark.", answeredAt: daysAgo(4), recallAfterDays: 3 },
       ];
       await act(async () => latestRead!.refresh());
       await settle();

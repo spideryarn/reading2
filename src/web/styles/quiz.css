@@ -127,8 +127,8 @@
    gamification. But just some of that sense of satisfaction of, you know,
    turning it a subtle green"*. One class, the band's question and the
    margin's line alike (controls.md § Controls that do the same job look the
-   same). It says *answered*, never right or wrong: the hidden verdict is still
-   not drawn (quiz.md). A pale ground, so the words keep the ink's contrast;
+   same). It says *answered*; a *right* is the deeper green below, and there is
+   no look for wrong (quiz.md). A pale ground, so the words keep the ink's contrast;
    `--positive` (styles/tokens.css) is the tick's colour, held at 4.5:1 there.
    Plan 261029i § Stage 3. */
 .quiz-answered {
@@ -153,10 +153,10 @@
    (spya-v2aehw): *"even more positive feedback if they got it right, and maybe
    some other indication if it's sort of stale"*. Both ride on `.quiz-answered`
    (quiz-recall.ts § `quizLookClass`), so only the ground and the mark change.
-   *Right* is this visit's hidden check, never stored; a failed check is plain
-   answered green, never less. *Due* is an answer older than RECALL_AFTER_DAYS:
-   the green has faded, and the clock says come back to it. No red anywhere.
-   Plan 261029m. */
+   *Right* is the hidden check's word, stored since plan 261030c; a failed
+   check is plain answered green, never less. *Due* is an answer older than
+   its `recallAfterDays` (src/quiz-spacing.ts): the green has faded, and the
+   clock says come back to it. No red anywhere. Plan 261029m. */
 .quiz-answered.quiz-right {
   background: color-mix(in oklab, var(--positive) 26%, transparent);
 }

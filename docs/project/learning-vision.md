@@ -105,9 +105,10 @@ too.
 - **Spacing across days, not just within a conversation.** The strongest effect in the literature is
   coming back after a delay. A Learn that knew what you recalled last week, and asked about the
   part you lost, would use it; nothing schedules that now ([cron-scheduler.md](cron-scheduler.md)).
-  A first step is in Quiz since 2026-10-29: an answer three days old is marked due and its box
-  opens empty ([quiz.md § Deeper for right](quiz.md#deeper-for-right-and-time-to-recall-it-again-since-2026-10-29)).
-  Adapting the interval to how the last try went would need the verdict stored (asked in q-m9zkx3).
+  A first step is in Quiz since 2026-10-29: a due answer is marked and its box opens empty
+  ([quiz.md § Deeper for right](quiz.md#deeper-for-right-and-time-to-recall-it-again-since-2026-10-29)).
+  Since 2026-10-30 the interval adapts to how each try went — wrong, a day; right, a week, then
+  doubling — from the verdict, now stored (Greg's B on q-m9zkx3, plan 261030c).
 - **Specialist interactions, sparingly.** Cloze (fill in the gap) is the one Greg is open to;
   multiple choice he is wary of, and finds both *"kind of artificial and annoying"*. Plain
   back-and-forth first.

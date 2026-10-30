@@ -1,5 +1,5 @@
 {
-  "id": "fe4b8c98-843d-41f3-9e47-b59495732bfb",
+  "id": "a005c71c-0d4b-4a06-bce8-265af4a766a2",
   "prevId": "d34fab29-0298-4d67-a7a4-c5999b621eb6",
   "version": "7",
   "dialect": "postgresql",
@@ -1051,12 +1051,6 @@
         },
         "situate": {
           "name": "situate",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sources_digest": {
-          "name": "sources_digest",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -7685,6 +7679,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "verdict": {
+          "name": "verdict",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -7762,6 +7762,10 @@
         "quiz_attempts_answer_length": {
           "name": "quiz_attempts_answer_length",
           "value": "char_length(\"spideryarn\".\"quiz_attempts\".\"answer\") between 1 and 1000000"
+        },
+        "quiz_attempts_verdict": {
+          "name": "quiz_attempts_verdict",
+          "value": "\"spideryarn\".\"quiz_attempts\".\"verdict\" in ('right', 'wrong')"
         }
       },
       "isRLSEnabled": false
@@ -7860,7 +7864,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate', 'cite-check', 'sources-digest')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate', 'cite-check')"
         }
       },
       "isRLSEnabled": false
@@ -9269,7 +9273,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','explanations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','sources-digest','crossrefs','simple')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','explanations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','crossrefs','simple')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",

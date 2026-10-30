@@ -109,6 +109,7 @@ import type {
   NavLabelStatus,
   PaperPassage,
   Quiz,
+  QuizVerdict,
   Quotes,
   SearchHit,
   Timeline,
@@ -6412,8 +6413,12 @@ export const commandSuggestionDismissals = spideryarn.table(
  * - **No `owner_id`**, like `reading_time`: only the owner writes, and
  *   ownership is inherited through the article, which also takes these rows
  *   with it when it is deleted.
- * - **No verdict column.** Whether the reader got it right is not stored —
- *   docs/project/quiz.md § What is deliberately not here.
+ * - **`verdict` since 2026-10-30**, Greg's option B on q-m9zkx3 (plan
+ *   docs/plans/261030c-quiz-keeps-right-or-wrong-and-spacing-adapts.md): the
+ *   hidden check's word on this mark, which keeps the deeper green across a
+ *   reload and decides when the question comes back (src/quiz-spacing.ts).
+ *   Until then it was deliberately not stored — docs/project/privacy.md §
+ *   Quiz answers says what changed and what the public page now says.
  *
  * The public read never touches this table.
  */
@@ -6438,10 +6443,21 @@ export const quizAttempts = spideryarn.table(
     answer: text("answer").notNull(),
     /** The mark, exactly as the reader saw it. */
     reply: text("reply").notNull(),
+    /**
+     * **Whether the hidden check judged this answer right** — `QuizVerdict`,
+     * or `NULL` when the check failed or declined, and on every row from
+     * before 2026-10-30. **`NULL` is never "wrong"**: the check is a cheap
+     * model, and a failure of it is not a judgement of the reader
+     * (src/quiz-spacing.ts skips it). No `judged_at`: the check finishes
+     * before the row is inserted, so `created_at` is its time (GPT Sol agreed,
+     * plan 261030c's review).
+     */
+    verdict: text("verdict").$type<QuizVerdict>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check("quiz_attempts_answer_length", sql`char_length(${t.answer}) between 1 and 1000000`),
+    check("quiz_attempts_verdict", sql`${t.verdict} in ('right', 'wrong')`),
     /** The one read: this batch's latest answer to each question. */
     index("quiz_attempts_latest").on(t.articleId, t.batchId, t.questionId, t.createdAt.desc()),
     /* Trivially unique, since `id` is the key: it is what

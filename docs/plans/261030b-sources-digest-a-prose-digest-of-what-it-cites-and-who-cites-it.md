@@ -327,7 +327,7 @@ to play with it."* Several small questions, each with an ASCII sketch, not one b
   code, step budget and lease, the cost table), F7 (the switch threaded into the chip row). Its
   check of my doubts: a summary has one `generatedAt` for both levels, so `level + generatedAt`
   names a level's chat; and a chip press that starts the run breaks no rule. Next: Stage 1.
-- 2026-10-30: Stage 1 built (48b535ec8): the step, migration `20261030144943_sources_digest`
+- 2026-10-30: Stage 1 built (48b535ec8): the step, migration `20261030215639_sources_digest`
   (additive; not yet applied to the shared local database, whose ledger holds another worktree's
   unlanded migration), 18 tests. Brief claims that proved false: situate's reader did not use
   `PROFILE_RULES`, its model calls had no clock of their own, and the piece has no stored "kind".

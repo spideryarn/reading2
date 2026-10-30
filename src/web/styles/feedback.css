@@ -552,6 +552,19 @@ details.fb-threads-group > summary { cursor: pointer; }
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+/* An admin's line under the title: how old this release is, and the changelog
+   (FeedbackDialog.tsx § ReleaseLine). Faint, small and tucked up against the
+   title, because it is a glance, not part of the report. */
+.fb-release {
+  flex: 0 0 auto;
+  margin: -0.5rem 0 0;
+  color: var(--ink-faint);
+  font-size: max(var(--text-min), 0.72rem);
+}
+.fb-release a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.fb-release a:hover { color: var(--highlight-text); }
+.fb-release a:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 2px; border-radius: 2px; }
+
 /* The size is styles/close.css § .close-x. */
 .fb-close {
   align-self: flex-start;
