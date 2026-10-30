@@ -346,7 +346,7 @@ function DigestSection({
         <Tooltip placement="top" content={<ControlTip head={words.head} what={words.what} how={words.how} />}>
           {/* A button rather than a bare icon, so the keyboard reaches the card
               (SettingsSection.tsx's (i), the same reason). */}
-          <button type="button" className="digest-info" aria-label={`What ${words.head} is`}>
+          <button type="button" className="digest-info" aria-label={`About “${words.head}”`}>
             <Info size={12} aria-hidden="true" />
           </button>
         </Tooltip>

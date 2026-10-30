@@ -616,6 +616,21 @@ describe("the writer's answer is believed only where the code can check it", () 
   it("refuses an answer with no sections at all, rather than storing an empty digest", () => {
     expect(() => checkDigest({ overview: [] }, evidenceIds, new Set(), new Set(), emptyCounts())).toThrow(/failed answer/);
   });
+
+  it("refuses a well-shaped answer that leaves nothing to show once checked (GPT Sol's SD2-03)", () => {
+    const empty = { overview: [], sections: { cites: [], citedBy: [], missed: [], check: [] } };
+    expect(() => checkDigest(empty, evidenceIds, new Set(), new Set(), emptyCounts())).toThrow(/failed answer/);
+    const allUnknown = {
+      overview: [],
+      sections: {
+        cites: [{ ids: ["spya-zzzzzz"], sentences: [{ text: "Nowhere.", id: "spya-zzzzzz" }], more: "", sources: [], leads: [] }],
+        citedBy: [],
+        missed: [],
+        check: [],
+      },
+    };
+    expect(() => checkDigest(allUnknown, evidenceIds, new Set(), new Set(), emptyCounts())).toThrow(/failed answer/);
+  });
 });
 
 /* ---------------------------------------------------------- nothing found -- */

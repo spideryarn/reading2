@@ -993,6 +993,16 @@ export function checkDigest(
   }
   const sections = checkedSections(rawSections, evidenceIds, quotedSources, leadIds, counts);
   const overview = checkedOverview(r.overview as unknown[], evidenceIds, counts);
+  // Well-shaped but empty once checked (everything dropped, or nothing written)
+  // is a failed answer too: stored as `written` it would draw a headline over
+  // nothing after a paid run (GPT Sol's SD2-03). Not `nothing-found`, which
+  // means no reader had evidence; here the readers did.
+  if (overview.length === 0 && Object.values(sections).every((paragraphs) => paragraphs.length === 0)) {
+    throw new Error(
+      "The writer's answer keeps nothing once its ids and sources are checked. " +
+        "That is a failed answer rather than an empty one.",
+    );
+  }
   return { overview, sections };
 }
 

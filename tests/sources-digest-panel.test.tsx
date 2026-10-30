@@ -21,7 +21,7 @@
  * The chip row's half (switch off hides the chip, a pasted address still
  * draws it lit) is in tests/sources-chips.test.tsx with the other chips.
  */
-import { act, createElement, StrictMode, type ReactElement } from "react";
+import { act, createElement, StrictMode, type ReactElement, useEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -59,11 +59,14 @@ const gets: string[] = [];
 const posts: { slug: string; steps: string[]; force?: string[] }[] = [];
 /** What `GET /api/sources-digest/:slug` answers: `null` is "none yet". */
 let stored: SourcesDigest | null = null;
+/** Hold a digest GET so a completed job's result can be observed while it is landing. */
+let digestReadGate: Promise<void> | null = null;
 
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (url: string) => {
     gets.push(url);
     if (url.startsWith("/api/sources-digest/")) {
+      if (digestReadGate) await digestReadGate;
       return new Response(
         JSON.stringify(
           stored === null ? null : { sourcesDigest: stored, stale: false, outdated: false, profileChanged: false },
@@ -83,22 +86,35 @@ vi.mock("../src/web/useJobs.js", async () => {
   const actual = await vi.importActual<typeof import("../src/web/useJobs.js")>("../src/web/useJobs.js");
   return {
     ...actual,
-    useJobs: () => ({
-      jobs,
-      loaded: true,
-      error: null,
-      driverFailures: {},
-      lastFailure: () => "The queue said no.",
-      run: async (request: { slug: string; steps: string[]; force?: string[] }) => {
-        posts.push(request);
-        return { id: `job${posts.length}` };
-      },
-      cancel: async () => {},
-      add: async () => null,
-      addUpload: async () => null,
-      retry: async () => {},
-      forget: async () => {},
-    }),
+    useJobs: (_cadence: unknown, onFinished?: (job: Job) => void) => {
+      const announced = useRef(new Set<string>());
+      /* The real queue drains completions in an effect after the render that
+         first sees the terminal job. Preserve that ordering: the later
+         auto-run effect must defend against the old `none` snapshot. */
+      useEffect(() => {
+        for (const job of jobs) {
+          if (job.status !== "done" || announced.current.has(job.id)) continue;
+          announced.current.add(job.id);
+          onFinished?.(job);
+        }
+      });
+      return {
+        jobs,
+        loaded: true,
+        error: null,
+        driverFailures: {},
+        lastFailure: () => "The queue said no.",
+        run: async (request: { slug: string; steps: string[]; force?: string[] }) => {
+          posts.push(request);
+          return { id: `job${posts.length}` };
+        },
+        cancel: async () => {},
+        add: async () => null,
+        addUpload: async () => null,
+        retry: async () => {},
+        forget: async () => {},
+      };
+    },
   };
 });
 
@@ -208,6 +224,7 @@ beforeEach(() => {
   jumps.length = 0;
   jobs = [];
   stored = null;
+  digestReadGate = null;
   resetActivations();
   jobEngine.reset();
   host = document.createElement("div");
@@ -253,6 +270,44 @@ describe("opening it is the request", () => {
     await act(async () => write?.click());
     await settle();
     expect(posts).toEqual([{ slug: SLUG, steps: ["sources-digest"] }]);
+  });
+
+  it("does not buy a second run while another tab's completed digest is landing", async () => {
+    const running = {
+      id: "other-tab",
+      slug: SLUG,
+      status: "running",
+      steps: [{ name: "sources-digest", status: "running" }],
+      createdAt: "2026-10-30T12:00:00.000Z",
+    } as Job;
+    jobs = [running];
+    armActivationForSubMode(SLUG, { mode: "sources", view: "digest" });
+    await mount();
+    expect(posts).toEqual([]);
+
+    let releaseRead = () => {};
+    digestReadGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    stored = digest();
+    jobs = [{
+      ...running,
+      status: "done",
+      steps: [{ name: "sources-digest", status: "done" }],
+    } as Job];
+    await act(async () => {
+      root.render(createElement(StrictMode, null, createElement(Band)));
+      await Promise.resolve();
+    });
+
+    /* The old empty read is not permission to run while the refresh is in flight. */
+    expect(posts).toEqual([]);
+
+    digestReadGate = null;
+    releaseRead();
+    await settle();
+    expect(posts).toEqual([]);
+    expect(host.textContent).toContain("What its sources say");
   });
 });
 

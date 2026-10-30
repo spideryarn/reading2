@@ -250,14 +250,15 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
 };
 
 /**
- * **Sources' nine sub-modes**: *Where it sits* (since 2026-10-25, plan
- * 261025h, the owner's default), Bibliography (the Citations mode until
+ * **Sources' ten sub-modes**: *Where it sits* (since 2026-10-25, plan
+ * 261025h, the owner's default), Digest (since 2026-10-30, plan 261030b),
+ * Bibliography (the Citations mode until
  * 2026-10-09), Not cited and Links (since 2026-10-11), then Reception and Claims (the Debate
  * mode's two, since 2026-10-03), Investigate (since 2026-10-20, plan 261020n), and
  * last the two experiments behind the switch, Guess first and Evidence first
- * (since 2026-10-26, plan 261025h, Stage 4). The command bar lists the first
- * seven, in this order (`subModesOf`), and not the experiments; the owner's
- * chip row draws three of them, *Where it sits*, Bibliography and Links
+ * (since 2026-10-26, plan 261025h, Stage 4). The command bar lists the eight
+ * established views, in record order (`subModesOf`), and not the experiments;
+ * the owner's chip row draws four of them, *Where it sits*, Digest, Bibliography and Links
  * (params.ts § `SOURCES_CHIPS`), and the other four are tools reached from
  * *Where it sits*, which keep their rows and aliases here. Greg,
  * 2026-10-09 (spya-vcvxu5): *"Let's call the sub-mode for citations listed in

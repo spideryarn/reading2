@@ -157,18 +157,30 @@ export function useSourcesDigest(slug: string): UseSourcesDigest {
      Between the job leaving the queue and that read landing, the panel is
      still working — useSituate.ts § `landing`, for the same beat. */
   const [landing, setLanding] = useState<{ read: SourcesDigestRead["refresh"] } | null>(null);
+  /* State holds the progress row across renders; this ref closes the smaller
+     interval inside one passive-effect pass, where the queue announces a
+     completion and `useAutoRun` still has the preceding render's `none`. */
+  const landingNow = useRef<{ read: SourcesDigestRead["refresh"] } | null>(null);
   const finished = useCallback(() => {
     const mine = { read: refresh };
+    landingNow.current = mine;
     setLanding(mine);
-    void refresh().finally(() => setLanding((current) => (current === mine ? null : current)));
+    void refresh().finally(() => {
+      if (landingNow.current === mine) landingNow.current = null;
+      setLanding((current) => (current === mine ? null : current));
+    });
   }, [refresh]);
   const queue = useStepJob(slug, "sources-digest", finished, "watches-queue");
 
   /* The automatic run and the panel's own button make the identical unforced
      request, so `work_key` dedupes them — useReception.ts § Two verbs. */
   const ensure = useCallback(async () => {
+    /* The completion effect can start `refresh` earlier in the same effect
+       pass, before React rerenders `useAutoRun` away from its old `none`.
+       Refuse at the action boundary too; state-only gating is one commit late. */
+    if (landingNow.current?.read === refresh) return;
     await queue.start({});
-  }, [queue]);
+  }, [queue, refresh]);
   /* The forced verb holds the digest it was pressed on (rewrite-hold.ts); its
      clock, `generatedAt`, is its identity. */
   const hold = useRewriteHold({
@@ -188,7 +200,10 @@ export function useSourcesDigest(slug: string): UseSourcesDigest {
      A run already under way, from this tab or another, is not an answer yet:
      held at `loading` until it lands (useWhereAutoRun.ts § `searching`). */
   const freshQueue = useFreshQueueForActivation(slug, "sources-digest");
-  const working = queue.job !== null || queue.starting;
+  /* A completion removes the job before its refresh can replace an earlier
+     `none`. Keep a waiting press behind that read too, or another tab's
+     completed run can be followed by a second paid request in the gap. */
+  const working = queue.job !== null || queue.starting || landing?.read === refresh;
   const auto = useAutoRun(
     slug,
     "sources-digest",

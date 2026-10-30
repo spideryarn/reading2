@@ -337,3 +337,16 @@ to play with it."* Several small questions, each with an ASCII sketch, not one b
   and SD1-03 (two validators split under the complexity limit) fixed by Sol; SD1-04 (the citer
   lookup is not aborted) fixed here for cancellation, the rest deferred above. 23 digest tests,
   288 across digest, situate and the database-backed freshness deciders.
+- 2026-10-30: Stage 2 built (ea1959879): the chip, the panel, press-only start, the switch
+  threaded into the chip row, visitors mapped to Bibliography. Plan claims that proved false:
+  "digest" cannot be an alias of a row labelled Digest (its label is already its first alias),
+  and all of a paragraph's sentences show rather than the first two or three, since paragraphs
+  are short. Browser pass (Sonnet, Playwright, a seeded digest on `clark-chalmers-1998-spya-uwb4tn`
+  locally, desktop and phone): works, console clean; the (i) label doubled a word (fixed); the
+  phone chip row overflowing is the part-switcher's designed sideways scroll. GPT Sol's review
+  ([261030b-stage2-code-review-sol.md](261030b-stage2-code-review-sol.md)), *approve with
+  changes*: SD2-01 (another tab's finished run could start a second paid one; fixed by Sol, with
+  postmortem 261030c), SD2-05 and SD2-06 fixed by Sol; SD2-02 (Where it sits has the same race)
+  fixed in its own commit; SD2-03 (a writer answer empty once checked is a failed answer, not a
+  blank `written` digest) fixed here, red first; SD2-04 (admin view-as sees the digest as the owner
+  does) kept as the standing view-as design and written into sources.md in Stage 4.
