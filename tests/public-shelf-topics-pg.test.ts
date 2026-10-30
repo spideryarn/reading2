@@ -378,6 +378,16 @@ describe("the public shelf's topic pills", () => {
     expect(nameCalls().length).toBeGreaterThan(0);
     expect((await publicShelf()).topics.length).toBeGreaterThan(0);
 
+    /* Its owner opening it puts it back on the shelf, and so back on the
+       public list (plan 261030f): the topics hear about that too. Archived
+       again afterwards, so the rest of this file sees the shelf it expects. */
+    seen = [];
+    const opened = await call("POST", `/api/library/${slug(3)}/open`, { as: ownerOf(3) });
+    expect(opened.status, opened.text).toBe(204);
+    expect(Object.keys((await siteRow())?.members ?? {})).toContain(ids[3]);
+    const rearchived = await call("PATCH", `/api/library/${slug(3)}`, { body: { archived: true }, as: ownerOf(3) });
+    expect(rearchived.status, rearchived.text).toBe(200);
+
     seen = [];
     const deleted = await call("DELETE", `/api/library/${slug(5)}`, { as: ownerOf(5) });
     expect(deleted.status, deleted.text).toBe(200);

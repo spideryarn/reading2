@@ -7237,7 +7237,9 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
 /**
  * **Answer, then bring the public shelf's topic pills up to date**, before the
  * handler returns: the three routes that can move an article on or off
- * `/read/public` — share and un-share, archive and restore, delete.
+ * `/read/public` — share and un-share, archive and restore, delete. (A fourth,
+ * an open that puts an archived article back, answers 204 and calls
+ * `refreshPublicShelfTopics` itself: `POST /api/library/:slug/open`.)
  *
  * Awaited after the answer is sent, as `/api/library/terms` does, so the spend
  * lands in this request's collector — booked to the site account with no
@@ -12213,11 +12215,15 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/library\/([\w.%-]+)\/open$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      await shelfStore.recordOpen(slugPart(captures, 1));
+      const { restored } = await shelfStore.recordOpen(slugPart(captures, 1));
       // 204: there is nothing worth reading back, and a body would invite
       // somebody to render a counter that is one behind.
       res.statusCode = 204;
       res.end();
+      /* An open that put an archived article back is a fourth way onto
+         `/read/public` (plan 261030f), so the topic pills hear about it as
+         they do from `sendThenRefreshPublicTopics`'s three. Never throws. */
+      if (restored) await refreshPublicShelfTopics();
     },
   },
 

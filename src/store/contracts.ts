@@ -816,13 +816,14 @@ export interface ShelfStore {
   ): Promise<LibraryEntry | null>;
 
   /**
-   * One more open.
+   * One more open — **and, if the article was archived, back on the shelf**
+   * (Greg, spya-h8cda9; plan 261030f).
    *
-   * Returns nothing. This is fire-and-forget from the client's point of view,
-   * and a response body would only invite somebody to render a counter that is
-   * one behind.
+   * Returns only whether it was put back, for the route to bring the public
+   * shelf's topics up to date. Nothing reaches the client: a response body
+   * would only invite somebody to render a counter that is one behind.
    */
-  recordOpen(slug: string): Promise<void>;
+  recordOpen(slug: string): Promise<{ restored: boolean }>;
 
   /**
    * **How many other articles this reader has opened**: theirs, on the shelf

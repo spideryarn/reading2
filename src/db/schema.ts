@@ -362,7 +362,8 @@ export const articles = spideryarn.table("articles", {
    * at all, un-archiving nulls `archived_at`, and switching High-powered AI off
    * nulls `high_power_since`. Those columns keep their meanings exactly.
    *
-   * **Not "the row changed".** An open (`last_opened_at`), a visibility change
+   * **Not "the row changed".** An open (`last_opened_at`) — unless it put an
+   * archived article back, which is un-archiving (plan 261030f) — a visibility change
    * (`article_visibility_changes`), a publish (`public_at`) and the pipeline's
    * own writes each have their own time and do not move this one. Stored, not
    * shown — docs/plans/261003j-store-when-it-happened-timestamp-audit.md.
