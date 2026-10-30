@@ -82,8 +82,9 @@
  * cost.** Both engines compute inertness as style, so `showModal()` and
  * `close()` each restyle every element in the page: 13–19 s and 13–15 s on an
  * 87k-node book at 6× CPU throttle, against 0.8 s and 0 ms for a non-modal
- * `show()` (spya-bewb4q, spya-k3g78t; docs/investigations/261029a-…). A modal
- * that inerts nothing is question q-f7xm4h; postmortem 261029d names the class.
+ * `show()` (spya-bewb4q, spya-k3g78t; docs/investigations/261029a-…). Whether
+ * Feedback should be modal at all — Greg: "it's not really a proper dialogue.
+ * It's like a panel" — is question q-f7xm4h; postmortem 261029d names the class.
  *
  * **AnnotateDialog would have been the wrong precedent for a second reason**, and
  * it is the one that would have hurt: its first Escape *clears the box*. Here
