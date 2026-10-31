@@ -36,6 +36,11 @@ article.
 On your own article, the small chat icon (two speech bubbles) beside a paragraph opens a new chat
 with that paragraph quoted, ready for your question. Nothing is sent until you press Send.
 
+Under Brief and under Fuller there is also a box, **Ask about this summary…**: type a question and
+press **Ask**, and a new chat starts about that summary, with your question sent straight away.
+After that the box gives way to a link back to that chat, so each summary has one conversation you
+can return to. Chat lists it as started from Summary.
+
 If you have filled in your [reader profile](/help/reader-profile), the summary is written with it in
 mind, and a small badge says so. A summary is written once and kept. **Write it again** appears only
 when the article has changed since, or you have changed your profile, and gives you a fresh one.

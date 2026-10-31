@@ -11,7 +11,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
   Fuller prompts grew out of: levels, length, register
   - [Length follows the piece](#length-follows-the-piece-since-2026-10-05) · [Written for someone who has not read it](#written-for-someone-who-has-not-read-it-since-2026-10-05) · [Bold and bullets](#bold-and-bullets-since-2026-10-04)
 - [§ A summary is a door](#a-summary-is-a-door) — the chips, and each paragraph linking to its passages
-  - [Ask about a paragraph](#ask-about-a-paragraph-since-2026-10-04) · [Each sentence is a door too](#each-sentence-is-a-door-too-since-2026-10-02)
+  - [Ask about a paragraph](#ask-about-a-paragraph-since-2026-10-04) · [Ask about the summary](#ask-about-the-summary) · [Each sentence is a door too](#each-sentence-is-a-door-too-since-2026-10-02)
 - [§ The fidelity guard](#the-fidelity-guard-since-2026-10-01) — checking each paragraph against what it cites
 - [§ The band is a touch wider](#the-band-is-a-touch-wider-since-2026-10-01) · [§ The URL](#the-url)
 - [§ What this deliberately does not have](#what-this-deliberately-does-not-have) · [§ What is still open](#what-is-still-open)
@@ -678,6 +678,42 @@ Tests: [`chat-handoff.test.ts`](../../tests/chat-handoff.test.ts) (the wording),
 [`simple-panel.test.tsx`](../../tests/simple-panel.test.tsx) (who gets a button),
 [`summary-ask-in-chat.test.tsx`](../../tests/summary-ask-in-chat.test.tsx) (the whole trip, and
 what Send posts).
+
+### Ask about the summary
+
+> there should be a text input box underneath so that you can […] continue the conversation
+> underneath. And actually, there probably should be a text input box at the bottom of the
+> summaries as well […] And then they would be their own special types of chats that would also be
+> listed in the list of chats.
+>
+> — Greg, 2026-10-30 (`spya-vqmfrs`, abridged), asking first for the box under
+> [Sources › Digest](sources.md#digest)
+
+Since 2026-10-30, under a stored Brief and under a stored Fuller — not under Thread, which is
+another band — sits an ask box, the same control as the digest's
+([`AskBox.tsx`](../../src/web/AskBox.tsx)). **Its first Send starts one chat about that level** and
+opens it in Chat's band, as every *Ask in chat* does: the reader's words whole, then the level's
+text fenced, marked as quoted and cut to fit Chat's limit (chat-handoff.ts § `askAboutModelText`;
+the same reasons for the fence as the paragraph button's, above). **From then on the box gives way
+to the chat's mark**, whose press reopens that chat beside the mode, where its own composer carries
+on: one chat per item ([chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item)).
+
+- **One chat per level, as that summary was written.** The chat stores a `summary` origin whose
+  item is the level and the summary's `generatedAt` (`ss-fuller-…`, `summaryItemId`); one time
+  covers both levels, so a summary written again gets new chats rather than reopening one about
+  words it no longer says.
+- **Listed in Chat** as *Started from Summary › Fuller* (or *› Brief*), under Summary's filter, and
+  its way back opens Summary on that level.
+- **Owner only.** A visitor has no chat, and in an administrator's view-as tab, where nothing may
+  be sent on the owner's behalf, the box is not drawn (`SummaryLevelChats` is passed only to the
+  owner).
+- **The paragraph button above is unchanged**: it still waits in the composer and stores no origin,
+  and its way back is still not built. The plan, and why the box reuses the reopen rule rather than
+  posting into an existing thread, is
+  [261030b § The ask box](../plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md#the-ask-box-under-the-digest-and-under-summary).
+
+The level's box is `LevelAsk` in [`SimplePanel.tsx`](../../src/web/SimplePanel.tsx); the origin's
+tests are [`sources-digest-and-summary-origins.test.ts`](../../tests/sources-digest-and-summary-origins.test.ts).
 
 ### Each sentence is a door too (since 2026-10-02)
 

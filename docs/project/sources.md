@@ -2,10 +2,11 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-One mode in the band, with nine sub-mode addresses: seven established views and two experiments.
-Since 2026-10-25 the owner sees three of the established views as chips,
+One mode in the band, with ten sub-mode addresses: seven established views, the Digest and two
+experiments. Since 2026-10-25 the owner sees three of the established views as chips,
 and the other four as tools inside the first
-([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)):
+([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)); since
+2026-10-30, with the experimental switch on, a fourth chip, Digest:
 
 - **Where it sits**: what came after the piece, what it leans on, and the literature search (the
   owner's default, since 2026-10-25). Its four tools:
@@ -17,6 +18,9 @@ and the other four as tools inside the first
 
   And, behind the experimental switch, two experiments after the tools (since 2026-10-26,
   [§ The experiments](#the-experiments)): **Guess first** and **Evidence first**.
+- **Digest**, behind the experimental switch: one text to read on what the piece cites, who has
+  taken it up, what it may have missed and which citations to check (the owner's, since
+  2026-10-30, [§ Digest](#digest)).
 - **Bibliography**: the works the piece cites (the Citations mode until 2026-10-09; a visitor's
   default).
 - **Links**: every web address its own text links to (since 2026-10-11).
@@ -50,6 +54,7 @@ for Reception and Claims. This page owns the merge.
 - [§ The band](#the-band) — three chips for the owner, four tools inside the first, one surface
 - [§ Where it sits](#where-it-sits) — the default: the literature search, Go further (the tools), Papers that cite it (and its *About "keyword"* view) and What it builds on; whose year it prints; opening it is the request
 - [§ The experiments](#the-experiments) — Guess first and Evidence first, behind the switch: the dossier met before its verdicts
+- [§ Digest](#digest) — behind the switch: one prose digest of the piece's sources, on the owner's press; what it trusts, who sees it, and its ask box
 - [§ Not cited](#not-cited) — OpenAlex's search on the owner's press, less the bibliography, and why every row says "not among the works Spideryarn found"
 - [§ Links](#links) — the article's own hyperlinks, read in the browser, and why not a fold into Bibliography
 - [§ Investigate](#investigate) — suggested questions and your own, each a chat with a web search; why a launcher and why the name
@@ -65,10 +70,11 @@ for Reception and Claims. This page owns the merge.
 ## The band
 
 ```
- ┌ Where it sits │ Bibliography 42 │ Links 61 ┐                                   (i)
+ ┌ Where it sits │ Digest │ Bibliography 42 │ Links 61 ┐                          (i)
  │ WhereItSitsPanel                          ← Where it sits (the owner's default)
  │   the search's summary box, its groups, then Go further:
  │   [Pages about it 3] [Check a claim 8] [Close to it, not cited 18] [Ask your own question]
+ │ SourcesDigestPanel                                  ← Digest (switch on)
  │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (a visitor's default)
  │ LinksPanel                                          ← Links
  │
@@ -78,7 +84,7 @@ for Reception and Claims. This page owns the merge.
  │ InvestigatePanel                                     ← Investigate
 ```
 
-**Three chips, four tools, seven addresses** (nine with the two experiments, [§ The experiments](#the-experiments)) (since 2026-10-25, [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 7).
+**Three chips, four tools, seven addresses** (since 2026-10-25, [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 7), and behind the switch a fourth chip, Digest ([§ Digest](#digest)), and two experiments ([§ The experiments](#the-experiments)): ten addresses in all.
 Greg asked for fewer sub-modes where they could be unified:
 
 > be proactive if you think things can be unified into one submode. Great, let's do that.
@@ -310,6 +316,113 @@ note is the model's, in the model's face.
 
 The panel is [`src/web/SourcesExperiments.tsx`](../../src/web/SourcesExperiments.tsx); the band in
 the whole app, switch on and off, is *tests/reception-lens-in-chat.test.tsx* § the experiments.
+
+## Digest
+
+> let's do this as new submodes in sources, because I don't want to screw with what we already
+> have. It's easier to generate a bunch of new submodes and then iterate on them and then throw
+> things away. […] one for now that generates a sort of a summary of all of those, I think, four
+> points I made before: outbound, inbound, anything missed, and anything that doesn't quite say what
+> the article purports them to say. And that as you scroll the article, it highlights in that
+> sources digest […] there should be a text input box underneath so that you can […] continue the
+> conversation underneath.
+>
+> — Greg, 2026-10-30 (`spya-vqmfrs`, abridged)
+
+Since 2026-10-30, for the owner, behind the experimental switch, at `?sources=digest`: **one text
+to read about the piece's sources**, where *Where it sits*' dossier gives cards. Two to four
+sentences on the shape of it, then four headed sections of short paragraphs — *What it builds on*,
+*Who has taken it up*, *What it may have missed* and *Worth checking: citations that may not say
+that* — each paragraph with *More* (the detail, then each source with the words checked in it),
+and *What was searched* folded at the foot, so the working is one press away. A sentence that names
+a passage is drawn as Summary's are (SimplePanel.tsx § `Sentence`, a `BlockRef`), so it lights
+while its passage is on screen and a press jumps there, with no lighting code of its own. *Worth
+checking* is headed as something to check, never "wrong"; a check's verdict is *says it*, *partly*,
+*does not say it* or *could not tell*.
+
+**A sibling of the dossier, not a change to it**, as Greg asked. The cheaper digest, one Opus call
+reworded from the stored dossier, was passed over because he asked for the many-searches version
+first — *"Let's just try and make this be as valuable as possible, and then we'll figure out what
+costs the most afterwards"* — and is the fallback if the cost does not pay. The plan, its research
+and its reviews are [261030b](../plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md).
+
+**One step, `sources-digest`, in four phases**: a planner (Sonnet; Opus under
+[high-powered AI](high-powered-ai.md)) writes up to 16 *leads* from the article, each a question with
+its passages and one or two searches; the searches run on Exa through OpenRouter, with OpenAlex's
+citers beside them; one Haiku reader per lead reports on what its searches found; and Opus, for
+every article, writes the digest from those reports. The diagram, the caps and what each call is
+sent are the plan's § The pipeline and the header of [`src/sources-digest.ts`](../../src/sources-digest.ts),
+which reuses `situate`'s query checks, search, citers and quote check rather than copying them. Its
+ledger tasks are `digest-plan`, `digest-search`, `digest-read` and `sources-digest`. Stored on the
+revision (`sources_digest`), read by `GET /api/sources-digest/:slug`, and in the owner's export.
+
+**What it trusts**, each rule held in code rather than asked of a model:
+
+- **No search is written after a page is read** (GPT Sol's F1 on the plan). Greg imagined the
+  readers searching again; a query written after reading a stranger's page is a search that page
+  steered, so every query is the planner's, from the article alone, through `validateQueries`. The
+  readers have no tools: what one would still dig into comes back as words under *More*, and the
+  digging is the chat's. Whether readers may search again is Greg's question 7 in the plan.
+- **Untrusted text is fenced at both boundaries** (F2): the article and every page at the readers,
+  and at the writer the article and every reader's report, since a report is model text that read a
+  stranger's page. The instructions come after the last fence (SD1-01).
+- **Every quote is checked in code** against the text the run fetched, and the writer may cite only
+  the sources of checked quotes; its block ids are checked against the article. A writer answer left
+  empty by the checks fails the run rather than storing a blank digest (SD2-03).
+- **The profile goes only to the writer**, never to the planner or the readers, so a profile word
+  cannot become a search; the digest carries the usual *written for you* badge.
+- **Found nothing is said**, with the searches listed, never as an all clear.
+
+**Opening it is the request**, the rule *Where it sits* follows ([§ Opening it is the
+request](#opening-it-is-the-request)). The press on the Digest chip or its command-bar row arms
+`sources-digest` (activation.ts § `activationForSources`) and starts a run when none is stored;
+arriving by a link, a reload or Back starts nothing and shows *Write the digest*. **A stored digest
+is never re-run by a press**, stale or outdated included: only *Write it again* replaces it. A run
+another tab is already writing is waited on, not bought twice ([`useSourcesDigest.ts`](../../src/web/useSourcesDigest.ts);
+[postmortem 261030c](../postmortems/261030c-a-state-update-in-one-passive-effect-cannot-guard-a-later-effect-from-the-same-render.md)
+is the race that once let a finished run start a second).
+
+**The dearest press in the app**: about $0.85 a run, $1.80 with every cap hit — estimated from
+the caps, not yet measured. Its own allowance, `SOURCES_DIGEST_RATE_POLICY`: three an hour and eight
+a day per reader, 50 a day across everyone, one at a time, with a lease longer than the step's whole
+budget so a slot cannot expire mid-run.
+
+**Owner only, as a decision rather than a default** (F3). [mode.md](mode.md)'s default is that a
+stored artefact is readable by a visitor; the digest departs from it, as the dossier does, for two
+reasons: the writer is given the owner's profile, so it is written for them; and it carries quotes
+from strangers' pages the owner's press fetched, which a public page would republish. So a visitor's
+band never offers it and a shared `?sources=digest` draws Bibliography ([§ Visitors](#visitors)).
+**An administrator's view-as sees a stored digest exactly as the owner does**: that is the standing
+view-as design ([security.md § Viewing the app as a reader](security.md#view-as)), kept on purpose
+(GPT Sol's SD2-04). It cannot start a run (`useAutoRun` does nothing in view-as, and the client sends
+no write) and draws no ask box. Whether a visitor should see a stored one is Greg's question 8.
+
+**Behind the experimental switch until a live run is measured** ([experimental-features.md](experimental-features.md#gated-below-mode-level)).
+`experimental: true` on its `SOURCES_SUB_MODES` row hides the command-bar row, and the chip row
+filters through the same rule (SourcesMode.tsx § `SourcesViews`), so a pasted `?sources=digest`
+still draws its chip, lit. Moving it out is that flag.
+
+**The ask box and the paragraph chats.** Under the digest sits the shared ask box
+([`AskBox.tsx`](../../src/web/AskBox.tsx), lifted from Investigate's, the same box Summary uses:
+[summaries.md § Ask about the summary](summaries.md#ask-about-the-summary)). Its first Send starts
+one chat about the whole digest, and each paragraph's *Ask in chat* one about that paragraph; both
+are `sources-digest` origins, the item `sd-` and the digest's `generatedAt` digits (with `-p3` for a
+paragraph), so a digest written again gets new chats. The first message is the reader's words whole
+and the digest's text fenced and cut to fit Chat's limit (chat-handoff.ts § `askAboutModelText`).
+Once an item has its chat, the box or button gives way to that chat's mark, which reopens it. Chat's
+list says *Started from the digest in Sources › Digest*, and the way back opens the digest on that
+paragraph. The general rules are [chat-from-a-mode.md](chat-from-a-mode.md).
+
+**Whose words** ([fonts.md](fonts.md)): the overview, paragraphs and detail are the model's; a
+source's quote is a stranger's page, in the UI face, as the dossier draws it.
+
+**Deferred**, each with its reason, in the plan's § Deferred: measuring a real run, readers that
+search again or fetch a page, Brief and Fuller levels, and an abort signal through the OpenAlex
+citer lookup.
+
+The panel is [`src/web/SourcesDigestPanel.tsx`](../../src/web/SourcesDigestPanel.tsx). Tests:
+*tests/sources-digest.test.ts* (the step), *tests/sources-digest-panel.test.tsx* (the press, the
+doors, visitors, the switch), *tests/sources-digest-and-summary-origins.test.ts* (the two origins).
 
 ## Not cited
 
@@ -586,8 +699,8 @@ What Sources might become as a result, folded to three chips, was proposed for G
 ## The address, and old links
 
 `?mode=sources`, and `?sources=` names Where it sits, Bibliography, Not cited, Links, Reception,
-Claims or Investigate, or one of the two experiments, `guess-first` and `evidence-first`
-([§ The experiments](#the-experiments)). **Where it sits is the default since 2026-10-25** and is left off, so a bare
+Claims or Investigate, the Digest (`digest`, [§ Digest](#digest)), or one of the two experiments,
+`guess-first` and `evidence-first` ([§ The experiments](#the-experiments)). **Where it sits is the default since 2026-10-25** and is left off, so a bare
 `?mode=sources` opens it for the owner; Bibliography was the default until then, and is still what a
 visitor's band draws for a bare address (`visitorSourcesView`). Each sub-mode keeps its own parameters,
 unchanged: `?citeby=` and `?citebar=` for
@@ -620,7 +733,8 @@ beside `debate`, so a lone old `?peer-review=claims` link wins over a remembered
 *tests/sources-old-addresses.test.ts*, *tests/last-view.test.ts* and
 *tests/reception-navigation.test.tsx*.
 
-**In the command bar** all seven are rows (the two experiments are not), *Where it sits* first: the four tools keep their own
+**In the command bar** all seven are rows, and Digest with the switch on (also *sources digest*,
+*citation digest* and *what its sources say*); the two experiments are not. *Where it sits* first: the four tools keep their own
 rows and aliases, and *Where it sits* is also *situate*, *the literature*, *where this piece
 sits*, *literature search*, *what came after* and *papers citing it*
 (`SOURCES_SUB_MODES`); not *search the literature*, which as a phrase starting *search* is the bar's find-in-article command. **The old words find the sub-mode they meant**, as Tweets' did Summary's Thread:
@@ -637,11 +751,12 @@ rule 5). Sources has come first since 2026-10-10 and ranks before Referee for *p
 
 ## What a press buys
 
-**Only *Where it sits* and Bibliography are ever armed by a press that moves you**: a press on the
-Sources button, a chip, or a command-bar row arms the work of the sub-mode it lands on
+**Only *Where it sits*, Digest and Bibliography are ever armed by a press that moves you**: a press
+on the Sources button, a chip, or a command-bar row arms the work of the sub-mode it lands on
 (activation.ts § `activationForSources`). For Bibliography that is the `bibliography` list; for
 *Where it sits*, since 2026-10-26, the composite `sources-where`: the search of the literature and,
-when missing, Bibliography before it ([§ Opening it is the request](#opening-it-is-the-request)).
+when missing, Bibliography before it ([§ Opening it is the request](#opening-it-is-the-request));
+for Digest, since 2026-10-30, the `sources-digest` step when none is stored ([§ Digest](#digest)).
 Nothing for any other. *Where it sits* needs Bibliography because *What it builds on* is drawn from
 it and an article can arrive without one (Rebuild, Start again, a re-add): the mode contract's
 "opening an unmade sub-mode starts it" ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 8, GPT Sol's F4).
@@ -659,7 +774,8 @@ tool, as the links do. Reception's search is retired as a chip, not as a search 
 Sol's F5): its stored rows, its stale banner's *Search again*, and Metadata's and the command bar's
 *Run again* all stay.
 
-Every read stays mounted in every sub-mode, so the chips and tools can count, and each auto-run is
+Every read stays mounted in every sub-mode, so the chips and tools can count — bar the Digest's,
+which has no number and is mounted only while it is on screen (SourcesMode.tsx § `DigestBand`) — and each auto-run is
 gated on its own sub-mode, so a press armed for one that lands on another is retired unspent. A
 link, Back, popstate or a last-view restore never buys anything.
 
@@ -697,12 +813,12 @@ the policy about blocks would change what every public article shows, and was le
 [261011d](../plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md) as wider than
 the report.
 
-**Where it sits, Not cited, Investigate and the two experiments are not there at all**, and plan 261025h left a
+**Where it sits, Digest, Not cited, Investigate and the two experiments are not there at all**, and plan 261025h left a
 visitor's band as it was (GPT Sol's F3): their chips are Bibliography, Links, Reception and Claims.
-A bare Sources address (the owner's *Where it sits*), a shared `?sources=where`,
+A bare Sources address (the owner's *Where it sits*), a shared `?sources=where`, `?sources=digest`,
 `?sources=not-cited`, `?sources=investigate`, `?sources=guess-first` or `?sources=evidence-first`
 draws Bibliography (params.ts §
-`visitorSourcesView`), so a visitor never asks `/api/citers`, `/api/situate` or `/api/related-work`
+`visitorSourcesView`), so a visitor never asks `/api/citers`, `/api/situate`, `/api/sources-digest` or `/api/related-work`
 and never mounts an Investigate sender (*tests/public-network-trace.test.tsx*). A visitor's *Where
 it sits* would need a public projection of the citers; it is left for later.
 
@@ -731,15 +847,17 @@ line, from the same two lists in the public payload.
 
 ## Chats started from it
 
-A chat started from a cited work, a claim, an angle or a literature-search finding keeps its stored
+A chat started from a cited work, a claim, an angle, a literature-search finding or the digest keeps its stored
 origin as data: `bibliography` for a cited work, `sources-claims` for a claim, `reception` for an
-angle, and `situate` for a finding (since 2026-10-25). The old spellings were `citations` for a work
+angle, `situate` for a finding (since 2026-10-25), and `sources-digest` for the digest or one of its
+paragraphs (since 2026-10-30, [§ Digest](#digest)). The old spellings were `citations` for a work
 and `debate` for a claim or an angle; old rows are read under the current names.
-Chat's list shows all four under Sources' icon and one `sources` filter; the row names the
-sub-mode in words (*Bibliography*, *Investigate*, *Claims* or *Where it sits*), the tooltip gives
+Chat's list shows all five under Sources' icon and one `sources` filter; the row names the
+sub-mode in words (*Bibliography*, *Investigate*, *Claims*, *Where it sits* or *Digest*), the tooltip gives
 the fuller origin, and the way back
 opens that sub-mode: a work on Bibliography with its row in view, a question (an angle, before 2026-10-20) on Investigate, a claim on
-Claims with its row in view, a finding on *Where it sits* with its row in view
+Claims with its row in view, a finding on *Where it sits* with its row in view, a digest paragraph on
+Digest with that paragraph in view
 ([`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`,
 Reader.tsx § `openOrigin`, GPT Sol's F5 on 261009l and F6 on 261025h).
 
@@ -804,6 +922,11 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
   [`src/web/useSituate.ts`](../../src/web/useSituate.ts) — *Where this piece sits*, its words and
   order, and its read and press; [`src/situate.ts`](../../src/situate.ts) — the step behind
   `GET /api/situate/:slug` and the `situate` job.
+- [`src/web/SourcesDigestPanel.tsx`](../../src/web/SourcesDigestPanel.tsx) and
+  [`src/web/useSourcesDigest.ts`](../../src/web/useSourcesDigest.ts) — Digest, its read and its
+  press; [`src/sources-digest.ts`](../../src/sources-digest.ts) — the step behind
+  `GET /api/sources-digest/:slug` and the `sources-digest` job;
+  [`src/web/AskBox.tsx`](../../src/web/AskBox.tsx) — the ask box under it, shared with Summary.
 - [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`, `SOURCES_CHIPS`, `chipOf`,
   `SOURCES_EXPERIMENTS`; [`src/web/router.ts`](../../src/web/router.ts)
   § `liftLegacySources`; [`src/web/activation.ts`](../../src/web/activation.ts) §

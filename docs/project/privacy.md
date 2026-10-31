@@ -30,6 +30,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
 - [§ Search the literature](#search-the-literature) — what the planner, Exa, OpenAlex and the final read receive, on the owner's opening or manual press
+- [§ Sources' Digest](#sources-digest) — the literature search's flows in more depth, the profile only to the writer
 - [§ The Chrome extension](#the-chrome-extension) — what one press takes, and where it goes
 - [§ A claim typed into Sources › Claims](#a-claim-typed-into-sources-claims) — the reader's words to the search, kept with the check
 - [§ A private link](#a-private-link) — the four places the page names it, and [who opens one](#who-opens-one-since-2026-10-21), recorded since 2026-10-21
@@ -942,6 +943,31 @@ revision (`article_revisions.situate`), goes with the article, and is never show
 `LAST_UPDATED` moved to 24 October 2026, to 25 October with the move out of the switch, and to
 26 October when opening the sub-mode started it;
 `tests/privacy-page.test.ts` holds the sentence.
+
+## Sources' Digest
+
+**Added 2026-10-31**, with [sources.md § Digest](sources.md#digest)
+([261030b](../plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md),
+[`src/sources-digest.ts`](../../src/sources-digest.ts)). The same flows as the literature search
+above, to the same parties, in more depth, so the page gives it a few sentences in the same
+paragraph rather than a section of its own. On the owner's press on the Digest chip, its command-bar row or *Write the
+digest* (behind the experimental switch, so the page says *an experimental feature*):
+
+- **The planner** (Claude Sonnet, Opus under high-powered AI, through OpenRouter) is shown the
+  fenced article and the works Bibliography lists, and writes every search. Never the profile.
+- **Each search goes through OpenRouter to Exa**, as the literature search's do (`searchOne`).
+  OpenAlex is asked for the citers by DOI or title, as above.
+- **The readers** (Claude Haiku, through OpenRouter, one per question) are shown that question's
+  passages of the article and what its searches returned. Never the profile, and no tools.
+- **The writer** (Claude Opus, through OpenRouter) is shown the whole article, the readers' reports
+  with their checked quotes, and the profile block — the only call that sees it.
+
+Stored on the revision (`article_revisions.sources_digest`), in the owner's export, gone with the
+article, and never shown to a visitor ([sources.md § Digest](sources.md#digest) has the owner-only
+decision; an administrator's view-as sees it, as the page's sentence on administrators already
+covers). **The ask box under it adds no flow**: its chat is an ordinary chat turn, its first message
+the reader's words and the digest's text. The same is true of the box under Summary.
+`LAST_UPDATED` moved to 31 October 2026; `tests/privacy-page.test.ts` holds the sentence.
 
 ## A claim typed into Sources › Claims
 

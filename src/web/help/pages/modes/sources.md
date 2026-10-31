@@ -105,6 +105,9 @@ for that.
   rests on, each a link out with the words found in it. **What was searched**, at the foot, lists
   every question and search, and what each found. *Worth checking* is something to check, not a
   verdict, and finding nothing does not mean there is nothing. Only you see it, not visitors.
+- **Ask about this digest…**, under it, starts a chat about the whole digest with your question;
+  the chat icon on a paragraph starts one about that paragraph. After that, the box or the icon
+  gives way to a link back to that chat. A digest written again gets new chats.
 
 **Bibliography**
 

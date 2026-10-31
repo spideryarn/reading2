@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "30 October 2026";
+const LAST_UPDATED = "31 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -545,6 +545,25 @@ export function PrivacyPage() {
           sent the article’s DOI, or the words of its title, to find papers that cite it. The whole
           article, the search results, public abstracts, and what you wrote about yourself or why
           you are reading then go through OpenRouter to the AI that writes the dossier.
+          {/* Plan 261030b (src/sources-digest.ts): Sources › Digest, behind
+              the experimental switch, on the owner's press on its chip or
+              Write the digest. The planner is shown the fenced article and the
+              works it cites, never the profile, and writes every search; each
+              is one forced Exa search through OpenRouter (situate's
+              `searchOne`). The citers are OpenAlex's, as above. The Haiku
+              readers get a lead's passages and its results, no profile and no
+              tools; the writer gets the article, the reports and the profile.
+              Stored on `article_revisions.sources_digest`, owner-only.
+              docs/project/privacy.md § Sources' Digest. */}{" "}
+          When you open Sources’ Digest (an experimental feature) with its tab, or press Write the
+          digest there, the same is done in more depth. The whole article and details of works it cites go through
+          OpenRouter to an AI that writes questions and short searches, and those searches go
+          through OpenRouter to Exa. OpenAlex is sent the article’s DOI, or the words of its title,
+          to find papers that cite it. Smaller AIs, through OpenRouter, are each shown some passages
+          of the article and what the searches found for them. The whole article, what those AIs
+          reported, and what you wrote about yourself or why you are reading then go through
+          OpenRouter to the AI that writes the digest. It is kept with your article, and is not
+          shown to anybody reading an article you have shared.
         </p>
         <p>
           {/* **The honest version of the training question.** Everything here
