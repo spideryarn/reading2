@@ -24,7 +24,7 @@ import { CONTACT_EMAIL } from "../src/site-text.js";
 import { MAX_FEEDBACK_QUESTION_BODY_CHARS } from "../src/feedback-question-values.js";
 import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 import { exactly } from "../src/web/relative-time.js";
-import { readerCssNoComments } from "./helpers/stylesheets.js";
+import { enclosing, mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
 /** Handed the request's init, so an answer can watch its `signal` (plan 261010f). */
@@ -488,8 +488,9 @@ describe("the feedback dialog", () => {
   });
 
   /* **The release's age and the changelog, for an admin only** (Greg,
-     2026-10-30, spya-hgpctx, plan 261030d). Under the head, so the close
-     button is still the first thing in it; and off a build, the link alone. */
+     2026-10-30, spya-hgpctx, plan 261030d). In the tab row since spya-j8xe8w,
+     after the head, so the close button is still the first thing in it; and
+     off a build, the link alone. */
   it("shows an admin how old this release is and links the changelog, and a reader neither", () => {
     builtAt = new Date(Date.now() - 3 * 3_600_000).toISOString();
     mount();
@@ -505,8 +506,34 @@ describe("the feedback dialog", () => {
     expect(link?.getAttribute("target")).toBe("_blank");
     expect(line?.querySelector(".fb-release-age")?.textContent).toBe("Released 3 hours ago · ");
     expect(link?.textContent).toBe("Changelog");
-    expect(line?.previousElementSibling?.classList.contains("fb-head")).toBe(true);
+    /* In the tab row (spya-j8xe8w), at its end: beside the tablist, not in
+       it, because a tablist's children are tabs. The compact form too. */
+    expect(line?.parentElement?.classList.contains("fb-tabrow")).toBe(true);
+    expect(line?.previousElementSibling?.getAttribute("role")).toBe("tablist");
+    expect(line?.nextElementSibling).toBeNull();
+    expect(line?.closest('[role="tablist"]')).toBeNull();
+    expect(line?.querySelector(".fb-release-age-short")?.textContent).toBe("3h ago · ");
     expect(host.querySelector("dialog button, dialog a")?.getAttribute("aria-label")).toBe("Close");
+
+    /* The panel stays at its 34rem-or-narrower base width until its 1024px
+       width step, so the compact wording stays the default until that same
+       step rather than following an unrelated phone-width query. `display:
+       none` also keeps the other form out of the accessibility tree. */
+    const css = readerCssNoComments();
+    for (const [selector, display] of [
+      [".fb-release-age", "none"],
+      [".fb-release-age-short", "inline"],
+    ] as const) {
+      const rule = `${selector} { display: ${display}; }`;
+      const at = css.indexOf(rule);
+      expect(at, rule).toBeGreaterThan(-1);
+      expect(enclosing(css, at + rule.indexOf("display")), `${rule} is unconditional`).toEqual([
+        selector,
+      ]);
+    }
+    const wideRelease = mediaBlock(css, "(min-width: 1024px)", ".fb-release-age-short");
+    expect(wideRelease).toMatch(/\.fb-release-age\s*\{\s*display:\s*inline/);
+    expect(wideRelease).toMatch(/\.fb-release-age-short\s*\{\s*display:\s*none/);
     act(() => root.unmount());
     host.remove();
 
@@ -517,6 +544,7 @@ describe("the feedback dialog", () => {
     expect(newer?.querySelector(".fb-release-age")?.textContent).toBe(
       "Released 20 minutes ago (this tab is older — reload for it) · ",
     );
+    expect(newer?.querySelector(".fb-release-age-short")?.textContent).toBe("20m ago (reload) · ");
     expect(newer?.getAttribute("data-tip")).toMatch(/^Released .+ · commit a{40}$/);
     expect(newer?.querySelector(".sr-only")?.textContent).toMatch(/^ · Released .+ · commit a{40}$/);
     act(() => root.unmount());
@@ -529,6 +557,7 @@ describe("the feedback dialog", () => {
     expect(host.querySelector(".fb-release-age")?.textContent).toBe(
       "Released 6 hours ago (an older release is live — rollback) · ",
     );
+    expect(host.querySelector(".fb-release-age-short")?.textContent).toBe("6h ago (rollback) · ");
     act(() => root.unmount());
     host.remove();
 
@@ -537,7 +566,7 @@ describe("the feedback dialog", () => {
     liveBuild = `${"c".repeat(40)} not-a-time`;
     mount();
     expect(host.querySelector(".fb-release")?.textContent ?? "").toMatch(
-      /^Released 3 hours ago · Changelog/,
+      /^Released 3 hours ago · 3h ago · Changelog/,
     );
     act(() => root.unmount());
     host.remove();
