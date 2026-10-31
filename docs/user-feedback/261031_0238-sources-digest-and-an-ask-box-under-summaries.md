@@ -1,7 +1,7 @@
 ---
 reports: spya-vqmfrs
 ending: shipped
-comment: Sources › Digest is built behind the experimental switch, with an ask box under it and under Summary's Brief and Fuller. Not yet run live (key limit); measuring it, and your choices, are queued and in question q-v03wmh.
+comment: Sources › Digest is built behind the experimental switch, with an ask box under it and under Summary's Brief and Fuller. Not yet run live (key limit); measuring it is queued. Your answers to q-v03wmh are acted on (plan 261031d).
 ---
 # A Sources digest, and an ask box under it and under Summary
 
@@ -44,12 +44,15 @@ What was built:
 (progressive disclosure; build a version, then ask in small pieces), proposed rather than written
 into principles.md, which changes only with his approval; whether the readers may search again after
 reading a page (not built: a page could steer what we search and spend); and three small layout
-choices, each built as option A.
+choices, each built as option A. **Answered** 2026-10-31 (`spya-dvq5b4`), and acted on in
+[261031d](../plans/261031d-sources-digest-acting-on-greg-s-answers-principles-readers-that-search-again-layout-choices.md):
+the principles written; readers do not search again for now (a narrow version only if the
+measurement asks for it); A, A, A, with the sections parted.
 
 **Deferred, each queued:** measure a real run once the OpenRouter key resets on 1 November
 (`qi-dykn3xjh`; no live run has happened, so cost and quality are estimates: about $0.85 a run,
-worst about $1.80); readers that search again (`qi-xgnn5fpb`, waits on Greg); the other layouts
-(`qi-eerykqdn`, waits on Greg); an abort signal through the OpenAlex lookup (`qi-nc9rjdcv`).
+worst about $1.80); readers that search again (`qi-xgnn5fpb`, now a narrow version that waits on
+that measurement); the other layouts (`qi-eerykqdn`, dropped: Greg's A); an abort signal through the OpenAlex lookup (`qi-nc9rjdcv`).
 
 Decided without asking: owner only (it is written for the owner's profile and quotes strangers'
 pages), and it stays behind the switch until a live run is measured.

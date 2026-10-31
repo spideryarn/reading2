@@ -1,10 +1,11 @@
 ---
 id: q-v03wmh
 report: spya-vqmfrs
-status: open
+status: answered
 asked: 2026-10-31
 title: Sources digest: two principles to write down, and a few small design choices
-refs: qi-rc3k5z2t · qi-xgnn5fpb · qi-eerykqdn · qi-dykn3xjh · docs/plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md · docs/research/261030a-sources-digest-how-others-show-a-papers-citations.md
+refs: qi-rc3k5z2t · qi-xgnn5fpb · qi-eerykqdn · qi-dykn3xjh · docs/plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md · docs/research/261030a-sources-digest-how-others-show-a-papers-citations.md · docs/plans/261031d-sources-digest-acting-on-greg-s-answers-principles-readers-that-search-again-layout-choices.md
+acted: spya-dvq5b4
 ---
 The Sources digest is built, behind the experimental switch: Sources › Digest. Pressing the chip writes it (about $1, once). Three questions; answer like "1A, 2A, 3a-A 3b-B 3c-A".
 
@@ -58,3 +59,15 @@ Decided without asking, say if you disagree:
 On 2, why A for now: the existing Where it sits search has a rule that no search is ever written after reading a web page, because a page could plant instructions. GPT Sol's review of the plan held the digest to the same rule.
 
 Not yet measured: the OpenRouter key is at its monthly limit until 1 November, so no live run on a real article has happened. Expected about $0.85 a run, worst case about $1.80, up to about 11 minutes. Measuring cost, time and quality on three or four articles is queued for after the reset.
+
+Greg's reply, 2026-10-31 (spya-dvq5b4, in the Feedback dialog):
+
+> 1 A
+> 2 not sure, maybe B? what do you think is best for the user?
+> 3 I don't really understand what you're asking. It's too hard to make sense of it without either an example or an ASCII diagram or something. So maybe try and build it yourself. Try and take screenshots to see what you think. Ask other agents that are taking on the role of being the user or expert product manager and UI and UX designer. And I guess you know we'll probably continue to tweak it.
+
+Acted on 2026-10-31 (queue item qi-qgqzgq6v, plan 261031d):
+1. Both principles are in principles.md as 2 and 3, worded as above.
+2. A for now; Opus and GPT Sol agreed. The gain is unmeasured (no live run yet), it adds about 30% to every run, and a page could steer what we search. If real runs show leads failing for want of one search, a narrow version follows, its search words written by code, never by a model.
+3. A, A, A. From screenshots of a realistic digest, a reader, a product manager and a UI/UX designer each chose A on all three. Changed: the four sections are now parted by a rule and space, so they no longer read as one long run of paragraphs; and the writer is told a citation that checks out does not go under "Worth checking". Correction to the question: after you ask, the box becomes the chat's usual mark (its count and gist), not "Continue the conversation".
+Tweak it whenever you like.

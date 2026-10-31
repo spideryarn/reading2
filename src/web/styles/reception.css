@@ -717,9 +717,17 @@ button.situate-quote:focus-visible { outline: 2px solid var(--highlight-text); o
   font-weight: 600;
 }
 .digest-overview { margin-bottom: 0.4rem; }
-.digest-section { padding-top: 0.45rem; }
-.digest-section + .digest-section { margin-top: 0.2rem; }
-.digest-head { display: flex; align-items: center; gap: 0.3rem; }
+/* **Five blocks at a glance, not twelve equal paragraphs**: the overview and
+   each section are parted by a rule and a gap about twice the space between
+   paragraphs, while a heading stays tight to its first paragraph, so it reads
+   as belonging to what is under it. A reader, a product manager and a
+   designer, asked separately over a 12-paragraph digest, each named the four
+   sections running together as the first thing to fix (plan 261031d § 3). */
+.digest-section { margin-top: 1.1rem; padding-top: 0.7rem; border-top: 1px solid var(--rule); }
+/* The rule above gives the space; a step darker than the dossier's group
+   labels, because here the four headings are how a reader finds their way
+   back down the column. */
+.digest-head { display: flex; align-items: center; gap: 0.3rem; padding-top: 0; color: var(--ink-soft); }
 /* The (i) beside a heading: a quiet icon button, as Settings' is. */
 .digest-info {
   display: inline-flex;
