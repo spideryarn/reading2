@@ -145,7 +145,7 @@ import {
   readFeedbackDraft,
   saveFeedbackDraft,
 } from "./feedback-draft.js";
-import { exactly, timeAgo } from "./relative-time.js";
+import { exactly, relativeAgo, timeAgo } from "./relative-time.js";
 import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { differentBuildLive, onDeployNoticed } from "./stale-shell.js";
 import { Toast, type ToastMessage } from "./Toast.js";
@@ -377,14 +377,23 @@ function ReleaseLine() {
   const builtAt = liveAt ?? mineAt;
   const commit = liveAt ? match?.[1] : buildCommit() ?? undefined;
   const ago = timeAgo(builtAt, now);
+  /* **The base-width panel gets the short form** (`2h ago · Changelog`),
+     because there the row has little room left for it, and the long form can
+     grow the row it was moved into to save space (spya-j8xe8w; measured at
+     375px). The panel widens at 1024px, and CSS picks which form is drawn. */
+  const shortAgo = relativeAgo(builtAt, now, "narrow") ?? ago;
   let liveNote = "";
+  let shortNote = "";
   if (liveAt) {
     if (Number.isNaN(mineMs) || liveMs === mineMs) {
       liveNote = " (a different release is live — reload for it)";
+      shortNote = " (reload)";
     } else if (liveMs < mineMs) {
       liveNote = " (an older release is live — rollback)";
+      shortNote = " (rollback)";
     } else {
       liveNote = " (this tab is older — reload for it)";
+      shortNote = " (reload)";
     }
   }
   const exact = builtAt ? exactly(builtAt) : undefined;
@@ -392,18 +401,24 @@ function ReleaseLine() {
     ? [`Released ${exact}`, commit ? `commit ${commit}` : null].filter(Boolean).join(" · ")
     : undefined;
   return (
-    <p className="fb-release" data-tip={detail}>
+    <span className="fb-release" data-tip={detail}>
       {ago ? (
-        <span className="fb-release-age">
-          Released {ago}
-          {liveNote} ·{" "}
-        </span>
+        <>
+          <span className="fb-release-age">
+            Released {ago}
+            {liveNote} ·{" "}
+          </span>
+          <span className="fb-release-age-short">
+            {shortAgo}
+            {shortNote} ·{" "}
+          </span>
+        </>
       ) : null}
       <a href="/changelog" target="_blank" rel="noopener noreferrer">
         Changelog
       </a>
       {detail ? <span className="sr-only"> · {detail}</span> : null}
-    </p>
+    </span>
   );
 }
 
@@ -1390,70 +1405,77 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
             <X size={16} />
           </button>
         </div>
-        {/* Under the head rather than in it, so the close button stays the
-            first thing `showModal()` focuses and the link is not. */}
-        {admin && open ? <ReleaseLine /> : null}
 
         {/* **Two tabs, outside the part that scrolls**, so switching is always
             in reach. Roving `tabIndex`: only the selected tab is in the Tab
             order, and the arrows move between them — `onTabKey`. Both are
             `type="button"`, inside a form whose submit must not fire. */}
-        <div className="fb-tabs" role="tablist" aria-label="Feedback">
-          <button
-            ref={writeTab}
-            type="button"
-            role="tab"
-            id={tabId("write")}
-            className="fb-tab"
-            aria-selected={view === "write"}
-            aria-controls={panelId("write")}
-            tabIndex={view === "write" ? 0 : -1}
-            onClick={() => choose("write")}
-            onKeyDown={onTabKey}
-          >
-            Write
-          </button>
-          <button
-            ref={earlierTab}
-            type="button"
-            role="tab"
-            id={tabId("earlier")}
-            className="fb-tab"
-            aria-selected={view === "earlier"}
-            aria-controls={panelId("earlier")}
-            tabIndex={view === "earlier" ? 0 : -1}
-            onClick={() => choose("earlier")}
-            onKeyDown={onTabKey}
-          >
-            Earlier
-          </button>
-          {/* **The way straight to Needs a decision, for an admin** (Greg,
-              `spya-t6nmxt`). A button, not a third tab (GPT Sol's plan review,
-              F7): it opens the Earlier tab on that filter, which is what the
-              pill inside does too, so there are still two tabs and two panels.
-              Its count is the threads waiting on a decision, once the
-              opening's read has said; until then it is drawn with no number,
-              and a spinner after 600ms (Greg, spya-yf6vmy). */}
-          {choice.detail === "admin" && (liveQuestions !== null || questionsLoading) ? (
+        {/* **The release line rides in this row** (Greg, 2026-10-31,
+            spya-j8xe8w: *"Can we move that onto the same row as right earlier
+            and needs a decision so that it doesn't use up vertical space?"*),
+            at its far end. Beside the tablist, not in it: a tablist's children
+            are tabs, and a link is not one (GPT Sol's review). After the head
+            in the DOM, so the close button stays the first thing `showModal()`
+            focuses and the link is not. */}
+        <div className="fb-tabrow">
+          <div className="fb-tabs" role="tablist" aria-label="Feedback">
             <button
+              ref={writeTab}
               type="button"
-              className="fb-tab fb-tab-shortcut"
-              aria-pressed={view === "earlier" && choice.show === "waiting"}
-              data-tip={liveQuestions === null ? "Looking for questions waiting on you…" : shortcutTitle(liveQuestions)}
-              onClick={() => {
-                setShow("waiting");
-                replies.close();
-                choose("earlier");
-              }}
+              role="tab"
+              id={tabId("write")}
+              className="fb-tab"
+              aria-selected={view === "write"}
+              aria-controls={panelId("write")}
+              tabIndex={view === "write" ? 0 : -1}
+              onClick={() => choose("write")}
+              onKeyDown={onTabKey}
             >
-              Needs a decision{" "}
-              {liveQuestions !== null ? (
-                <span className="fb-show-count">{waitingQuestionCount}</span>
-              ) : questionsSlow ? (
-                <LoaderCircle className="cmt-spinner fb-tab-spinner" size={13} aria-hidden="true" />
-              ) : null}
+              Write
             </button>
-          ) : null}
+            <button
+              ref={earlierTab}
+              type="button"
+              role="tab"
+              id={tabId("earlier")}
+              className="fb-tab"
+              aria-selected={view === "earlier"}
+              aria-controls={panelId("earlier")}
+              tabIndex={view === "earlier" ? 0 : -1}
+              onClick={() => choose("earlier")}
+              onKeyDown={onTabKey}
+            >
+              Earlier
+            </button>
+            {/* **The way straight to Needs a decision, for an admin** (Greg,
+                `spya-t6nmxt`). A button, not a third tab (GPT Sol's plan review,
+                F7): it opens the Earlier tab on that filter, which is what the
+                pill inside does too, so there are still two tabs and two panels.
+                Its count is the threads waiting on a decision, once the
+                opening's read has said; until then it is drawn with no number,
+                and a spinner after 600ms (Greg, spya-yf6vmy). */}
+            {choice.detail === "admin" && (liveQuestions !== null || questionsLoading) ? (
+              <button
+                type="button"
+                className="fb-tab fb-tab-shortcut"
+                aria-pressed={view === "earlier" && choice.show === "waiting"}
+                data-tip={liveQuestions === null ? "Looking for questions waiting on you…" : shortcutTitle(liveQuestions)}
+                onClick={() => {
+                  setShow("waiting");
+                  replies.close();
+                  choose("earlier");
+                }}
+              >
+                Needs a decision{" "}
+                {liveQuestions !== null ? (
+                  <span className="fb-show-count">{waitingQuestionCount}</span>
+                ) : questionsSlow ? (
+                  <LoaderCircle className="cmt-spinner fb-tab-spinner" size={13} aria-hidden="true" />
+                ) : null}
+              </button>
+            ) : null}
+          </div>
+          {admin && open ? <ReleaseLine /> : null}
         </div>
 
         {/* **Only this scrolls**, so the buttons at the foot cannot be
