@@ -350,7 +350,22 @@ button meant, when clicked, include both active and archived, or only include ar
 
 **An archived article is still readable by direct link.** Only the shelf filters. That is a decision
 rather than an oversight — the shelf is a shelf, not an access control list, and a link that stops
-working is a worse surprise than a card that is out of sight. The library *search* is the exception:
+working is a worse surprise than a card that is out of sight.
+
+**And its owner opening it puts it back on the shelf**, since 2026-10-30:
+
+> I open an archived article. It should unarchive it.
+>
+> — Greg, 2026-10-30 (spya-h8cda9)
+
+The open's own UPDATE clears `archived_at` (`recordOpen`, src/store/pg-shelf.ts), so it is the
+owner's page alone — from the shelf, from Include archived, from a link to their own article, or its
+metadata page — and never a visitor, *view as*, chat or MCP, none of which record an open. The
+masthead's Archive leaves you on the page, so a reload after it puts the article back: the rule as
+stated, accepted. A shared article goes back on `/read/public` with it, as Put back does, and the
+public topics are refreshed. On the page, the open goes through `useArchive`, so an Archive pressed
+while it is still out waits for it rather than racing it —
+[261030f](../plans/261030f-opening-an-archived-article-puts-it-back-on-the-shelf.md). The library *search* is the exception:
 an archived article is out of the index unless the reader turns on Include archived, because an
 unmarked hit that opens an article you archived reads as a ghost. Chat's `search_library` never
 turns it on.
@@ -569,7 +584,8 @@ Opens are a counter and a timestamp, deliberately **not** an event log. The tool
 matters, the answer is a table of events, not another column.
 
 A rename, a purpose edit, an archive and a Put back each stamp `articles.updated_at` — stored, not
-shown, and the only trace of a Put back, which nulls `archived_at`. An open does not move it.
+shown, and the only trace of a Put back, which nulls `archived_at`. An open does not move it, unless
+the open put an archived article back ([§ Archive](#archive-and-undo-is-the-confirmation)).
 
 `POST /api/library/:slug/open` is called by the **client**, from the reading view's mount — not by
 the server from inside `GET /api/article/:slug`. A GET that writes is a GET that a prefetch, a retry
