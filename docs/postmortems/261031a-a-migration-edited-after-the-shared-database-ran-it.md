@@ -79,15 +79,23 @@ Production, read-only: the row with `created_at = 1793397890262` has hash `234b1
 
 ## What would have caught it, ranked by ease against value
 
+**Items 1 and 2 were both built on 2026-10-31** (Greg: *"Use your judgment"*, reply spya-fpdjgq to
+q-swc9st): the sentence is in
+[database.md § Rule 4](../project/database.md#rule-4-on-a-laptop-the-draft-that-ran-and-the-file-that-was-committed),
+and the test is [tests/migration-shared-ledger.test.ts](../../tests/migration-shared-ledger.test.ts),
+watched going red on a reproduction of this edit —
+[plan 261031e](../plans/261031e-a-test-that-the-shared-database-never-ran-a-different-version-of-a-migration-file.md).
+
 1. **A sentence in database.md**: "a migration has run once any tree on the box has migrated, so a
    review fix to one is a new migration". Costs nothing, and it is the belief that was wrong. But it
-   is prose, so it erodes. Proposed, not written, because database.md's wording is a rule.
+   is prose, so it erodes. Written on 2026-10-31, as worded in q-swc9st, on Greg's "use your judgment".
 2. **A live test of rule 4 against the shared database.** It would read `DATABASE_URL`'s ledger and
    fail on any journal entry whose applied hash differs from the file, with the message "this
    migration has already run on the shared database; write a new one". The author would have seen
    it red on the next `npm test` after the edit, in their own tree. Cost: one test, plus a decision
    in the test-database registry (`tests/store-migration-registry.ts`) about a test that reads the
-   shared database rather than a private one. That is the reason it is proposed here, not built.
+   shared database rather than a private one. Built on 2026-10-31 as
+   `tests/migration-shared-ledger.test.ts`.
 3. **A git rule: refuse a change to any `drizzle/*.sql` that already exists at `HEAD`'s
    merge-base with `origin/dev`.** This was the first idea, and **it would not have caught this
    incident**: the file was never on `origin/dev` before the edit. A stricter version, "no
@@ -102,8 +110,8 @@ Production, read-only: the row with `created_at = 1793397890262` has hash `234b1
 What shipped is a restamp, which is correct here only because every DDL statement was identical. If
 an edit changes DDL, a restamp would record a schema the database does not have. Then the remedy is
 to bring the schema to the new end state by hand, probe it, and restamp, exactly as database.md
-says. The real long-term fix is item 2: the author finds out within minutes, in their own tree,
-while the edit can still be turned into a second migration.
+says. The real long-term fix is item 2, now built: the author finds out within minutes, in their own
+tree, while the edit can still be turned into a second migration.
 
 ## The thing I would tell myself
 

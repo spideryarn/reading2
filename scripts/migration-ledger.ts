@@ -395,6 +395,35 @@ function hashProblem(
 }
 
 /**
+ * Rule 4 and nothing else: does any ledger row stamped with one of this
+ * journal's `when`s carry a hash other than its file's?
+ *
+ * **For a database other trees also migrate** — the box's one local Supabase —
+ * where the rest of `reconcileLedger` is not this tree's business: rows with no
+ * entry here are other trees' unpushed migrations, and entries with no row are
+ * this tree's own new ones. What *is* this tree's business is a file it holds
+ * that the database ran in a different form, because that is an edit made
+ * after the migration had already run, and the next tree to `db:migrate` is
+ * the one that pays for it.
+ * docs/postmortems/261031a-a-migration-edited-after-the-shared-database-ran-it.md
+ *
+ * Every row with the entry's `when` is compared, not only the first, so an
+ * entry recorded twice cannot hide a stale hash behind a matching one.
+ */
+export function appliedFromDifferentSql(
+  journal: readonly JournalEntry[],
+  hashes: ReadonlyMap<string, string>,
+  rows: readonly LedgerRow[],
+): string[] {
+  const problems: string[] = [];
+  for (const m of matchJournalToLedger(journal, rows).matches) {
+    const stale = m.rows.find((r) => hashProblem(m.entry, r, hashes).length > 0);
+    if (stale) problems.push(...hashProblem(m.entry, stale, hashes));
+  }
+  return problems;
+}
+
+/**
  * After `migrate()`: every journal entry has exactly one row with its `when`
  * and its hash.
  *

@@ -801,6 +801,16 @@ claim the repair script's header describes, and `npm run db:check` is what says 
 **Against a remote, none of this applies**: a hash mismatch there means the published file was
 edited after it ran, which is a different and worse problem, and the answer is not a restamp.
 
+**A migration has run once any tree on the box has migrated, so a review fix to one is a new
+migration.** (Greg, 2026-10-31, choosing it as worded in q-swc9st.) Every worktree migrates the one shared Postgres, so "has this run anywhere?" is
+answered yes long before the push.
+[tests/migration-shared-ledger.test.ts](../../tests/migration-shared-ledger.test.ts) reads that
+database's ledger on every `npm test` and fails, in the author's own tree, on any of the tree's
+migration files that it ran in a different form — rule 4 alone, because the rest of the preflight
+judges other trees' unpushed work. Before it, the author stayed green and the next tree to migrate
+(the readiness loop) refused for five hours:
+[261031a](../postmortems/261031a-a-migration-edited-after-the-shared-database-ran-it.md).
+
 **Rows the journal has never heard of** get a policy rather than a rule, because a laptop
 legitimately carries them and production never should. Remote: refuse. Laptop with anything still
 pending: refuse, because an orphan row may be the same DDL as a pending migration under a new

@@ -2664,11 +2664,12 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
  * killed run can be inside it. This is where a Postgres suite belongs unless
  * something stops it.
  *
- * `shared-services` — the suite is about a **Supabase service**, and the
- * services are bound to the stack's one configured database. GoTrue, Storage,
- * Realtime and PostgREST all read `postgres` and cloning the SQL does not
- * redirect them, so a suite that joins their answers to app rows has to run
- * where both halves agree.
+ * `shared-services` — the suite is about either a **Supabase service** or state
+ * that exists only in the stack's own database. GoTrue, Storage, Realtime and
+ * PostgREST all read `postgres` and cloning the SQL does not redirect them, so
+ * a suite that joins their answers to app rows has to run where both halves
+ * agree. The migration-ledger guard must read the one ledger every worktree
+ * migrates; a fresh private clone would match the current files by construction.
  *
  * `unit` — no database at all, and the ordinary parallel lane. **It is the
  * default and it is not written down**: a file absent from the map below is a
@@ -2700,7 +2701,7 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
  * only the two directions a `Record` cannot: a scanned file with no entry, and
  * an entry for a file the scan no longer finds.
  *
- * ## The four in `shared-services`, and why each
+ * ## The five in `shared-services`, and why each
  *
  * - **`tests/auth-user-seeding.test.ts`** — its subject is that a row this repo
  *   writes into `auth.users` is one GoTrue can read back, and it proves it by
@@ -2719,8 +2720,8 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
  *   real side and one empty one, and `typeof 0` is `"number"` however wrong the
  *   number is. Measured green on a private database on 2026-09-03 — which is
  *   the argument for moving it, not against.
- * - **`tests/db-test-create.test.ts`** — the factory's own suite, and the only
- *   one of the four chosen **by contract rather than by a red**: it passes
+ * - **`tests/db-test-create.test.ts`** — the factory's own suite, chosen **by
+ *   contract rather than by a red**: it passes
  *   57/57 in the private lane too, because `dumpSharedSchema` hardcodes
  *   `-d postgres` and the host and port do not change. What is wrong is
  *   quieter. `baseUrl()`'s documented job is to mean *the shared database*, and
@@ -2730,6 +2731,10 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
  *   the worst place to leave that ambiguity. Its integration half is
  *   additionally gated on `SPIDERYARN_TEST_DB_FACTORY=1`, and T-D decides
  *   whether the lane sets it.
+ * - **`tests/migration-shared-ledger.test.ts`** — its subject is the shared
+ *   database's migration ledger: it catches a file edited after any worktree
+ *   ran it. A private database freshly migrated from this tree's files would
+ *   match by construction and make the test prove nothing. Plan 261031e.
  *
  * **`tests/store-realtime-sessions.test.ts` is deliberately not here**, and
  * 260903e's first list was wrong to include it. Checked rather than inherited:
@@ -2811,6 +2816,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/admin-store.test.ts": "shared-services",
   "tests/auth-user-seeding.test.ts": "shared-services",
   "tests/db-test-create.test.ts": "shared-services",
+  /* Its subject IS the shared database: it reads the ledger every tree on the
+     box migrates, to catch a migration file edited after that database ran it.
+     On a private database, migrated fresh from the current files, it would
+     match by construction. Read-only. docs/postmortems/261031a-…, plan 261031e. */
+  "tests/migration-shared-ledger.test.ts": "shared-services",
   "tests/seed-admin-signin.test.ts": "shared-services",
 
   /* ---- private-postgres: everything else that touches a database --------- */

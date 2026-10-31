@@ -1,10 +1,11 @@
 ---
 id: q-swc9st
 report: none
-status: open
+status: answered
 asked: 2026-10-31
 title: [Q-migration-guard] How should we stop a migration being edited after the box's shared database has run it?
-refs: session fix-local-ledger-sources-digest · docs/postmortems/261031a-a-migration-edited-after-the-shared-database-ran-it.md · drizzle/20261030220450_chat_thread_origin_sources_digest_and_summary.sql · tests/store-migration-registry.ts
+refs: session fix-local-ledger-sources-digest · docs/postmortems/261031a-a-migration-edited-after-the-shared-database-ran-it.md · drizzle/20261030220450_chat_thread_origin_sources_digest_and_summary.sql · tests/store-migration-registry.ts · qi-z8xp4m8x · docs/plans/261031e-a-test-that-the-shared-database-never-ran-a-different-version-of-a-migration-file.md
+acted: spya-fpdjgq
 ---
 How should we guard against a database migration being edited after the box's shared local database has already run it? That stopped the readiness checks for about five hours this morning.
 
@@ -27,3 +28,14 @@ Production was never affected: it only ever got the final file, and its record m
 The fix. A one-row correction to the local database's record. That was safe only because the edit changed no schema statements. A session fixed it and the loop is running again. The full write-up is the postmortem in refs.
 
 Why not a git rule that refuses edits to migration files: the obvious version would not have caught this, because the file had not reached dev yet when it was edited. A stricter version would also forbid revising a migration nobody has run.
+
+Greg's reply, 2026-10-31 (spya-fpdjgq):
+
+> Use your judgment.
+
+Acted on 2026-10-31 (queue item qi-z8xp4m8x): C, after consulting Opus and GPT Sol, who both
+agreed. The test is `tests/migration-shared-ledger.test.ts`, in the shared-services lane. It reads
+the shared database's ledger on every `npm test` and fails, in the author's own tree, on any of
+the tree's migration files that the database ran in a different form. It was watched going red on
+a reproduction of the 261031a edit. B's sentence is in database.md § Rule 4, word for word as
+above. Plan: docs/plans/261031e-a-test-that-the-shared-database-never-ran-a-different-version-of-a-migration-file.md.
