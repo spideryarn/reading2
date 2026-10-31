@@ -120,7 +120,7 @@ import { ToolBack, type WhereBefore, type WhereChild, WhereItSitsPanel } from ".
 import { SourcesExperimentPanel } from "../../SourcesExperiments.js";
 import { useExperimental } from "../../useExperimental.js";
 import { useSourcesDigest } from "../../useSourcesDigest.js";
-import { SourcesDigestPanel } from "../../SourcesDigestPanel.js";
+import { type SourcesDigestChats, SourcesDigestPanel } from "../../SourcesDigestPanel.js";
 
 /** The article's own hyperlinks, worked out once per blocks array for the Links chip and its panel. */
 function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | null): OutboundLink[] {
@@ -160,6 +160,9 @@ export function SourcesBand({
   onClaimFocusTaken,
   findingFocus = null,
   onFindingFocusTaken,
+  digestChats = null,
+  digestFocus = null,
+  onDigestFocusTaken,
   onOpenWork,
 }: {
   slug: string;
@@ -199,6 +202,11 @@ export function SourcesBand({
   /** One Situate finding or overview to bring into view in *Where it sits*' dossier, once (plans 261024o and 261026g; SituateDossier § `focus`). */
   findingFocus?: ItemFocus | null;
   onFindingFocusTaken?: (focus: ItemFocus) => void;
+  /** The digest's ask box and paragraph chats, or `null` in view-as (SourcesDigestPanel § `SourcesDigestChats`). */
+  digestChats?: SourcesDigestChats | null;
+  /** One digest paragraph to bring into view, once: a paragraph chat's way back (SourcesDigestPanel § `focus`). */
+  digestFocus?: ItemFocus | null;
+  onDigestFocusTaken?: (focus: ItemFocus) => void;
   /** Open Bibliography on one work — Claims' *Cited in this paragraph* (Reader.tsx § `openBibliographyWork`). */
   onOpenWork(workId: string): void;
 }) {
@@ -297,7 +305,16 @@ export function SourcesBand({
     /* The digest (plan 261030b): behind the switch on the chip row, drawn
        for a pasted address whatever the switch says. */
     case "digest":
-      return <DigestBand slug={slug} head={head} onJump={onJump} />;
+      return (
+        <DigestBand
+          slug={slug}
+          head={head}
+          onJump={onJump}
+          chats={digestChats}
+          focus={digestFocus}
+          onFocusTaken={onDigestFocusTaken}
+        />
+      );
     case "guess-first":
     case "evidence-first":
       return (

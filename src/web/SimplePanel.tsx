@@ -27,6 +27,14 @@
  * until Greg, 2026-09-30 (SPIDERYARN-READING2-7B): *"we don't want these mode
  * descriptions - they waste space."* Each pill's card says it now, and
  * docs/project/mode.md has the rule.
+ *
+ * **The ask box under the level** (plan
+ * docs/plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md
+ * § The ask box): the owner's, outside view-as, under a stored Brief or
+ * Fuller (Thread is another band). Its Send starts one chat about that level
+ * as it was written (a `summary` origin); once the level has it, the chat's
+ * mark stands in the box's place and reopens it. The paragraph button is
+ * untouched: it still waits in the composer and stores no origin.
  */
 import { Fragment, type ReactNode } from "react";
 import { MessagesSquare, Sprout } from "lucide-react";
@@ -36,11 +44,18 @@ import {
   type SimpleLevel,
   type SimpleParagraph,
   type SimpleSentence,
+  type SimpleSummary,
+  type SummaryOrigin,
+  type ThreadSummary,
   paragraphShape,
 } from "../types.js";
 import type { PublicSimpleSummary } from "../public-types.js";
 import type { UseSimple } from "./useSimple.js";
+import { AskBox } from "./AskBox.js";
 import { BlockRef } from "./BlockRef.js";
+import { MAX_ASK_ABOUT_QUESTION_CHARS, summaryOrigin } from "./chat-handoff.js";
+import { OriginChatMark } from "./OriginChat.js";
+import { threadForOrigin } from "./useChatAnchors.js";
 import { JobProgress } from "./JobProgress.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
@@ -55,6 +70,39 @@ export const SIMPLE_NONE_VISITOR = "Nobody has made a plain-words version of thi
 
 /** The ask button's name and its card: one sentence, the same in both. */
 export const SIMPLE_ASK_CHAT = "Ask about this paragraph in chat";
+
+/** The ask box under a level, and its chat's mark, in words. */
+export const SIMPLE_ASK_PLACEHOLDER = "Ask about this summary…";
+export const SIMPLE_ASK_LABEL = "Your question about this summary";
+export const SIMPLE_ASK_SEND = "Ask";
+export const SIMPLE_ASK_TIP = "Opens a new chat about this summary and asks your question straight away.";
+export const OPEN_SUMMARY_CHAT = "Open the chat about this summary";
+
+/**
+ * **What `Reader` hands the owner's arm for the ask box** — never in view-as.
+ * Absent, no box and no mark.
+ */
+export interface SummaryLevelChats {
+  /** The reading view's thread summaries (the raw list, not the passage chats). */
+  summaries: readonly ThreadSummary[];
+  /** The box's Send: start this level's chat with the reader's words, or reopen the one it has. */
+  onAsk(level: SimpleLevel, summary: Pick<SimpleSummary, "generatedAt" | "levels">, question: string): void;
+  /** Open a chat already started from the level, beside the mode. */
+  onOpen(threadId: string): void;
+}
+
+/** A level's words, its paragraphs one after another: what its chat is told the summary says. */
+export function summaryLevelText(summary: Pick<SimpleSummary, "levels">, level: SimpleLevel): string {
+  return summary.levels[level].map((p) => p.text).join("\n\n");
+}
+
+/** A level's origin: the summary's time and the level, its first paragraph as the snapshot. */
+export function summaryLevelOrigin(
+  summary: Pick<SimpleSummary, "generatedAt" | "levels">,
+  level: SimpleLevel,
+): SummaryOrigin | undefined {
+  return summaryOrigin(level, summary.generatedAt, summary.levels[level][0]?.text ?? "");
+}
 
 /** The owner's empty state, before the press has started anything. */
 export const SIMPLE_NONE_OWNER = "Nobody has asked for a plain-words version of this one yet.";
@@ -73,7 +121,7 @@ export const SIMPLE_FULLER_NOT_WRITTEN = "Fuller was not written, so nothing has
  * press that could ask the model. `owner?: never` for `FaqAccess`'s reason.
  */
 export type SimpleAccess =
-  | { kind: "owner"; owner: UseSimple }
+  | { kind: "owner"; owner: UseSimple; chats?: SummaryLevelChats | null | undefined }
   | { kind: "visitor"; simple: PublicSimpleSummary | null; owner?: never };
 
 export function SimplePanel({
@@ -99,6 +147,7 @@ export function SimplePanel({
   const owner = access.kind === "owner" ? access.owner : null;
   /* The owner's alone: the visitor's arm must have nothing to press. */
   const askChat = access.kind === "owner" ? onAskChat : undefined;
+  const levelChats = access.kind === "owner" ? (access.chats ?? null) : null;
   const paragraphs =
     access.kind === "owner" ? access.owner.simple?.levels[level] : access.simple?.levels[level];
   /* A visitor's paragraphs arrived with the page, so they are ready by construction. */
@@ -200,8 +249,46 @@ export function SimplePanel({
               ))}
             </div>
           </TooltipGroup>
+          {owner?.simple && levelChats !== null && (
+            <LevelAsk summary={owner.simple} level={level} chats={levelChats} />
+          )}
           {showJob && <div className="simple-job">{run("Write it again", true)}</div>}
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * **The ask box under a stored level, or its chat's mark** (plan 261030b §
+ * The ask box): the box until the level has a chat, then the mark in its
+ * place, whose press reopens that chat beside the mode.
+ */
+function LevelAsk({
+  summary,
+  level,
+  chats,
+}: {
+  summary: SimpleSummary;
+  level: SimpleLevel;
+  chats: SummaryLevelChats;
+}) {
+  const origin = summaryLevelOrigin(summary, level);
+  if (origin === undefined) return null;
+  const chat = threadForOrigin(chats.summaries, origin);
+  return (
+    <div className="simple-ask-box">
+      {chat ? (
+        <OriginChatMark chat={chat} label={OPEN_SUMMARY_CHAT} className="simple-chat" onOpen={chats.onOpen} />
+      ) : (
+        <AskBox
+          onAsk={(question) => chats.onAsk(level, summary, question)}
+          maxLength={MAX_ASK_ABOUT_QUESTION_CHARS}
+          placeholder={SIMPLE_ASK_PLACEHOLDER}
+          label={SIMPLE_ASK_LABEL}
+          send={SIMPLE_ASK_SEND}
+          tip={SIMPLE_ASK_TIP}
+        />
       )}
     </div>
   );

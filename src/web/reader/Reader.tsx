@@ -38,6 +38,11 @@ import {
   type Idea,
   MAX_LENS_CHARS,
   sameOrigin,
+  type SimpleLevel,
+  type SimpleSummary,
+  type SourcesDigest,
+  type SourcesDigestParagraph,
+  sourcesDigestParagraphOf,
   summaryLevelOf,
   type ThreadOrigin,
 } from "../../types.js";
@@ -114,7 +119,11 @@ import {
   askReceptionThroughLens,
   askInSources,
   askToCheckClaim,
+  askAboutModelText,
+  DIGEST_PARAGRAPH_QUESTION,
 } from "../chat-handoff.js";
+import { digestChatText, digestOrigin, digestParagraphOrigin, type SourcesDigestChats } from "../SourcesDigestPanel.js";
+import { summaryLevelOrigin, summaryLevelText, type SummaryLevelChats } from "../SimplePanel.js";
 import { askAboutBlock, askDoesItSayThat } from "../../chat-question.js";
 import { findingLens, findingLensOrigin, findingOrigin, overviewOrigin, overviewQuestion } from "../situate-dossier.js";
 import { chatDraftsFor } from "../chat-draft.js";
@@ -1877,6 +1886,9 @@ export function Reader({
      *literature* line's *Open in Sources*, or a finding/overview chat's way back. */
   const [findingFocus, setFindingFocus] = useState<ItemFocus | null>(null);
   const findingFocusTaken = useCallback((taken: ItemFocus) => setFindingFocus(focusTaken(taken)), []);
+  /* A paragraph of Sources › Digest: a paragraph chat's way back (plan 261030b). */
+  const [digestFocus, setDigestFocus] = useState<ItemFocus | null>(null);
+  const digestFocusTaken = useCallback((taken: ItemFocus) => setDigestFocus(focusTaken(taken)), []);
   /* An explanation in its band: a margin *Explained* line's *Open in
      Explanations* (plan 261028c). */
   const [explanationFocus, setExplanationFocus] = useState<ItemFocus | null>(null);
@@ -1932,6 +1944,9 @@ export function Reader({
           break;
         case "finding":
           setFindingFocus(null);
+          break;
+        case "digest":
+          setDigestFocus(null);
           break;
         case "explanation":
           setExplanationFocus(null);
@@ -2111,11 +2126,13 @@ export function Reader({
           openFindingInSources(origin.itemId);
           return;
         /* The digest, or one of its paragraphs, opens Sources › Digest
-           (plan 261030b). Landing on the paragraph waits for the panel to
-           mark its paragraphs (Stage 3b); until then the digest opens at its
-           top, which is where the whole digest's chat lands anyway. */
+           (plan 261030b). A paragraph's chat lands on its paragraph, which
+           the panel marks `data-digest-paragraph`; the whole digest's opens
+           at its top. A digest written since has other ids, so the focus is
+           handed back unserved and the digest opens at its top. */
         case "sources-digest":
           setBandAway(false);
+          if (sourcesDigestParagraphOf(origin.itemId) !== null) setDigestFocus(focusOn(origin.itemId));
           leavePassageChat();
           void setSourcesWay(
             { mode: "sources", sources: "digest", bears: null, receptionthread: null, thread: null },
@@ -3335,6 +3352,57 @@ export function Reader({
     },
     [reopenItemChat, handToChat],
   );
+  /* **The ask box under the sources digest, and each of its paragraphs'
+     *Ask in chat*** (plan 261030b § The ask box): the reader's words, or the
+     paragraph's fixed question, above the digest's text, fenced and cut to
+     fit (`askAboutModelText`); its own origin, reopened if it has a chat. */
+  const askDigest = useCallback(
+    (digest: SourcesDigest, question: string) => {
+      const origin = digestOrigin(digest);
+      if (reopenItemChat(origin)) return;
+      handToChat(askAboutModelText({ kind: "digest", question, text: digestChatText(digest) }), "send", origin);
+    },
+    [reopenItemChat, handToChat],
+  );
+  const askDigestParagraph = useCallback(
+    (digest: SourcesDigest, number: number, paragraph: SourcesDigestParagraph) => {
+      const origin = digestParagraphOrigin(digest, number, paragraph);
+      if (reopenItemChat(origin)) return;
+      handToChat(
+        askAboutModelText({ kind: "digest-paragraph", question: DIGEST_PARAGRAPH_QUESTION, text: paragraph.text }),
+        "send",
+        origin,
+      );
+    },
+    [reopenItemChat, handToChat],
+  );
+  /* **The ask box under Summary's Brief or Fuller** (the same plan): one chat
+     per level of one summary. Not the paragraph button (`askAboutSummary`),
+     which waits and stores no origin. */
+  const askSummaryLevel = useCallback(
+    (level: SimpleLevel, summary: Pick<SimpleSummary, "generatedAt" | "levels">, question: string) => {
+      const origin = summaryLevelOrigin(summary, level);
+      if (reopenItemChat(origin)) return;
+      handToChat(askAboutModelText({ kind: level, question, text: summaryLevelText(summary, level) }), "send", origin);
+    },
+    [reopenItemChat, handToChat],
+  );
+  /* What the two boxes are handed: the owner's, and **not in view-as**, where
+     nothing may be sent on the owner's behalf; `null` draws no box, no
+     paragraph button and no mark. The raw summaries, for `entryChats`'
+     reason below. */
+  const digestChats = useMemo<SourcesDigestChats | null>(
+    () =>
+      owner && viewAsNonce() === null
+        ? { summaries: chatSummaries, onAsk: askDigest, onParagraph: askDigestParagraph, onOpen: openClaimChat }
+        : null,
+    [owner, chatSummaries, askDigest, askDigestParagraph, openClaimChat],
+  );
+  const summaryChats = useMemo<SummaryLevelChats | null>(
+    () =>
+      owner && viewAsNonce() === null ? { summaries: chatSummaries, onAsk: askSummaryLevel, onOpen: openClaimChat } : null,
+    [owner, chatSummaries, askSummaryLevel, openClaimChat],
+  );
   /* What Claims' claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
@@ -4321,7 +4389,15 @@ export function Reader({
           );
         /* `onAskChat` on the owner's band only: a visitor has no chat, and
            `VisitorSummaryBand` above has no such prop to be handed. */
-        return <SummaryBand slug={slug} article={article} onJump={bandJump} onAskChat={askAboutSummary} />;
+        return (
+          <SummaryBand
+            slug={slug}
+            article={article}
+            onJump={bandJump}
+            onAskChat={askAboutSummary}
+            chats={summaryChats}
+          />
+        );
       /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
          than the owner/visitor pair the artefact modes have, because there is
          no artefact to carry and no second component to build: the default
@@ -4481,6 +4557,9 @@ export function Reader({
             onClaimFocusTaken={claimFocusTaken}
             findingFocus={findingFocus}
             onFindingFocusTaken={findingFocusTaken}
+            digestChats={digestChats}
+            digestFocus={digestFocus}
+            onDigestFocusTaken={digestFocusTaken}
             onOpenWork={openBibliographyWork}
           />
         );

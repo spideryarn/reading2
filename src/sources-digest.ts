@@ -117,6 +117,7 @@ import {
   type Meta,
   type SimpleSentence,
   SOURCES_DIGEST_ANGLES,
+  SOURCES_DIGEST_SECTIONS,
   SOURCES_DIGEST_VERDICTS,
   SOURCES_DIGEST_VERDICTS_FOR,
   type SituateQueryGroup,
@@ -963,8 +964,6 @@ export const SOURCES_DIGEST_WRITE_SCHEMA = {
 validateAnthropicJsonSchema(SOURCES_DIGEST_WRITE_SCHEMA);
 assertNoBlockIdEnums(SOURCES_DIGEST_WRITE_SCHEMA, ["ids", "id"]);
 
-const SECTION_KEYS = ["cites", "citedBy", "missed", "check"] as const satisfies readonly (keyof SourcesDigestSections)[];
-
 /**
  * **The writer's answer, believing as little as possible.** Each paragraph goes
  * through Summary's own check (src/simple-summary.ts § `toParagraphs`): ids
@@ -1014,7 +1013,8 @@ function checkedSections(
   counts: SourcesDigestCounts,
 ): SourcesDigestSections {
   const sections = { cites: [], citedBy: [], missed: [], check: [] } as SourcesDigestSections;
-  for (const key of SECTION_KEYS) {
+  /* The panel's drawing order, which is also the order paragraph ids count in. */
+  for (const key of SOURCES_DIGEST_SECTIONS) {
     const items = Array.isArray(rawSections[key]) ? (rawSections[key] as unknown[]) : [];
     for (const item of items) {
       const paragraph = checkParagraph(item, evidenceIds, quotedSources, leadIds, counts);

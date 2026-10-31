@@ -742,6 +742,12 @@ button.situate-quote:focus-visible { outline: 2px solid var(--highlight-text); o
 .digest-lead { padding: 0.12rem 0; }
 .digest-lead-q { color: var(--ink); }
 .digest-lead > .situate-queries { padding-left: 0.9rem; }
+/* A paragraph's *Ask in chat* ends the doors row, pushed right as Summary's
+   paragraph button is (summary.css § `.simple-ask`), so it sits in one place
+   under every paragraph; its chat's mark takes a line of its own. The ask box
+   under the digest follows *What was searched* (plan 261030b's sketch). */
+.simple-refs > .digest-ask-para { margin-left: auto; }
+.digest-ask { padding-top: 0.5rem; }
 @media (any-pointer: coarse) {
   .digest-info { min-width: max(40px, 2.5rem); min-height: max(40px, 2.5rem); justify-content: center; }
 }

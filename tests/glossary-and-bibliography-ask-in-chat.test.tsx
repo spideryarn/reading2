@@ -56,7 +56,11 @@ import {
   type Reception,
   type Glossary,
   type Ideas,
+  MAX_CHAT_QUESTION_CHARS,
   MAX_ORIGIN_NAME_CHARS,
+  type SimpleSummary,
+  type SourcesDigest,
+  type SourcesDigestParagraph,
   type ThreadOrigin,
   type ThreadSummary,
 } from "../src/types.js";
@@ -65,7 +69,9 @@ import {
   askAboutCitedWork,
   askAboutGlossaryEntry,
   askAboutIdea,
+  askAboutModelText,
   CITED_WORK_QUESTION,
+  DIGEST_PARAGRAPH_QUESTION,
 } from "../src/web/chat-handoff.js";
 import { askAboutBlock, askDoesItSayThat } from "../src/chat-question.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
@@ -100,6 +106,13 @@ vi.mock("../src/web/useSession.js", async () => {
 });
 
 const authListeners: ((event: string, session: unknown) => void)[] = [];
+
+/* Viewing as another reader, when a test sets it (plan 261030b: view-as never sends). */
+const viewAs = vi.hoisted(() => ({ nonce: null as string | null }));
+vi.mock("../src/web/lib/view-as.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/lib/view-as.js")>()),
+  viewAsNonce: () => viewAs.nonce,
+}));
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -350,6 +363,75 @@ const RECEPTION: Reception = {
   },
 } as Reception;
 
+/* Summary's Brief and Fuller, and a sources digest (plan 261030b § The ask box). */
+const BRIEF_FIRST = "This piece says experience has a felt quality.";
+const FULLER_FIRST = "In fuller words, the piece argues that qualia are real.";
+const SIMPLE: SimpleSummary = {
+  version: "simple/2",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  generatedAt: "2026-10-04T09:00:00.000Z",
+  elapsedMs: 1,
+  profileHash: null,
+  levels: {
+    brief: [
+      { text: BRIEF_FIRST, ids: ["spya-bbbbbb"] },
+      { text: "And that Dennett is wrong about it.", ids: ["spya-bbbbbb"] },
+    ],
+    fuller: [
+      { text: FULLER_FIRST, ids: ["spya-bbbbbb"] },
+      { text: "It sets itself against Dennett's account at length.", ids: ["spya-bbbbbb"] },
+    ],
+  },
+} as SimpleSummary;
+
+const DIGEST_OVERVIEW = "The piece leans on Dennett and on Nagel.";
+/** Long enough that the whole digest's first message has to be cut to fit. */
+const DIGEST_LONG = `Nagel's bat paper is the other ${"pillar ".repeat(700)}it stands on.`;
+const DIGEST_CHECK = "Dennett may say less about qualia than the passage uses him for.";
+function digestParagraph(text: string): SourcesDigestParagraph {
+  return {
+    text,
+    sentences: [{ text, id: "spya-bbbbbb" }],
+    ids: ["spya-bbbbbb"],
+    more: "",
+    sources: [],
+    leadIds: [],
+  } as SourcesDigestParagraph;
+}
+const DIGEST: SourcesDigest = {
+  version: "sources-digest/1",
+  generator: "test",
+  phases: { plan: "test", read: "test", write: "test" },
+  slug: SLUG,
+  sourceHash: "h",
+  profileHash: null,
+  generatedAt: "2026-10-30T12:00:00.000Z",
+  elapsedMs: 1,
+  year: null,
+  outcome: "written",
+  overview: [{ text: DIGEST_OVERVIEW, id: null }],
+  sections: {
+    cites: [digestParagraph("Dennett's book is what the piece argues with."), digestParagraph(DIGEST_LONG)],
+    citedBy: [],
+    missed: [],
+    check: [digestParagraph(DIGEST_CHECK)],
+  },
+  leads: [],
+  pieceSearch: null,
+  citers: 0,
+  reports: [],
+  evidence: [],
+  counts: {
+    leadsWritten: 0, leadsDropped: 0, queriesRefused: 0, searches: 0, readers: 0, readersFailed: 0,
+    offVerdict: 0, quotesWritten: 0, quotesUnknownSource: 0, quotesUnchecked: 0, unknownIds: 0,
+    sentenceIds: 0, unanchored: 0, emptyParagraphs: 0, unknownSources: 0, unknownLeads: 0, overCap: 0,
+  },
+} as SourcesDigest;
+/** The digest's item id: `sd-` and its time's digits; a paragraph's adds `-p` and its number. */
+const DIGEST_ID = "sd-20261030120000000";
+
 /** What a visitor is sent: the same lists, in the page's own payload. */
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece with terms", byline: "Somebody" },
@@ -363,6 +445,7 @@ const ARTICLE: PublicArticle = {
   glossary: { entries: GLOSSARY.entries },
   bibliography: { citations: BIBLIOGRAPHY.citations, capped: false },
   ideas: { ideas: IDEAS.ideas },
+  simpleSummary: { levels: SIMPLE.levels },
 } as PublicArticle;
 
 const OWNED: Article = {
@@ -485,6 +568,9 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
   if (url === "/api/reader") return json({ experimentalSince: null });
+  /* Whose account a view-as tab is showing: the owner's (view-as-session.ts). */
+  if (url === "/api/admin/view-as/current")
+    return json({ subjectId: "owner-1", subjectEmail: "a@example.com", expiresAt: new Date(Date.now() + 600_000).toISOString() });
   if (url === `/api/chat/${SLUG}` && method === "POST") {
     if (refuseNextSend) {
       refuseNextSend = false;
@@ -505,6 +591,10 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url.startsWith("/api/ideas/"))
     return json({ ideas: IDEAS, stale: false, outdated: false, profileChanged: false });
   if (url === `/api/reception/${SLUG}`) return json({ reception: RECEPTION, stale: false, outdated: false });
+  if (url === `/api/simple/${SLUG}`)
+    return json({ simpleSummary: SIMPLE, stale: false, outdated: false, profileChanged: false });
+  if (url === `/api/sources-digest/${SLUG}`)
+    return json({ sourcesDigest: DIGEST, stale: false, outdated: false, profileChanged: false });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
@@ -513,6 +603,7 @@ function reply(url: string, method: string, body: unknown): Response {
 const { App } = await import("../src/web/App.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
 const activation = await import("../src/web/activation.js");
+const { resetViewAsSessionForTests, startViewAsSession } = await import("../src/web/view-as-session.js");
 const { ASK_ENTRY_IN_CHAT, ASK_IDEA_IN_CHAT, ASK_WORK_IN_CHAT, OPEN_ENTRY_CHAT, OPEN_IDEA_CHAT, OPEN_WORK_CHAT } =
   await import("../src/web/OriginChat.js");
 
@@ -533,6 +624,8 @@ beforeEach(() => {
   conflictCiteCheckId = null;
   frozenSummaries = null;
   bibliographyMayReply = null;
+  viewAs.nonce = null;
+  resetViewAsSessionForTests();
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -1200,6 +1293,244 @@ describe("Ask in chat on an idea", () => {
 
 /* ------------------------------------------------------- the way back -- */
 
+/* ---------------------------------------- the ask box (plan 261030b) -- */
+
+/**
+ * **The ask box under the sources digest and under Summary's Brief and
+ * Fuller, and each digest paragraph's own chat** (plan
+ * docs/plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md
+ * § The ask box, Stage 3). The claims, in the rendered reader for this
+ * file's reason (the senders travel `Reader` → the band → the panel):
+ *
+ * 1. the box's Send starts **one** fresh chat, with that item's origin and a
+ *    first message that quotes the text and fits Chat's 4,000 characters;
+ * 2. once the item has its chat, the chat's mark stands in the box's place and
+ *    reopens it, sending nothing and starting no second chat;
+ * 3. a digest paragraph's *Ask in chat* names the paragraph by its number
+ *    across the four sections;
+ * 4. Summary's box is under Brief and Fuller and not under Thread, and its
+ *    paragraph buttons are as they were;
+ * 5. a visitor, and an administrator viewing as the owner, get no box, no
+ *    paragraph button and no mark.
+ */
+const askBox = (): HTMLInputElement | null => host.querySelector<HTMLInputElement>(".mode-band .ask-box input");
+const digestParagraphs = () => [...host.querySelectorAll<HTMLElement>(".mode-band [data-digest-paragraph]")];
+const digestParagraphButtons = () => [...host.querySelectorAll<HTMLButtonElement>(".mode-band .digest-ask-para")];
+const askMark = (): HTMLButtonElement | null =>
+  host.querySelector<HTMLButtonElement>(".mode-band .digest-ask .origin-chat, .mode-band .simple-ask-box .origin-chat");
+const summaryParagraphButtons = () => [
+  ...host.querySelectorAll<HTMLButtonElement>(`.mode-band .simple-refs button[aria-label="Ask about this paragraph in chat"]`),
+];
+
+/** Type the reader's words into the ask box and press Enter. */
+async function ask(words: string): Promise<void> {
+  const input = askBox() as HTMLInputElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, words);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    input.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  await settle();
+}
+
+/** Go to an address in this tab, as a link or Back would. */
+async function goTo(search: string): Promise<void> {
+  history.pushState(null, "", `/read/${SLUG}${search}`);
+  await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
+  await settle();
+}
+
+type Sent = { threadId: string; question: string; origin?: unknown };
+
+describe("the ask box under the sources digest, and each paragraph's chat", () => {
+  it("sends the reader's words and the digest, cut to fit, as a fresh chat about the digest", async () => {
+    who.set(OWNER);
+    await open(`?mode=sources&sources=digest&thread=${STORED.id}`);
+    await until(() => askBox() !== null, "the digest's ask box");
+    expect(
+      digestParagraphs().map((p) => p.dataset.digestParagraph),
+      "each paragraph numbered across the sections",
+    ).toEqual([`${DIGEST_ID}-p1`, `${DIGEST_ID}-p2`, `${DIGEST_ID}-p3`]);
+    expect(marks(), "no chat yet").toHaveLength(0);
+
+    nextAnswer = "Nagel claimed there is something it is like to be a bat.";
+    await ask("  What did Nagel actually claim?  ");
+    await until(
+      () => param("mode") === "chat" && param("thread") !== STORED.id && chatPosts().length === 1,
+      "Chat, on a fresh conversation",
+    );
+    expect(chatPosts(), "one request, from the Send alone").toHaveLength(1);
+    const sent = chatPosts()[0]?.body as Sent;
+    expect(sent.threadId).toBe(param("thread"));
+    expect(sent.origin).toEqual({ mode: "sources-digest", itemId: DIGEST_ID, quote: DIGEST_OVERVIEW });
+    /* Spelled out, so this file does not only agree with the panel's builder:
+       the overview, then each section with paragraphs under its heading. */
+    const text = [
+      DIGEST_OVERVIEW,
+      `What it builds on:\nDennett's book is what the piece argues with.\n\n${DIGEST_LONG}`,
+      `Worth checking: citations that may not say that:\n${DIGEST_CHECK}`,
+    ].join("\n\n");
+    expect(sent.question).toBe(askAboutModelText({ kind: "digest", question: "What did Nagel actually claim?", text }));
+    expect(sent.question.startsWith("My question:\n\nWhat did Nagel actually claim?\n\n"), "the reader's words first, whole").toBe(true);
+    expect(sent.question.length).toBeLessThanOrEqual(MAX_CHAT_QUESTION_CHARS);
+    expect(sent.question, "the long paragraph cut, visibly").toMatch(/…\n"""$/);
+    expect(sent.question, "and what came after it left out").not.toContain(DIGEST_CHECK);
+    expect(composer()?.value, "nothing is left in Chat's box").toBe("");
+  });
+
+  it("has one chat: once the digest has one, its mark stands in the box's place and reopens it", async () => {
+    who.set(OWNER);
+    await open("?mode=sources&sources=digest");
+    await until(() => askBox() !== null, "the digest's ask box");
+    nextAnswer = "The digest's first answer.";
+    await ask("Is this fair to Dennett?");
+    await until(() => param("mode") === "chat" && chatPosts().length === 1, "the new chat");
+    const firstId = param("thread") as string;
+
+    await goTo("?mode=sources&sources=digest");
+    await until(() => askMark() !== null, "the digest's mark");
+    expect(askBox(), "no box beside the mark").toBeNull();
+    expect(askMark()?.querySelector(".origin-chat-line")?.textContent).toBe(nextAnswer);
+    expect(digestParagraphButtons(), "a paragraph's chat is its own, so each still has its button").toHaveLength(3);
+    await act(async () => askMark()?.click());
+    await until(() => param("thread") === firstId && dialog() !== null, "the first conversation, beside the mode");
+    expect(param("mode")).toBe("sources");
+    expect(chatPosts(), "reopening sends nothing").toHaveLength(1);
+    expect(server.filter((t) => t.origin?.mode === "sources-digest"), "and starts no second chat").toHaveLength(1);
+  });
+
+  it("starts a paragraph's own chat, named by its number across the sections, and then marks it", async () => {
+    who.set(OWNER);
+    await open("?mode=sources&sources=digest");
+    await until(() => digestParagraphButtons().length === 3, "each paragraph's Ask in chat");
+    const button = digestParagraphButtons()[2] as HTMLButtonElement;
+    expect(button.getAttribute("aria-label")).toBe("Ask about this paragraph in chat");
+    /* The control every per-item chat uses (controls.md § Controls that do
+       the same job look the same): AskInChatButton's outline icon button. */
+    expect(button.dataset.variant).toBe("outline");
+    expect(button.dataset.size).toBe("icon-sm");
+    nextAnswer = "It holds up only in part.";
+    await act(async () => button.click());
+    await until(() => param("mode") === "chat" && chatPosts().length === 1, "the paragraph's chat");
+    const sent = chatPosts()[0]?.body as Sent;
+    expect(sent.origin, "the first paragraph of Worth checking is the third").toEqual({
+      mode: "sources-digest",
+      itemId: `${DIGEST_ID}-p3`,
+      quote: DIGEST_CHECK,
+    });
+    expect(sent.question).toBe(
+      askAboutModelText({ kind: "digest-paragraph", question: DIGEST_PARAGRAPH_QUESTION, text: DIGEST_CHECK }),
+    );
+
+    await goTo("?mode=sources&sources=digest");
+    await until(() => marks().length === 1, "the paragraph's mark");
+    const third = digestParagraphs()[2];
+    expect(third?.querySelector(".origin-chat"), "the mark is on that paragraph").not.toBeNull();
+    expect(third?.querySelector(".digest-ask-para"), "in its button's place").toBeNull();
+    expect(digestParagraphButtons()).toHaveLength(2);
+    expect(askBox(), "the whole digest's box is a different chat").not.toBeNull();
+    await act(async () => third?.querySelector<HTMLButtonElement>(".origin-chat")?.click());
+    await until(() => dialog() !== null, "the paragraph's conversation, beside the mode");
+    expect(chatPosts()).toHaveLength(1);
+  });
+});
+
+describe("the ask box under Summary's Brief and Fuller", () => {
+  it.each(["brief", "fuller"] as const)("sits under %s, starts one chat about that level, then gives way to its mark", async (level) => {
+    who.set(OWNER);
+    await open(`?mode=summary&summary=${level}`);
+    await until(() => askBox() !== null, `the box under ${level}`);
+    /* The paragraph button is left as it is: one per paragraph, the ghost one. */
+    expect(summaryParagraphButtons()).toHaveLength(2);
+    for (const b of summaryParagraphButtons()) expect(b.classList.contains("simple-ask")).toBe(true);
+
+    nextAnswer = `An answer about ${level}.`;
+    await ask("Is that the whole argument?");
+    await until(() => param("mode") === "chat" && chatPosts().length === 1, "the level's chat");
+    const sent = chatPosts()[0]?.body as Sent;
+    const paragraphs = SIMPLE.levels[level].map((p) => p.text);
+    expect(sent.origin).toEqual({ mode: "summary", itemId: `ss-${level}-20261004090000000`, quote: paragraphs[0] });
+    expect(sent.question).toBe(
+      askAboutModelText({ kind: level, question: "Is that the whole argument?", text: paragraphs.join("\n\n") }),
+    );
+    expect(sent.question.length).toBeLessThanOrEqual(MAX_CHAT_QUESTION_CHARS);
+    const firstId = param("thread") as string;
+
+    await goTo(`?mode=summary&summary=${level}`);
+    await until(() => askMark() !== null, "the level's mark");
+    expect(askBox()).toBeNull();
+    await act(async () => askMark()?.click());
+    await until(() => param("thread") === firstId && dialog() !== null, "the level's conversation, beside the mode");
+    expect(chatPosts(), "reopening sends nothing").toHaveLength(1);
+    expect(server.filter((t) => t.origin?.mode === "summary")).toHaveLength(1);
+  });
+
+  it("is one chat per level: Fuller's box is not Brief's chat", async () => {
+    who.set(OWNER);
+    server.push(startedFrom("spya-srvx36", { mode: "summary", itemId: "ss-brief-20261004090000000", quote: BRIEF_FIRST }, "Brief."));
+    await open("?mode=summary&summary=brief");
+    await until(() => askMark() !== null, "Brief's mark");
+    await goTo("?mode=summary&summary=fuller");
+    await until(() => askBox() !== null, "Fuller's box");
+    expect(askMark()).toBeNull();
+  });
+
+  it("is not under Thread", async () => {
+    who.set(OWNER);
+    await open("?mode=summary&summary=thread");
+    await until(() => host.querySelector(".mode-band") !== null, "Summary's band");
+    expect(askBox()).toBeNull();
+    expect(host.querySelector(".mode-band .simple-ask-box")).toBeNull();
+    /* Falsifiable: the same reader gets the box on Brief. */
+    await goTo("?mode=summary&summary=brief");
+    await until(() => askBox() !== null, "the box under Brief");
+  });
+});
+
+describe("no ask box for a visitor, or while viewing as the owner", () => {
+  it("gives a visitor Summary's paragraphs and no box", async () => {
+    await open("?mode=summary&summary=brief");
+    await until(() => host.querySelectorAll(".mode-band .simple-para").length === 2, "the visitor's summary");
+    expect(askBox()).toBeNull();
+    expect(host.querySelector(".mode-band .simple-ask-box")).toBeNull();
+    expect(summaryParagraphButtons()).toHaveLength(0);
+  });
+
+  it("gives a visitor's shared ?sources=digest Bibliography, and no digest to ask about", async () => {
+    await open("?mode=sources&sources=digest");
+    await until(() => workRow(WORK) !== null, "the visitor's Bibliography");
+    expect(digestParagraphs()).toHaveLength(0);
+    expect(askBox()).toBeNull();
+    expect(trace.filter((r) => r.url.startsWith("/api/sources-digest/"))).toHaveLength(0);
+  });
+
+  it("draws the digest and Summary in view-as with no box, no paragraph button and no mark", async () => {
+    who.set(OWNER);
+    viewAs.nonce = "v".repeat(43);
+    /* As a view-as tab's page starts: waiting to hear whose account it is. */
+    resetViewAsSessionForTests();
+    server.push(startedFrom("spya-srvx35", { mode: "sources-digest", itemId: DIGEST_ID, quote: DIGEST_OVERVIEW }, "Earlier."));
+    /* main.tsx's ViewAsBar starts the session; App alone does not mount it. */
+    const stop = startViewAsSession();
+    try {
+      await open("?mode=sources&sources=digest");
+      await until(() => digestParagraphs().length === 3, "the owner's digest, viewed as them");
+      expect(askBox()).toBeNull();
+      expect(digestParagraphButtons()).toHaveLength(0);
+      expect(marks(), "not even the mark: its press would open a chat to send in").toHaveLength(0);
+      await goTo("?mode=summary&summary=brief");
+      await until(() => host.querySelectorAll(".mode-band .simple-para").length === 2, "the owner's summary, viewed as them");
+      expect(askBox()).toBeNull();
+      expect(host.querySelector(".mode-band .simple-ask-box")).toBeNull();
+      expect(chatPosts()).toHaveLength(0);
+    } finally {
+      stop();
+    }
+  });
+});
+
 /**
  * **The way back from a chat to the item it was started from** (plan 261009k,
  * stage 2): a line above the open chat's transcript, and a press on it that
@@ -1404,15 +1735,27 @@ describe("the way back from a chat to its item", () => {
     expect(scrolled).toEqual([]);
   });
 
-  /* Plan 261030b, Stage 3a: the digest's way back opens Sources › Digest.
-     Landing on one paragraph is Stage 3b's (the panel has no rows to focus yet). */
-  it("goes back to the sources digest: Sources › Digest, the chat closed", async () => {
+  /* Plan 261030b: the digest's way back opens Sources › Digest, and a
+     paragraph's lands on that paragraph (Stage 3b). */
+  it("goes back to a paragraph of the sources digest: Sources › Digest, the paragraph in view and flashed", async () => {
+    const line = await openChatFrom({ mode: "sources-digest", itemId: `${DIGEST_ID}-p3`, quote: "Dennett may say less" });
+    expect(line.textContent).toBe("Back to “Dennett may say less” in Digest");
+    await act(async () => line.click());
+    await until(() => param("mode") === "sources" && scrolled.length > 0, "Digest, on the paragraph");
+    expect(param("sources")).toBe("digest");
+    expect(param("thread")).toBeNull();
+    const paragraph = host.querySelector(`.mode-band [data-digest-paragraph="${DIGEST_ID}-p3"]`);
+    expect(paragraph?.textContent, "the third paragraph: the first of Worth checking").toContain(DIGEST_CHECK);
+    expectLandedOn(paragraph, ".tl-scroll");
+  });
+
+  it("opens the digest at its top for the whole digest's chat, or a paragraph of a digest written since", async () => {
     const line = await openChatFrom({ mode: "sources-digest", itemId: "sd-20261030215639123-p2", quote: "Nobody has tested it" });
-    expect(line.textContent).toBe("Back to “Nobody has tested it” in Digest");
     await act(async () => line.click());
     await until(() => param("mode") === "sources", "Sources");
     expect(param("sources")).toBe("digest");
-    expect(param("thread")).toBeNull();
+    await until(() => host.querySelector(".mode-band [data-digest-paragraph]") !== null, "the digest");
+    expect(scrolled, "an id the digest no longer has lands nowhere").toEqual([]);
   });
 
   it("goes back to a summary level: Summary on that level, the chat closed", async () => {

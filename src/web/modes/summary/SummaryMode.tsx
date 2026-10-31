@@ -56,7 +56,7 @@ import { SUMMARY_VIEWS, type SummaryView, summaryParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { AboutMade } from "../../BandAbout.js";
 import { ModeSurface } from "../../ModeSurface.js";
-import { SimplePanel } from "../../SimplePanel.js";
+import { SimplePanel, type SummaryLevelChats } from "../../SimplePanel.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { useSimple } from "../../useSimple.js";
 import { useRevealChosen } from "../../useRevealChosen.js";
@@ -80,6 +80,7 @@ export function SummaryBand({
   article,
   onJump,
   onAskChat,
+  chats = null,
 }: {
   slug: string;
   /** For the thread's copy text and its counts (Tweets.tsx). */
@@ -94,6 +95,11 @@ export function SummaryBand({
    * docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md.
    */
   onAskChat?: ((paragraphText: string) => void) | undefined;
+  /**
+   * **The ask box under Brief and Fuller** (plan 261030b § The ask box), the
+   * owner's and never in view-as: `null` draws none. Not the Thread's.
+   */
+  chats?: SummaryLevelChats | null;
 }) {
   useRenderCount("SummaryBand");
   const [view, setView] = useQueryState("summary", summaryParam);
@@ -107,6 +113,7 @@ export function SummaryBand({
       level={view}
       onJump={onJump}
       onAskChat={onAskChat}
+      chats={chats}
       render={(body, badge, about) => (
         <SummarySurface controls={controls} about={about} profile={badge}>
           {body}
@@ -127,6 +134,7 @@ function OwnerSimple({
   level,
   onJump,
   onAskChat,
+  chats,
   render,
 }: {
   slug: string;
@@ -134,6 +142,8 @@ function OwnerSimple({
   onJump(id: BlockId): void;
   /** See `SummaryBand`. */
   onAskChat: ((paragraphText: string) => void) | undefined;
+  /** See `SummaryBand`. */
+  chats: SummaryLevelChats | null;
   render(body: ReactNode, badge: ReactNode, about: ReactNode): ReactNode;
 }) {
   useRenderCount("OwnerSimple");
@@ -169,7 +179,7 @@ function OwnerSimple({
   return (
     <>
       {render(
-        <SimplePanel access={{ kind: "owner", owner }} level={level} onJump={onJump} onAskChat={onAskChat} />,
+        <SimplePanel access={{ kind: "owner", owner, chats }} level={level} onJump={onJump} onAskChat={onAskChat} />,
         badge,
         about,
       )}
