@@ -38,6 +38,7 @@ import {
   type Idea,
   MAX_LENS_CHARS,
   sameOrigin,
+  summaryLevelOf,
   type ThreadOrigin,
 } from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
@@ -2109,6 +2110,29 @@ export function Reader({
         case "situate":
           openFindingInSources(origin.itemId);
           return;
+        /* The digest, or one of its paragraphs, opens Sources › Digest
+           (plan 261030b). Landing on the paragraph waits for the panel to
+           mark its paragraphs (Stage 3b); until then the digest opens at its
+           top, which is where the whole digest's chat lands anyway. */
+        case "sources-digest":
+          setBandAway(false);
+          leavePassageChat();
+          void setSourcesWay(
+            { mode: "sources", sources: "digest", bears: null, receptionthread: null, thread: null },
+            { history: "push" },
+          );
+          return;
+        /* A summary level opens Summary on that level. A URL write, not the
+           chip's press, so it never arms a summary run (params.ts §
+           `summaryParam`). */
+        case "summary":
+          setBandAway(false);
+          leavePassageChat();
+          void setSubNav(
+            { mode: "summary", summary: summaryLevelOf(origin.itemId) ?? "brief", thread: null },
+            { history: "push" },
+          );
+          return;
         default: {
           const never: never = origin;
           return never;
@@ -2123,6 +2147,7 @@ export function Reader({
       leavePassageChat,
       openQuizAt,
       openFindingInSources,
+      setSubNav,
     ],
   );
   /**

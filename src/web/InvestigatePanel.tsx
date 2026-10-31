@@ -61,8 +61,9 @@
  * **Owner only.** A visitor has no chat, so their chip row has no Investigate and a
  * shared `?sources=investigate` draws Bibliography (params.ts § `visitorSourcesView`).
  *
- * The box is Glossary's *Look up a term* (`.gloss-ask`), as Reception's
- * angle box was until this sub-mode took it: the same field, the reader's
+ * The box is the shared ask box (AskBox.tsx, lifted from here by plan 261030b
+ * for the digest and Summary), built on Glossary's *Look up a term*
+ * (`.gloss-ask`), as Reception's angle box was until this sub-mode took it: the same field, the reader's
  * face from voices.css, and room left for the band's (i). No sentence under
  * it (docs/project/mode.md): what a press does is in each control's tooltip.
  */
@@ -72,7 +73,7 @@ import type { CitedWork, ClaimOrigin, ListedClaim, Situate, SituateFinding, Thre
 import { MAX_LENS_CHARS } from "../types.js";
 import { MODE_LABEL } from "../title-text.js";
 import { shortTitle, workShortName } from "./cited-in-paragraph.js";
-import { isImeComposing } from "./key-chord.js";
+import { AskBox } from "./AskBox.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { OPEN_WORK_CHAT, OriginChatMark, originChatTip } from "./OriginChat.js";
 import { SOURCES_CLAIMS_OPEN_CLAIM_CHAT } from "./ReceptionAndClaimsPanel.js";
@@ -218,7 +219,18 @@ export function InvestigatePanel({
       }
       head={head}
     >
-      <QuestionBox onQuestion={chats.onQuestion} />
+      {/* The box: the reader's own question, handed to `Reader`, which opens
+          Chat on a fresh conversation and sends it (plan 261006j). The shared
+          ask box since plan 261030b. `maxLength` is the lens's cap. */}
+      <AskBox
+        className="investigate-box"
+        onAsk={chats.onQuestion}
+        maxLength={MAX_LENS_CHARS}
+        placeholder={`${SOURCES_INVESTIGATE_LABEL}…`}
+        label={SOURCES_INVESTIGATE_LABEL}
+        send={SOURCES_INVESTIGATE_SEND}
+        tip={SOURCES_INVESTIGATE_TIP}
+      />
       <div className="tl-scroll investigate-scroll">
         {/* The reader's own conversations before ours (plan 261021b). */}
         <YourQuestions chats={chats} />
@@ -403,56 +415,6 @@ function Asked({
     <div className="investigate-asked">
       <span className="investigate-q-words">{children}</span>
       <OriginChatMark chat={chat} label={label} className="investigate-mark" onOpen={onOpen} />
-    </div>
-  );
-}
-
-/**
- * **The box**: the reader's own question. Enter or the button hands the
- * words to `Reader`, which opens Chat on a fresh conversation and sends them
- * (plan 261006j). It starts no job and has no waiting state: the answer
- * arrives in Chat, which the reader is by then looking at.
- */
-function QuestionBox({ onQuestion }: { onQuestion(question: string): void }) {
-  const [draft, setDraft] = useState("");
-  const words = draft.trim();
-  return (
-    <div className="gloss-ask investigate-box">
-      <form
-        className="gloss-ask-row investigate-box-row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (words === "") return;
-          onQuestion(words);
-          /* The words have become the fresh chat's first question. */
-          setDraft("");
-        }}
-      >
-        {/* `maxLength` is the origin's cap, counted here before trimming, so
-            the box can only refuse what the route would refuse or a little
-            more: the harmless direction (GlossaryPanel.tsx § `AskATerm`). */}
-        <input
-          className="gloss-ask-input"
-          type="text"
-          /* Enter submits this form and goes to Chat. */
-          enterKeyHint="go"
-          value={draft}
-          maxLength={MAX_LENS_CHARS}
-          placeholder={`${SOURCES_INVESTIGATE_LABEL}…`}
-          aria-label={SOURCES_INVESTIGATE_LABEL}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            /* Accepting an IME candidate is not a request to open Chat.
-               Cancel implicit submission, including engines that report 229
-               instead of isComposing; an ordinary Enter still uses the form. */
-            if (e.key === "Enter" && isImeComposing(e)) e.preventDefault();
-          }}
-        />
-        <button type="submit" className="gloss-btn investigate-send" disabled={words === ""} data-tip={SOURCES_INVESTIGATE_TIP}>
-          <MessagesSquare size={12} aria-hidden="true" />
-          {SOURCES_INVESTIGATE_SEND}
-        </button>
-      </form>
     </div>
   );
 }

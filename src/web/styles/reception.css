@@ -315,13 +315,7 @@
    words on one line cut with an ellipsis, and a count. Whose words are whose
    is voices.css's (`.voice-author`, `.voice-reader`, `.voice-ai`); the
    quotation marks and the count are ours. */
-.investigate-send { flex: none; white-space: nowrap; }
-/* In a narrow band the button goes under the box, not beside it: side by side
-   on an iPad the box was 117px and its placeholder clipped (seen in the
-   browser, 2026-10-06, on the angle box). The box asks for 12rem before it
-   shares its line. */
-.investigate-box-row { flex-wrap: wrap; }
-.investigate-box-row .gloss-ask-input { flex: 1 1 12rem; }
+/* The box itself is the shared ask box's (origin-chat.css § the ask box). */
 .investigate-section { padding: 0.2rem 0.7rem 0.35rem; }
 .investigate-head { padding-top: 0.15rem; }
 .investigate-list { margin: 0; padding: 0; list-style: none; }
@@ -393,7 +387,6 @@
   font-size: max(var(--text-min), 0.78rem);
 }
 @media (any-pointer: coarse) {
-  .investigate-send,
   .investigate-q,
   .investigate-yours-line,
   .investigate-yours-more { min-height: max(40px, 2.5rem); }

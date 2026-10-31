@@ -4663,9 +4663,10 @@ export type ChatAnchor =
  *
  * **A union on `mode`**, so a claim cannot exist without its block and its
  * words. A claim has no id: its identity is `(blockId, quote)`, the article's
- * own words as they were when the chat started. `summary` is reserved and
- * not built: `chat_threads_origin_mode` in src/db/schema.ts lists it, and the
- * route accepts only the modes that are built (`ORIGIN_MODES`).
+ * own words as they were when the chat started. The route accepts only the
+ * modes that are built (`ORIGIN_MODES`); `chat_threads_origin_mode` in
+ * src/db/schema.ts may list more. `summary` was reserved there, with no
+ * shape, from plan 261005i until plan 261030b built it (`SummaryOrigin`).
  *
  * **A glossary entry and a cited work since 2026-10-06, an idea since
  * 2026-10-09, and a Quiz mark since 2026-10-24**
@@ -4693,7 +4694,9 @@ export type ThreadOrigin =
   | IdeasOrigin
   | CiteCheckOrigin
   | QuizOrigin
-  | SituateOrigin;
+  | SituateOrigin
+  | SourcesDigestOrigin
+  | SummaryOrigin;
 
 /** One of Sources › Claims' claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "sources-claims"; blockId: BlockId; quote: string };
@@ -4798,7 +4801,7 @@ export type SituateOrigin = { mode: "situate"; itemId: string; quote: string };
 /**
  * **What a finding's id looks like** — `si-` and twelve hex digits, as
  * src/situate.ts § `findingId` mints it. The route refuses any other
- * (routes.ts § `parseSituateOrigin`); tests/situate-finding-origin.test.ts
+ * (routes.ts § `parseShapedItemOrigin`); tests/situate-finding-origin.test.ts
  * holds the two together.
  */
 export const SITUATE_FINDING_ID = /^si-[0-9a-f]{12}$/;
@@ -4811,7 +4814,7 @@ export const SITUATE_FINDING_ID = /^si-[0-9a-f]{12}$/;
  * `situate` origin, so the chat is listed under *Where it sits* and its way
  * back opens it (plan 261026g § Stage 2, GPT Sol's F3 on that plan: a
  * `reception` lens would have been filed under Investigate). The route takes
- * either shape (routes.ts § `parseSituateOrigin`).
+ * either shape (routes.ts § `parseShapedItemOrigin`).
  */
 export const SITUATE_OVERVIEW_ID = /^so-\d{14,17}$/;
 export function situateOverviewId(generatedAt: string): string {
@@ -4822,7 +4825,103 @@ export function isSituateOverviewId(itemId: string): boolean {
 }
 
 /**
- * The most the name snapshot of a glossary, citations, ideas, cite-check, Quiz or situate origin may be.
+ * **The sources digest, or one paragraph of it** (plan
+ * docs/plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md
+ * § The ask box): the box under the digest starts a chat about the whole of
+ * it, and each paragraph's own *Ask in chat* one about that paragraph.
+ * `GlossaryOrigin`'s rules: **the item id is the identity** (`sameOrigin`),
+ * minted by `sourcesDigestItemId` from the digest's `generatedAt`, so a digest
+ * written again gets new chats rather than reopening one about words it no
+ * longer says. `quote` is the model's words, cut by `originName`.
+ */
+export type SourcesDigestOrigin = { mode: "sources-digest"; itemId: string; quote: string };
+
+/**
+ * **One level of Summary, Brief or Fuller** (the same plan): the box under its
+ * text starts a chat about that level as it was written. `GlossaryOrigin`'s
+ * rules, the id minted by `summaryItemId` from the level and the summary's
+ * `generatedAt` (one time for both levels: `SimpleSummary`), so a summary
+ * written again gets new chats. Not Summary's paragraph button, which stores
+ * no origin (docs/project/summaries.md § Ask about a paragraph).
+ */
+export type SummaryOrigin = { mode: "summary"; itemId: string; quote: string };
+
+/**
+ * **What a digest's item id looks like**: `sd-` and the digits of its
+ * `generatedAt` (14 to 17, as `situateOverviewId` takes them) for the whole
+ * digest, and `-p` and a paragraph's number after that for one paragraph. The
+ * route refuses any other (routes.ts § `parseShapedItemOrigin`), and so does
+ * the database (`chat_threads_origin_sources_digest`, the same pattern in SQL;
+ * tests/sources-digest-and-summary-origins.test.ts holds the two together).
+ *
+ * **A paragraph's number** counts from 1 across the four sections in the order
+ * the panel draws them (`SOURCES_DIGEST_SECTIONS`: cites, citedBy, missed,
+ * check), so the second paragraph of `citedBy` is `cites.length + 2`. A
+ * stored digest's paragraphs never move, so the number is stable for as long
+ * as its `generatedAt` is; a digest written again has a new time, and every id
+ * changes with it. The overview is not numbered: it belongs to the whole
+ * digest's chat.
+ */
+export const SOURCES_DIGEST_ITEM_ID = /^sd-\d{14,17}(-p[1-9]\d{0,2})?$/;
+
+/** The four sections in the order the panel draws them, which is the order paragraphs are numbered in. */
+export const SOURCES_DIGEST_SECTIONS = ["cites", "citedBy", "missed", "check"] as const satisfies readonly (keyof SourcesDigestSections)[];
+
+/** The digits of an artefact's `generatedAt`, as `situateOverviewId` takes them. */
+function timeDigits(generatedAt: string): string {
+  return generatedAt.replace(/\D/g, "").slice(0, 17);
+}
+
+/** The whole digest's item id, or one paragraph's (`paragraph` from 1: `sourcesDigestParagraphNumber`). */
+export function sourcesDigestItemId(generatedAt: string, paragraph?: number): string {
+  const whole = `sd-${timeDigits(generatedAt)}`;
+  return paragraph === undefined ? whole : `${whole}-p${paragraph}`;
+}
+
+/**
+ * A paragraph's number in its digest: 1 for the first paragraph of `cites`,
+ * counting on through the sections in `SOURCES_DIGEST_SECTIONS`' order.
+ * `index` is the paragraph's place within its own section, from 0.
+ */
+export function sourcesDigestParagraphNumber(
+  sections: SourcesDigestSections,
+  section: keyof SourcesDigestSections,
+  index: number,
+): number {
+  let before = 0;
+  for (const key of SOURCES_DIGEST_SECTIONS) {
+    if (key === section) break;
+    before += sections[key].length;
+  }
+  return before + index + 1;
+}
+
+/** The paragraph a digest item id names, or null for the whole digest or an id that is not a digest's. */
+export function sourcesDigestParagraphOf(itemId: string): number | null {
+  if (!SOURCES_DIGEST_ITEM_ID.test(itemId)) return null;
+  const p = /-p(\d+)$/.exec(itemId);
+  return p ? Number(p[1]) : null;
+}
+
+/**
+ * **What a summary level's item id looks like**: `ss-`, the level, and the
+ * digits of the summary's `generatedAt`. The route and the database
+ * (`chat_threads_origin_summary`) refuse any other.
+ */
+export const SUMMARY_ITEM_ID = /^ss-(brief|fuller)-\d{14,17}$/;
+
+export function summaryItemId(level: SimpleLevel, generatedAt: string): string {
+  return `ss-${level}-${timeDigits(generatedAt)}`;
+}
+
+/** The level a summary item id names, or null if it is not one. */
+export function summaryLevelOf(itemId: string): SimpleLevel | null {
+  const m = SUMMARY_ITEM_ID.exec(itemId);
+  return m?.[1] === "brief" || m?.[1] === "fuller" ? m[1] : null;
+}
+
+/**
+ * The most the name snapshot of an item origin (every mode but a claim's and a lens's) may be.
  * The route refuses a longer one, so **every sender cuts with `originName`**:
  * a glossary name has no length limit of its own (plan 261006d's review, F1).
  */
@@ -4860,7 +4959,18 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas", "cite-check", "quiz", "situate"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = [
+  "reception",
+  "sources-claims",
+  "glossary",
+  "bibliography",
+  "ideas",
+  "cite-check",
+  "quiz",
+  "situate",
+  "sources-digest",
+  "summary",
+] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * **An origin mode's old word, and the mode it is now.** A chat started from a
@@ -4927,6 +5037,10 @@ export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
     case "ideas":
     /* A dossier item: its id, never its snapshot (plans 261025h and 261026g). */
     case "situate":
+    /* The digest or one of its paragraphs, or a summary level: the id carries
+       the artefact's time, so a rewrite is a new item (plan 261030b). */
+    case "sources-digest":
+    case "summary":
       return b.mode === a.mode && a.itemId === b.itemId;
     /* The mark, which names its batch and question (`QuizOrigin`). */
     case "quiz":

@@ -1625,6 +1625,13 @@
       "when": 1793397399446,
       "tag": "20261030215639_sources_digest",
       "breakpoints": true
+    },
+    {
+      "idx": 232,
+      "version": "7",
+      "when": 1793397890262,
+      "tag": "20261030220450_chat_thread_origin_sources_digest_and_summary",
+      "breakpoints": true
     }
   ]
 }

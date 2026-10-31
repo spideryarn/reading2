@@ -374,7 +374,7 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
 
 /**
  * **Which conversations Chat's list is narrowed to, by where they came from**
- * — `?chatfrom=chats`, a mode (`sources`, `glossary`, `ideas`), `learn` or
+ * — `?chatfrom=chats`, a mode (`sources`, `glossary`, `ideas`, `summary`), `learn` or
  * `passage`. Since 2026-10-05
  * the list shows every conversation about the article (report `spya-hyfqkq`,
  * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md
@@ -398,7 +398,7 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
  * anything reads them (router.ts § `liftLegacySources`), as GPT Sol's F5 on plan
  * 261009l asked.
  */
-export const CHAT_FROM_WORDS = ["chats", "sources", "glossary", "ideas", "learn", "passage"] as const;
+export const CHAT_FROM_WORDS = ["chats", "sources", "glossary", "ideas", "summary", "learn", "passage"] as const;
 export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
 
 export const chatFromParam = createParser<ChatFrom>({
@@ -1549,7 +1549,7 @@ export function learnInSearch(search: string): LearnView {
  * Back should undo.
  *
  * **These are the addresses, not the chips.** Since plan 261025h the owner's
- * chip row is three (`SOURCES_CHIPS`), and Reception, Claims, Not cited and
+ * chip row is four (`SOURCES_CHIPS`), and Reception, Claims, Not cited and
  * Investigate are tools reached from inside *Where it sits*, at the addresses
  * they always had; `chipOf` says which chip each address lights.
  *
@@ -1607,7 +1607,7 @@ export function isSourcesExperiment(view: SourcesView): view is SourcesExperimen
   return (SOURCES_EXPERIMENTS as readonly SourcesView[]).includes(view);
 }
 /**
- * **The owner's chip row** (plan 261025h, decision 7 and GPT Sol's F2): three
+ * **The owner's chip row** (plan 261025h, decision 7 and GPT Sol's F2): four
  * chips, *Where it sits* first because it is the default, and since plan
  * 261030b *Digest* beside it, drawn only with the experimental switch on or on
  * its own address (SourcesMode.tsx § `SourcesViews`). The other four

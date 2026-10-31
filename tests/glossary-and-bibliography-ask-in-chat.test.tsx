@@ -1404,6 +1404,26 @@ describe("the way back from a chat to its item", () => {
     expect(scrolled).toEqual([]);
   });
 
+  /* Plan 261030b, Stage 3a: the digest's way back opens Sources › Digest.
+     Landing on one paragraph is Stage 3b's (the panel has no rows to focus yet). */
+  it("goes back to the sources digest: Sources › Digest, the chat closed", async () => {
+    const line = await openChatFrom({ mode: "sources-digest", itemId: "sd-20261030215639123-p2", quote: "Nobody has tested it" });
+    expect(line.textContent).toBe("Back to “Nobody has tested it” in Digest");
+    await act(async () => line.click());
+    await until(() => param("mode") === "sources", "Sources");
+    expect(param("sources")).toBe("digest");
+    expect(param("thread")).toBeNull();
+  });
+
+  it("goes back to a summary level: Summary on that level, the chat closed", async () => {
+    const line = await openChatFrom({ mode: "summary", itemId: "ss-fuller-20261030215639123", quote: "In plain words" });
+    expect(line.textContent).toBe("Back to “In plain words” in Fuller");
+    await act(async () => line.click());
+    await until(() => param("mode") === "summary", "Summary");
+    expect(param("summary")).toBe("fuller");
+    expect(param("thread")).toBeNull();
+  });
+
   it("opens the mode on its list when the item is gone, and scrolls nothing", async () => {
     const line = await openChatFrom({ mode: "ideas", itemId: "spya-dea999", quote: "A paraphrased idea" });
     await act(async () => line.click());

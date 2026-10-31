@@ -48,7 +48,10 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
     case "bibliography":
     case "ideas":
     case "situate":
-      /* An id and a snapshot of the name (a finding's: its passage); no block, no lens. */
+    case "sources-digest":
+    case "summary":
+      /* An id and a snapshot of the name (a finding's: its passage; a digest's
+         or a summary level's: its opening words); no block, no lens. */
       return { ...NO_ORIGIN, originMode: origin.mode, originItemId: origin.itemId, originQuote: origin.quote };
     case "cite-check":
       /* A citation's check: the work's id, the citing block, the title; no lens. */
@@ -78,12 +81,13 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
  * The columns back as the union, **as a fragment to spread**, so a thread with
  * no origin gets no `origin` key at all rather than `origin: undefined`.
  *
- * A mode this code does not know (the CHECK allows `summary`, which is not
- * built) reads as no origin: the thread is still an ordinary chat. So does a
+ * A mode this code does not know reads as no origin: the thread is still an
+ * ordinary chat. So does a
  * row that is not one shape exactly, which the CHECKs refuse
  * (`chat_threads_origin_reception`, `chat_threads_origin_sources_claims`,
  * `chat_threads_origin_debate`, `chat_threads_origin_item`,
- * `chat_threads_origin_cite_check`, `chat_threads_origin_quiz`); half of one is
+ * `chat_threads_origin_cite_check`, `chat_threads_origin_quiz`,
+ * `chat_threads_origin_sources_digest`, `chat_threads_origin_summary`); half of one is
  * never read as the whole.
  *
  * **Not exhaustive by construction**: `originMode` is a string out of a
@@ -110,7 +114,14 @@ export function originFromColumns(row: OriginColumns): { origin?: ThreadOrigin }
   }
   /* Only a quiz mark names a batch or an attempt (`chat_threads_origin_quiz_only`). */
   if (batchId !== null || attemptId !== null) return {};
-  if (mode === "glossary" || mode === "bibliography" || mode === "ideas" || mode === "situate") {
+  if (
+    mode === "glossary" ||
+    mode === "bibliography" ||
+    mode === "ideas" ||
+    mode === "situate" ||
+    mode === "sources-digest" ||
+    mode === "summary"
+  ) {
     if (itemId === null || quote === null || blockId !== null || lens !== null) return {};
     return { origin: { mode, itemId, quote } };
   }

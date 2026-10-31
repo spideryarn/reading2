@@ -66,7 +66,7 @@ describe("the icon each mode wears", () => {
     ["OriginChat.tsx", "export function OriginChatMark", "export function AskInChatButton"],
     ["InvestigatePanel.tsx", 'className="investigate-q"', "</button>"],
     ["InvestigatePanel.tsx", 'className="investigate-yours-line"', "</button>"],
-    ["InvestigatePanel.tsx", 'className="gloss-btn investigate-send"', "</button>"],
+    ["AskBox.tsx", 'className="gloss-btn ask-box-send"', "</button>"],
     ["SimplePanel.tsx", 'className="simple-ask', "</Button>"],
   ])("draws the chat at %s / %s as two bubbles", (file, start, end) => {
     const source = read(file);

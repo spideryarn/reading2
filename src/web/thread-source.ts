@@ -17,9 +17,18 @@
  */
 import type { Mode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
-import { type ChatThread, isLensOrigin, isSituateOverviewId, type LearnKind, type ThreadKind, type ThreadOrigin } from "../types.js";
+import {
+  type ChatThread,
+  isLensOrigin,
+  isSituateOverviewId,
+  type LearnKind,
+  type SimpleLevel,
+  summaryLevelOf,
+  type ThreadKind,
+  type ThreadOrigin,
+} from "../types.js";
 import { CHAT_FROM_WORDS, type ChatFrom, type LearnView } from "./params.js";
-import { LEARN_SUB_MODES, SOURCES_SUB_MODES, type SubMode, subModeWords } from "./sub-modes.js";
+import { LEARN_SUB_MODES, SOURCES_SUB_MODES, SUMMARY_SUB_MODES, type SubMode, subModeWords } from "./sub-modes.js";
 
 /** The parts of Learn that are a conversation: every part but Quiz. */
 export type LearnConversationView = Exclude<LearnView, "quiz">;
@@ -85,6 +94,18 @@ export const SOURCE_RECEPTION_LENS = `Started from a question in ${SOURCES_IN} $
 export const SOURCE_SITUATE_FINDING = `Started from a finding in ${SOURCES_IN} ${SOURCES_SUB_MODES.where.label}`;
 /** The same origin when its item is the dossier's overview (plan 261026g § Stage 2). */
 export const SOURCE_SITUATE_OVERVIEW = `Started from the overview in ${SOURCES_IN} ${SOURCES_SUB_MODES.where.label}`;
+
+/**
+ * And for one started from the sources digest: its ask box, or one
+ * paragraph's *Ask in chat* (plan 261030b). One label for both; the quote says
+ * which words.
+ */
+export const SOURCE_SOURCES_DIGEST = `Started from the digest in ${SOURCES_IN} ${SOURCES_SUB_MODES.digest.label}`;
+
+/** And for one started from the ask box under a Summary level (plan 261030b): *Started from Summary › Fuller*. */
+export function sourceSummaryLevel(level: SimpleLevel): string {
+  return `Started from ${MODE_LABEL.summary} › ${SUMMARY_SUB_MODES[level].label}`;
+}
 
 /** And for one started from a Glossary entry's *Ask in chat* (plan 261006d, D6). */
 export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
@@ -160,7 +181,9 @@ export type OriginPlace =
   | Extract<SubMode, { mode: "sources" }>
   /* Quiz alone of Learn's: a mark's chat. Recall and Explore are Learn kinds,
      not origins. A narrowing of `SubMode`'s Learn arm, so it is still one. */
-  | { mode: "learn"; view: Extract<LearnView, "quiz"> };
+  | { mode: "learn"; view: Extract<LearnView, "quiz"> }
+  /* Brief or Fuller, where the ask box sits (plan 261030b); not Thread. */
+  | { mode: "summary"; view: SimpleLevel };
 
 export function originPlace(origin: ThreadOrigin): OriginPlace {
   switch (origin.mode) {
@@ -179,6 +202,14 @@ export function originPlace(origin: ThreadOrigin): OriginPlace {
     /* A finding lives in the dossier, which is in Where it sits (plan 261025h). */
     case "situate":
       return { mode: "sources", view: "where" };
+    /* The digest and its paragraphs live in Sources › Digest (plan 261030b). */
+    case "sources-digest":
+      return { mode: "sources", view: "digest" };
+    /* A summary level lives on its own chip. A malformed id cannot be stored
+       (the route and `chat_threads_origin_summary` refuse it), so the
+       fallback is only the type's. */
+    case "summary":
+      return { mode: "summary", view: summaryLevel(origin.itemId) };
     /* A mark in Quiz. Learn's place and filter word, but a `chat`-kind
        thread, so the row opens in Chat (`threadSource` gives it no `learn`). */
     case "quiz":
@@ -186,6 +217,11 @@ export function originPlace(origin: ThreadOrigin): OriginPlace {
     default:
       return origin satisfies never;
   }
+}
+
+/** The level a summary origin is about; Brief for an id the route would have refused. */
+function summaryLevel(itemId: string): SimpleLevel {
+  return summaryLevelOf(itemId) ?? "brief";
 }
 
 /** A place's name as its chip says it: the sub-mode's when there is one, else the mode's. */
@@ -224,6 +260,11 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
         return isSituateOverviewId(origin.itemId)
           ? { ...at, label: SOURCE_SITUATE_OVERVIEW, quote: origin.quote, voice: "ai" }
           : { ...at, label: SOURCE_SITUATE_FINDING, quote: origin.quote };
+      /* The digest's words and a summary's are the model's. */
+      case "sources-digest":
+        return { ...at, label: SOURCE_SOURCES_DIGEST, quote: origin.quote, voice: "ai" };
+      case "summary":
+        return { ...at, label: sourceSummaryLevel(summaryLevel(origin.itemId)), quote: origin.quote, voice: "ai" };
       default:
         return origin satisfies never;
     }
@@ -272,6 +313,7 @@ export const CHAT_FROM_LABEL: Readonly<Record<ChatFrom, string>> = {
   sources: MODE_LABEL.sources,
   glossary: MODE_LABEL.glossary,
   ideas: MODE_LABEL.ideas,
+  summary: MODE_LABEL.summary,
   learn: MODE_LABEL.learn,
   passage: SOURCE_PASSAGE,
 };
@@ -302,7 +344,7 @@ export function narrowed<T extends SourcedThread>(threads: readonly T[], from: C
  */
 export interface OriginBackWords {
   mode: Mode;
-  /** The sub-mode the press opens: Sources' on a Sources origin, Quiz on a mark, none otherwise. */
+  /** The sub-mode the press opens: Sources' on a Sources origin, Quiz on a mark, a Summary level's, none otherwise. */
   view?: Extract<OriginPlace, { view: unknown }>["view"];
   /**
    * The word on the button the press lands on: the mode's (*Glossary*), or

@@ -70,8 +70,18 @@ describe("origin checked against the transaction's thread snapshot", () => {
   /* Plan 261006d, D1: an entry is matched by its id, so the name sent with a
      resend may differ, and the name stored first is the one kept. An idea
      joined them in plan 261009k (GPT Sol's F7). */
-  describe.each(["glossary", "bibliography", "ideas", "situate"] as const)("a %s origin", (mode) => {
-    const ITEM = { mode, itemId: mode === "situate" ? "si-0123456789ab" : "spya-ttm222", quote: "qualia" } satisfies ThreadOrigin;
+  /* Each mode's id and another item's of the same shape (the digest and a
+     summary level are plan 261030b's). */
+  const IDS = {
+    glossary: ["spya-ttm222", "spya-ttm333"],
+    bibliography: ["spya-ttm222", "spya-ttm333"],
+    ideas: ["spya-ttm222", "spya-ttm333"],
+    situate: ["si-0123456789ab", "si-ba9876543210"],
+    "sources-digest": ["sd-20261030215639123", "sd-20261030215639123-p1"],
+    summary: ["ss-brief-20261030215639123", "ss-fuller-20261030215639123"],
+  } as const;
+  describe.each(["glossary", "bibliography", "ideas", "situate", "sources-digest", "summary"] as const)("a %s origin", (mode) => {
+    const ITEM = { mode, itemId: IDS[mode][0], quote: "qualia" } satisfies ThreadOrigin;
 
     it("accepts a resend whose name has changed, and keeps the first name", () => {
       const first = withTurn([], { threadId: ID, question: "first", origin: ITEM }, AT);
@@ -88,7 +98,7 @@ describe("origin checked against the transaction's thread snapshot", () => {
       const first = withTurn([], { threadId: ID, question: "first", origin: ITEM }, AT);
       const otherMode = mode === "glossary" ? "bibliography" : "glossary";
       for (const wanted of [
-        { ...ITEM, itemId: mode === "situate" ? "si-ba9876543210" : "spya-ttm333" },
+        { ...ITEM, itemId: IDS[mode][1] },
         { ...ITEM, mode: otherMode } as ThreadOrigin,
         CLAIM,
         LENS,
@@ -106,6 +116,8 @@ describe("origin checked against the transaction's thread snapshot", () => {
         bibliography: "Cited work: qualia",
         ideas: "Idea: qualia",
         situate: "Finding: qualia",
+        "sources-digest": "Digest: qualia",
+        summary: "Brief summary: qualia",
       } as const;
       expect(made.thread.title).toBe(named[mode]);
     });

@@ -5,7 +5,7 @@
  *
  * For a finding, the route requires `SITUATE_FINDING_ID`; the overview is the
  * one other admitted shape, `SITUATE_OVERVIEW_ID` (src/routes.ts §
- * `parseSituateOrigin`). Finding ids are minted by src/situate.ts §
+ * `parseShapedItemOrigin`). Finding ids are minted by src/situate.ts §
  * `findingId`. If the step ever mints another finding shape, every finding's
  * *Ask in chat* would get a 400, and this is the test that says so first.
  */

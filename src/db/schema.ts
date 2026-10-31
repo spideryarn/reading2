@@ -4715,14 +4715,17 @@ export const chatThreads = spideryarn.table(
      * - `origin_mode`: which mode. `reception` (a lens), `sources-claims` (a
      *   claim), `glossary`, `bibliography`, `ideas` and `cite-check` (a
      *   citation's *Does it say that?*: a work id, its citing block and the
-     *   title, plan 261024m) are written; `summary` is reserved. `citations` (a cited work) and `debate` (a claim or a
+     *   title, plan 261024m), `quiz`, `situate`, `sources-digest` and
+     *   `summary` (the digest or a paragraph of it, and a summary level, plan
+     *   261030b) are written. `citations` (a cited work) and `debate` (a claim or a
      *   lens) are origins as written before 2026-10-09 (plan 261009w): still
      *   admitted, never written now, and read as `bibliography`, and by shape
      *   as `sources-claims` or `reception`, by `originFromColumns`
      *   (src/thread-origin.ts). The contract migration rewrites those rows and
      *   narrows the CHECKs below.
      * - `origin_item_id`: the item's id where it has a durable one (a glossary
-     *   entry, a cited work, a literature-search finding). Null for a claim,
+     *   entry, a cited work, a literature-search finding, a digest or a
+     *   summary level). Null for a claim,
      *   which has none. Never dereferenced, and no foreign key: the entry may
      *   be regenerated away.
      * - `origin_block_id`: the block the item sits in. Points at the identity,
@@ -4792,7 +4795,7 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check','situate')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check','situate','sources-digest')`,
     ),
     /* No mode, no origin: the original four shape columns mean nothing
        without it. The two Quiz columns have their own null-safe check below. */
@@ -4822,11 +4825,19 @@ export const chatThreads = spideryarn.table(
     ),
     /* A glossary entry, a cited work, an idea or a literature-search finding
        is an id and a snapshot of its name, with no block and no lens (plan
-       261006d, D2; the idea is plan 261009k, the finding plan 261025h). Spelled null-safe: a row with no mode, or another mode, passes
+       261006d, D2; the idea is plan 261009k, the finding plan 261025h, the
+       digest and a summary level plan 261030b). Spelled null-safe: a row with no mode, or another mode, passes
        without the last arm being read. */
     check(
       "chat_threads_origin_item",
-      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas','situate') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas','situate','sources-digest','summary') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+    ),
+    /* The digest's id, or one paragraph's: `SOURCES_DIGEST_ITEM_ID` in
+       src/types.ts, the same pattern (plan 261030b). Null-safe: another mode
+       passes, and a null id is the item check's to refuse. */
+    check(
+      "chat_threads_origin_sources_digest",
+      sql`${t.originMode} is distinct from 'sources-digest' or ${t.originItemId} ~ '^sd-[0-9]{14,17}(-p[1-9][0-9]{0,2})?$'`,
     ),
     /* A citation's *Does it say that?*: the cited work's id, the citing block,
        and the work's title as a snapshot; no lens (plan 261024m). The item
@@ -4863,14 +4874,14 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.originAttemptId, t.originBatchId, t.originItemId],
       foreignColumns: [quizAttempts.articleId, quizAttempts.id, quizAttempts.batchId, quizAttempts.questionId],
     }),
-    /* `summary`, which the list above reserves, has no shape of its own yet,
-       so it carries none of the shape columns and cannot get one by accident
-       before it is built (plan 261009k, GPT Sol's F8). Null-safe, like the
-       item check: any other mode, or none, passes without the last arm. The
-       lens is the next check's. */
+    /* A summary level's id: `SUMMARY_ITEM_ID` in src/types.ts (plan
+       261030b). Until that plan `summary` was reserved with no shape, and
+       this check refused every shape column (plan 261009k, GPT Sol's F8); the
+       item check above now requires the id and the quote, and this one their
+       form. Null-safe, like the digest's. */
     check(
       "chat_threads_origin_summary",
-      sql`${t.originMode} is distinct from 'summary' or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null)`,
+      sql`${t.originMode} is distinct from 'summary' or ${t.originItemId} ~ '^ss-(brief|fuller)-[0-9]{14,17}$'`,
     ),
     /* Only Reception takes a lens (and `debate`, its word before plan 261009w,
        until the contract migration rewrites those rows and renames this). */

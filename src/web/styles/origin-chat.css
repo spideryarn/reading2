@@ -65,3 +65,18 @@
   overflow: hidden;
   white-space: normal;
 }
+
+/* **The ask box** (AskBox.tsx; plan 261030b): the reader's own question and a
+   button that hands it to a chat, under Sources › Investigate, the sources
+   digest and Summary's Brief and Fuller. Its field is `.gloss-ask`
+   (footnotes.css); this is the row and the button. In a narrow band the
+   button goes under the field, not beside it: side by side on an iPad the
+   field was 117px and its placeholder clipped (seen in the browser,
+   2026-10-06, on Reception's angle box). The field asks for 12rem before it
+   shares its line. */
+.ask-box-send { flex: none; white-space: nowrap; }
+.ask-box-row { flex-wrap: wrap; }
+.ask-box-row .gloss-ask-input { flex: 1 1 12rem; }
+@media (any-pointer: coarse) {
+  .ask-box-send { min-height: max(40px, 2.5rem); }
+}

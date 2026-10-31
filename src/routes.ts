@@ -588,6 +588,8 @@ import {
   ORIGIN_MODES,
   SITUATE_FINDING_ID,
   SITUATE_OVERVIEW_ID,
+  SOURCES_DIGEST_ITEM_ID,
+  SUMMARY_ITEM_ID,
   currentOriginMode,
   sameAnchor,
   sameOrigin,
@@ -5647,7 +5649,26 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
     case "quiz":
       return parseQuizOrigin(origin as Record<string, unknown>);
     case "situate":
-      return parseSituateOrigin(origin as Record<string, unknown>);
+      return parseShapedItemOrigin(
+        built,
+        (id) => SITUATE_FINDING_ID.test(id) || SITUATE_OVERVIEW_ID.test(id),
+        "a finding id or an overview id",
+        origin as Record<string, unknown>,
+      );
+    case "sources-digest":
+      return parseShapedItemOrigin(
+        built,
+        (id) => SOURCES_DIGEST_ITEM_ID.test(id),
+        "a digest id",
+        origin as Record<string, unknown>,
+      );
+    case "summary":
+      return parseShapedItemOrigin(
+        built,
+        (id) => SUMMARY_ITEM_ID.test(id),
+        "a summary level id",
+        origin as Record<string, unknown>,
+      );
     /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
     default:
       return built satisfies never;
@@ -5681,21 +5702,27 @@ function parseItemOrigin(mode: "glossary" | "bibliography" | "ideas", body: Reco
 }
 
 /**
- * **A literature-search item's origin**: a finding's id, shaped as
- * src/situate.ts § `findingId` mints it (`SITUATE_FINDING_ID`), or an
- * overview's dossier-time id (`SITUATE_OVERVIEW_ID`), plus its snapshot.
- * Shape only: the id is not looked up, so an item a newer search dropped
- * never refuses its own chat. No part of the snapshot reaches a thrown
- * message. Plans 261025h (qi-mmtsxdhg) and 261026g.
+ * **An item origin whose id has a shape of its own**, not a block-shaped one:
+ * a literature-search finding (`SITUATE_FINDING_ID`, minted by src/situate.ts
+ * § `findingId`) or its overview (`SITUATE_OVERVIEW_ID`), plans 261025h
+ * (qi-mmtsxdhg) and 261026g; the sources digest or one of its paragraphs
+ * (`SOURCES_DIGEST_ITEM_ID`) and a summary level (`SUMMARY_ITEM_ID`), plan
+ * 261030b. Each with its snapshot. Shape only: the id is not looked up, so an
+ * item a newer run dropped never refuses its own chat. No part of the
+ * snapshot reaches a thrown message.
  */
-function parseSituateOrigin(body: Record<string, unknown>): ThreadOrigin {
+function parseShapedItemOrigin(
+  mode: "situate" | "sources-digest" | "summary",
+  isId: (id: string) => boolean,
+  idWords: string,
+  body: Record<string, unknown>,
+): ThreadOrigin {
   const { itemId, quote, blockId, lens } = body;
   if (blockId !== undefined || lens !== undefined) {
     throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");
   }
-  /* A finding's id, or its dossier's overview's (plan 261026g § Stage 2). */
-  if (typeof itemId !== "string" || !(SITUATE_FINDING_ID.test(itemId) || SITUATE_OVERVIEW_ID.test(itemId))) {
-    throw httpError(400, "origin.itemId must be a finding id or an overview id");
+  if (typeof itemId !== "string" || !isId(itemId)) {
+    throw httpError(400, `origin.itemId must be ${idWords}`);
   }
   if (typeof quote !== "string" || quote.trim() === "") {
     throw httpError(400, "origin.quote must be a non-empty string");
@@ -5703,7 +5730,7 @@ function parseSituateOrigin(body: Record<string, unknown>): ThreadOrigin {
   if (quote.length > MAX_ORIGIN_NAME_CHARS) {
     throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
   }
-  return { mode: "situate", itemId, quote };
+  return { mode, itemId, quote };
 }
 
 /**

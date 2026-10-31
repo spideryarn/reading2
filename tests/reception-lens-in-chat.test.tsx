@@ -509,7 +509,7 @@ async function until(check: () => boolean, what = "the page to settle"): Promise
 const chatPosts = () => trace.filter((r) => r.method === "POST" && r.url.startsWith(`/api/chat/${SLUG}`));
 const posts = () => trace.filter((r) => r.method === "POST");
 
-const lensBox = () => host.querySelector<HTMLInputElement>(".mode-band form.investigate-box-row input");
+const lensBox = () => host.querySelector<HTMLInputElement>(".mode-band .investigate-box form.ask-box-row input");
 const angles = () => [...host.querySelectorAll<HTMLButtonElement>(".mode-band .investigate-yours button.investigate-yours-line")];
 const investigateRows = (section: string) => [
   ...host.querySelectorAll<HTMLButtonElement>(`.mode-band .investigate-section${section} button.investigate-q`),

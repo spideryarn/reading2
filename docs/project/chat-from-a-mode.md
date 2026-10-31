@@ -70,8 +70,8 @@ lands on the question while its batch is current, and on Quiz's start once it is
 
 Three things look like this and are not: Summary's *Ask about a paragraph*
 ([summaries.md](summaries.md#ask-about-a-paragraph-since-2026-10-04)) goes to Chat and stores no
-origin (`summary` is reserved in the database CHECK and not built, and since 2026-10-09 the CHECK
-`chat_threads_origin_summary` lets it carry none of the shape columns); a chat about a passage has an
+origin (the `summary` origin, since plan 261030b, is the ask box under a whole Brief or Fuller
+level, not a paragraph); a chat about a passage has an
 *anchor*, not an origin; and a comment's question is linked from the comment's side
 ([comments.md](comments.md#asking-the-model-and-the-link-back)). A citation card's *Does it say
 that?* was the passage kind, fresh each press, until 2026-10-24; it is now both anchored on the citing
@@ -192,25 +192,28 @@ In the order you would do them:
 3. **`sameOrigin`**, same file: how the item finds its chat again. **Loud** (`never`).
 4. **The database.** [`src/db/schema.ts`](../../src/db/schema.ts) § `chat_threads_origin_mode`
    lists the allowed words (today `debate`, `reception`, `sources-claims`, `summary`, `glossary`,
-   `bibliography`, `ideas`, `quiz`, `cite-check`, `situate`, and `citations`, Bibliography's word
+   `bibliography`, `ideas`, `quiz`, `cite-check`, `situate`, `sources-digest`, and `citations`, Bibliography's word
    until 2026-10-09, still admitted until plan 261009w's contract migration). **Loud**:
    a word not listed is refused on insert, which the reader sees as a failed first question.
-   `chat_threads_origin_item` names `glossary`, `bibliography` (and `citations`), `ideas` and
-   `situate` one by one. **Silent**: a new
+   `chat_threads_origin_item` names `glossary`, `bibliography` (and `citations`), `ideas`,
+   `situate`, `sources-digest` and `summary` one by one. **Silent**: a new
    id-shaped mode left out of it may store half a shape, which then reads back as no origin
    (step 5). Both are a migration: [database.md § A new migration, in five lines](database.md#a-new-migration-in-five-lines);
-   copy `drizzle/20261025183854_chat_thread_origin_situate.sql`, which is the latest.
+   copy `drizzle/20261030220450_chat_thread_origin_sources_digest_and_summary.sql`, which is the
+   latest, and also gives an id of its own form a CHECK of its own (`chat_threads_origin_sources_digest`,
+   `chat_threads_origin_summary`).
 5. **The columns, both ways.** [`src/thread-origin.ts`](../../src/thread-origin.ts).
    `originColumns` is **loud** (`never`). **`originFromColumns` is silent, and this is the one to
    remember**: it reads a string out of the database, reads a retired word as its successor
-   (`RETIRED_ORIGIN_MODES` in src/types.ts), tests for `glossary`, `bibliography`, `ideas` and
-   `debate` by hand, and returns no origin for anything else (the `return {}` near its end). Miss it
+   (`RETIRED_ORIGIN_MODES` in src/types.ts), tests for each mode by hand, and returns no origin for anything else (the `return {}` near its end). Miss it
    and the chat is saved with its origin, reads back as a plain chat, and the item never shows its
    mark. Nothing fails. The export ([`src/store/export.ts`](../../src/store/export.ts)) and the
    test seeder call this file, so they need no edit and inherit the same hole. The check that
    catches it is the round trip in step 11.
 6. **The route.** [`src/routes.ts`](../../src/routes.ts) § `parseOrigin`, and § `parseItemOrigin`
-   for an id-shaped one (its `mode` parameter is typed to the id-shaped modes). **Loud** once step 2
+   for an item whose id is block-shaped (`spya-…`), or § `parseShapedItemOrigin` for one whose id
+   has a form of its own (`situate`, `sources-digest`, `summary`, each handed its pattern). Each
+   one's `mode` parameter is typed to the modes it takes. **Loud** once step 2
    is done. Only a claim's block is checked against the article; an `itemId` is never looked up.
 7. **The title, the list and the way back.** [`src/chat-title.ts`](../../src/chat-title.ts) §
    `titleFromOrigin`, [`src/web/thread-source.ts`](../../src/web/thread-source.ts) §
@@ -226,7 +229,9 @@ In the order you would do them:
    The `chatfrom` row in [url-state.md](url-state.md) lists the words too. **Silent**.
 9. **The question.** [`src/web/chat-handoff.ts`](../../src/web/chat-handoff.ts): a function beside
    `askAboutGlossaryEntry`, using `fencedQuote`, and `itemOrigin` (its `mode` is typed, so
-   **loud**). The item's words are the article's or a model's, so they go inside the fence.
+   **loud**). The item's words are the article's or a model's, so they go inside the fence. A
+   message that quotes a long model text under the reader's own words (the ask box) uses
+   `askAboutModelText`, which cuts the text to fit `MAX_CHAT_QUESTION_CHARS` with everything counted.
 10. **The reader and the panel.** [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx):
     a sender beside `askGlossaryEntryInChat`, wrapped in `reopenItemChat` as `askEntry` is
     (**silent**: an unwrapped sender starts a second chat every press,
@@ -236,7 +241,7 @@ In the order you would do them:
     ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts)) and `OriginChatMark`, one or the
     other, passed through the owner's arm of `access`. The icon rule is [icons.md § A chat is two bubbles](icons.md#a-chat-is-two-bubbles).
 11. **The tests to copy.** `tests/thread-origin-way-back.test.ts` (the `describe.each` over
-    `glossary`, `bibliography`, `ideas` and `situate`: `sameOrigin`, and **the columns round trip that covers
+    `glossary`, `bibliography`, `ideas`, `situate`, `sources-digest` and `summary`: `sameOrigin`, and **the columns round trip that covers
     step 5**); `tests/chat-origin-route.test.ts` (the route, the CHECKs, the export);
     `tests/chat-origin-transaction.test.ts`'s `describe.each` (a renamed snapshot, another item,
     another mode); `tests/chat-handoff.test.ts` (the fence, and a long name cut);

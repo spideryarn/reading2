@@ -383,13 +383,25 @@ describe("a lens origin on the way in", () => {
  * **The item shapes: a glossary entry, a cited work and an idea**
  * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1 and D3;
  * the idea is plan 261009k's stage 3; a literature-search finding, `situate`,
- * plan 261025h, whose id is `si-` and twelve hex digits rather than a block-shaped one).
+ * plan 261025h, whose id is `si-` and twelve hex digits rather than a block-shaped one;
+ * the sources digest and a summary level, plan 261030b, each with an id from its
+ * artefact's time).
  * An id and a snapshot of the name. The id is never dereferenced, so a made-up
  * one is accepted; only the shape is checked.
  */
-describe.each(["glossary", "bibliography", "ideas", "situate"] as const)("a %s origin on the way in", (mode) => {
-  const ITEM = mode === "situate" ? "si-0123456789ab" : "spya-ttm222";
-  const OTHER_ITEM = mode === "situate" ? "si-ba9876543210" : "spya-ttm333";
+/** Each item mode's id, another item's, and a well-formed id of another shape. */
+const ITEM_IDS = {
+  glossary: ["spya-ttm222", "spya-ttm333", "si-0123456789ab"],
+  bibliography: ["spya-ttm222", "spya-ttm333", "si-0123456789ab"],
+  ideas: ["spya-ttm222", "spya-ttm333", "si-0123456789ab"],
+  situate: ["si-0123456789ab", "si-ba9876543210", "spya-ttm222"],
+  "sources-digest": ["sd-20261030215639123", "sd-20261030215639123-p2", "ss-brief-20261030215639123"],
+  summary: ["ss-brief-20261030215639123", "ss-fuller-20261030215639123", "sd-20261030215639123"],
+} as const;
+const BLOCK_SHAPED = new Set<string>(["glossary", "bibliography", "ideas"]);
+
+describe.each(["glossary", "bibliography", "ideas", "situate", "sources-digest", "summary"] as const)("a %s origin on the way in", (mode) => {
+  const [ITEM, OTHER_ITEM, OTHER_SHAPE] = ITEM_IDS[mode];
   const item = (over: Record<string, unknown> = {}) => ({ mode, itemId: ITEM, quote: "qualia", ...over });
 
   it("stores the id and the name on the thread it creates, and reads them back equal", async () => {
@@ -431,7 +443,7 @@ describe.each(["glossary", "bibliography", "ideas", "situate"] as const)("a %s o
     ["no item id", { mode, quote: "qualia" }],
     ["a malformed item id", { mode, itemId: "not-an-id", quote: "qualia" }],
     /* Each shape's own id: a finding's is not a block-shaped one, nor the reverse. */
-    ["the other kind of item id", { mode, itemId: mode === "situate" ? "spya-ttm222" : "si-0123456789ab", quote: "qualia" }],
+    ["the other kind of item id", { mode, itemId: OTHER_SHAPE, quote: "qualia" }],
     ["no name", { mode, itemId: ITEM }],
     ["an empty name", { mode, itemId: ITEM, quote: "  " }],
     ["a name that is not a string", { mode, itemId: ITEM, quote: 7 }],
@@ -455,7 +467,7 @@ describe.each(["glossary", "bibliography", "ideas", "situate"] as const)("a %s o
     await ask({ threadId: THREAD, question: "what more?", origin: item() });
     const otherMode = mode === "glossary" ? "bibliography" : "glossary";
     /* Another mode's item, well formed for that mode, so the answer is the 409 and not the 400. */
-    const otherModeItem = mode === "situate" ? { mode: otherMode, itemId: "spya-ttm222", quote: "qualia" } : item({ mode: otherMode });
+    const otherModeItem = BLOCK_SHAPED.has(mode) ? item({ mode: otherMode }) : { mode: otherMode, itemId: "spya-ttm222", quote: "qualia" };
     for (const other of [item({ itemId: OTHER_ITEM }), otherModeItem, claim(), lens()]) {
       expect((await ask({ threadId: THREAD, question: "and now?", origin: other })).status).toBe(409);
     }
@@ -757,9 +769,11 @@ describe("the origin's columns", () => {
   });
 
   it("refuses a lens on any mode but Reception (or its old word)", async () => {
-    expect(await refusedBy({ originMode: "summary", originLens: "an angle" })).toMatch(
-      /chat_threads_origin_lens_debate_only/,
-    );
+    /* A well-formed summary item but for the lens. The item check forbids a
+       lens too, so either may be the one named. */
+    expect(
+      await refusedBy({ originMode: "summary", originItemId: "ss-brief-20261030215639123", originQuote: "words", originLens: "an angle" }),
+    ).toMatch(/chat_threads_origin_(lens_debate_only|item)/);
   });
 
   it("refuses a lens on a thread that is not a chat", async () => {
@@ -790,9 +804,12 @@ describe("the origin's columns", () => {
   });
 
   /* Plan 261006d, D2: a glossary entry or a cited work is an id and a name,
-     with no block and no lens. `summary` is still reserved and has no shape. */
-  describe.each(["glossary", "citations", "bibliography", "ideas", "situate"])("a %s origin", (mode) => {
-    const good = { originMode: mode, originItemId: "spya-ttm222", originQuote: "qualia" };
+     with no block and no lens. The digest and a summary level joined them in
+     plan 261030b, each with an id of its own form (below). */
+  describe.each(["glossary", "citations", "bibliography", "ideas", "situate", "sources-digest", "summary"])("a %s origin", (mode) => {
+    const itemId =
+      mode === "sources-digest" ? "sd-20261030215639123" : mode === "summary" ? "ss-fuller-20261030215639123" : "spya-ttm222";
+    const good = { originMode: mode, originItemId: itemId, originQuote: "qualia" };
 
     it("accepts an id and a name", async () => {
       expect(await refusedBy(good)).toBeNull();
@@ -814,18 +831,34 @@ describe("the origin's columns", () => {
     });
   });
 
-  it("still accepts the reserved summary mode with no shape of its own", async () => {
-    expect(await refusedBy({ originMode: "summary" })).toBeNull();
+  /* Plan 261030b: `summary`, reserved with no shape since plan 261009k
+     (GPT Sol's F8), is now an item, and its id and the digest's have a form
+     of their own, held by a CHECK each: the patterns of `SUMMARY_ITEM_ID` and
+     `SOURCES_DIGEST_ITEM_ID` in src/types.ts. */
+  it("refuses a summary origin with no shape, as it was reserved", async () => {
+    expect(await refusedBy({ originMode: "summary" })).toMatch(/chat_threads_origin_item/);
   });
 
-  /* Plan 261009k, GPT Sol's F8: `summary` has no shape, so it may carry none
-     of the shape columns, and does not get one by accident before it is built. */
-  it("refuses a summary origin that carries an item id, a block or a quote", async () => {
-    expect(await refusedBy({ originMode: "summary", originItemId: "spya-aaaaaa" })).toMatch(
-      /chat_threads_origin_summary/,
-    );
-    expect(await refusedBy({ originMode: "summary", originBlockId: BLOCK })).toMatch(/chat_threads_origin_summary/);
-    expect(await refusedBy({ originMode: "summary", originQuote: "words" })).toMatch(/chat_threads_origin_summary/);
+  it.each([
+    ["sources-digest", "sd-20261030215639123"],
+    ["sources-digest", "sd-20261030215639-p12"],
+    ["summary", "ss-brief-20261030215639123"],
+    ["summary", "ss-fuller-20261030215639"],
+  ])("accepts a %s origin with the id %s", async (mode, itemId) => {
+    expect(await refusedBy({ originMode: mode, originItemId: itemId, originQuote: "words" })).toBeNull();
+  });
+
+  it.each([
+    ["sources-digest", "sd-2026", /chat_threads_origin_sources_digest/],
+    ["sources-digest", "sd-20261030215639123-p0", /chat_threads_origin_sources_digest/],
+    ["sources-digest", "spya-aaaaaa", /chat_threads_origin_sources_digest/],
+    ["sources-digest", "ss-brief-20261030215639123", /chat_threads_origin_sources_digest/],
+    ["summary", "ss-thread-20261030215639123", /chat_threads_origin_summary/],
+    ["summary", "ss-brief-2026", /chat_threads_origin_summary/],
+    ["summary", "spya-aaaaaa", /chat_threads_origin_summary/],
+    ["summary", "sd-20261030215639123", /chat_threads_origin_summary/],
+  ])("refuses a %s origin with the malformed id %s", async (mode, itemId, constraint) => {
+    expect(await refusedBy({ originMode: mode, originItemId: itemId, originQuote: "words" })).toMatch(constraint);
   });
 });
 

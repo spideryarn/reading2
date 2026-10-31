@@ -408,7 +408,7 @@ describe("the browser pass's stragglers", () => {
       ".gloss-sort-btn",
       ".rcp-check-send",
       ".rcp-dig",
-      ".investigate-send",
+      ".ask-box-send",
       ".investigate-q",
       ".investigate-yours-line",
       ".investigate-yours-more",

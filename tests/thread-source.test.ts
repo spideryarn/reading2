@@ -211,7 +211,8 @@ describe("the filter", () => {
     expect(CHAT_FROM_LABEL.sources).toBe("Sources");
     expect(CHAT_FROM_LABEL.glossary).toBe("Glossary");
     expect(CHAT_FROM_LABEL.ideas).toBe("Ideas");
-    expect([...CHAT_FROM_WORDS]).toEqual(["chats", "sources", "glossary", "ideas", "learn", "passage"]);
+    expect(CHAT_FROM_LABEL.summary).toBe("Summary");
+    expect([...CHAT_FROM_WORDS]).toEqual(["chats", "sources", "glossary", "ideas", "summary", "learn", "passage"]);
   });
 
   it("reads `?chatfrom=` as one of those words, and anything else as All", () => {
