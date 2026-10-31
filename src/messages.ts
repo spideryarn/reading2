@@ -4449,10 +4449,8 @@ export const SHARING_OFF_LINK_UNKNOWN = "This is not public.";
  *
  * **It stays one short sentence because it is three surfaces**, not one — the
  * sharing card's line, the shelf badge's hover (`SHARING_BADGE`), and the
- * masthead's mark while the article is known to be unarchived. The masthead
- * substitutes `SHARING_MARK_ON_ARCHIVED` or
- * `SHARING_MARK_ON_ARCHIVE_UNKNOWN` when the listing clause cannot be made.
- * So the listing is a clause inside the existing sentence and not a second
+ * masthead's mark — archived or not, since a shared article stays listed when
+ * it is archived (Greg, 2026-10-31; plan 261031c). So the listing is a clause inside the existing sentence and not a second
  * sentence after it: a badge tooltip and a link's description have to read as
  * one voice, and two sentences read as a correction of the first.
  */
@@ -4601,29 +4599,6 @@ export const SHARING_MARK_PRESS_PRIVATE =
 export const SHARING_MARK_HOW_PUBLIC =
   "Stopping sharing refuses the next request for it and takes it off the public list — whatever " +
   "somebody has already read or copied stays with them.";
-
-/**
- * **`SHARING_ON` for an article that is shared and archived**, where its second
- * half is false: archiving takes a public article off the public list while its
- * link keeps working (src/store/public-library.ts § the `archivedAt` clause).
- * A surface that knows both facts draws this: the masthead's mark and the paper
- * card (`PaperCard.tsx`). The sharing card and the shelf badge still say
- * `SHARING_ON` — deferred in
- * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
- */
-export const SHARING_MARK_ON_ARCHIVED =
-  "Anyone with the link can read this without signing in. It's archived, so it isn't listed publicly.";
-
-/**
- * **The public state while the archive question is unknown.** Public visibility
- * still proves that the direct link works (`publicSlug` ignores `archived_at`),
- * but the public listing requires `archived_at is null`, so silence about the
- * archive state cannot honestly promise the listing. `useArchive` reaches this
- * state when the article payload cannot say, or after both a write and its
- * verifying read fail.
- */
-export const SHARING_MARK_ON_ARCHIVE_UNKNOWN =
-  "Anyone can read this without signing in. Whether it's listed publicly couldn't be confirmed.";
 
 /** @see SHARING_MARK_HOW_PUBLIC */
 export const SHARING_MARK_HOW_PRIVATE =

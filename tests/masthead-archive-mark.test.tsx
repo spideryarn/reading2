@@ -22,7 +22,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SHARING_MARK_ON_ARCHIVED, SHARING_ON } from "../src/messages.js";
+import { SHARING_ON } from "../src/messages.js";
 import type { Article, Visibility } from "../src/types.js";
 import { DELAY } from "../src/web/Tooltip.js";
 
@@ -194,7 +194,9 @@ describe("the masthead's Archive button", () => {
     expect(button()?.dataset.archived).toBe("false");
   });
 
-  it("updates the sharing card from the same controller after archive and put-back presses", async () => {
+  /* A shared article is listed publicly archived or not (plan 261031c), so
+     the sharing card says the same thing through both presses. */
+  it("keeps the sharing card's promise through archive and put-back presses", async () => {
     await act(async () =>
       root.render(
         createElement(MastheadHarness, { archivedAt: null, owner: true, visibility: "public" }),
@@ -205,7 +207,7 @@ describe("the masthead's Archive button", () => {
 
     apiFetch.mockResolvedValueOnce(patched(WHEN));
     await act(async () => button()!.click());
-    expect(sharing.querySelector(".tip-soon-what")?.textContent).toBe(SHARING_MARK_ON_ARCHIVED);
+    expect(sharing.querySelector(".tip-soon-what")?.textContent).toBe(SHARING_ON);
 
     apiFetch.mockResolvedValueOnce(patched(null));
     await act(async () => button()!.click());
@@ -234,7 +236,7 @@ describe("the masthead's Archive button", () => {
       "public",
       "On your shelf",
       "Archiving takes it off your shelf, and can be undone.",
-      "It comes off the public list too, though its public link keeps working. You stay here and can carry on reading.",
+      "Nothing else changes: it stays on the public list while it's shared, and you stay here.",
       "Press to archive it.",
     ],
     [
@@ -242,7 +244,7 @@ describe("the masthead's Archive button", () => {
       "public",
       "Archived",
       "Off your shelf, and still readable here.",
-      "Putting it back lists it publicly again. Its public link works either way, and you stay here.",
+      "Nothing else changes: it stays on the public list while it's shared, and you stay here.",
       "Press to put it back on your shelf.",
     ],
   ] as const)(
@@ -262,7 +264,9 @@ describe("the masthead's Archive button", () => {
   );
 
   it.each([null, WHEN])(
-    "does not claim archiving has no other effect when visibility is unknown (%s)",
+    /* Archiving changes nothing public whatever the sharing state (plan
+       261031c), so not knowing it no longer needs a hedge. */
+    "says archiving has no other effect even when visibility is unknown (%s)",
     async (archivedAt) => {
       await act(async () =>
         root.render(
@@ -272,8 +276,9 @@ describe("the masthead's Archive button", () => {
       const archive = button();
       if (!archive) throw new Error("no archive mark");
       const card = await openCard(archive);
-      expect(card.querySelector(".tip-soon-how")?.textContent).toMatch(/couldn't be confirmed/i);
-      expect(card.querySelector(".tip-soon-how")?.textContent).not.toContain("Nothing else changes");
+      expect(card.querySelector(".tip-soon-how")?.textContent).toBe(
+        "Nothing else changes — you stay here and can carry on reading.",
+      );
     },
   );
 

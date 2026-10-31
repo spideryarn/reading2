@@ -43,6 +43,11 @@ function pub(slug: string, title: string, byline: string | null = null): PublicL
 }
 
 let active: LibraryEntry[];
+/* What `?archived=1` answers. Include public reads it too, since a shared
+   article stays listed when its owner archives it (plan 261031c). */
+let archivedRows: LibraryEntry[];
+let archiveFails: boolean;
+let archiveReads: number;
 let shared: PublicLibraryEntry[];
 let truncated: boolean;
 let publicReads: number;
@@ -64,6 +69,11 @@ vi.mock("../src/web/lib/api.js", () => ({
         status: 200,
         ...(activeIsOfflineCopy ? { headers: { "x-spideryarn-offline": "copy" } } : {}),
       });
+    }
+    if (url === "/api/library?archived=1") {
+      archiveReads++;
+      if (archiveFails) return json({ error: "down" }, 500);
+      return json({ articles: [...archivedRows] });
     }
     if (url.startsWith("/api/library/search?")) {
       const params = new URLSearchParams(url.slice(url.indexOf("?") + 1));
@@ -138,6 +148,9 @@ let root: Root;
 
 beforeEach(() => {
   active = [entry("alpha", "Alpha"), entry("mine-shared", "Mine, shared")];
+  archivedRows = [];
+  archiveFails = false;
+  archiveReads = 0;
   shared = [pub("mine-shared", "Mine, shared"), pub("zebra", "Zebra crossings", "Ann Other"), pub("yak", "Yak shaving")];
   truncated = false;
   publicReads = 0;
@@ -223,6 +236,39 @@ describe("the Include public chip", () => {
     expect(host.querySelector("[role=status]")?.textContent).toContain("once your shelf is up to date");
 
     await act(async () => release());
+    await settle();
+    expect(publicReads).toBe(1);
+    expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
+  });
+
+  /* Greg, 2026-10-31 (spya-zyh56c): a shared article stays public when its
+     owner archives it. So an article you archived before this page loaded is
+     on the public listing, and only your archive can say it is yours. */
+  it("leaves out your own shared article archived before the page loaded", async () => {
+    archivedRows = [{ ...entry("old-shared", "Old, shared"), archivedAt: "2026-09-01T00:00:00.000Z" }];
+    shared = [...shared, pub("old-shared", "Old, shared")];
+    await show("/?public=1");
+    expect(publicReads).toBe(1);
+    expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
+  });
+
+  it("reads nothing public while your archive cannot be loaded, and says why", async () => {
+    archiveFails = true;
+    await show("/?public=1");
+    expect(publicReads).toBe(0);
+    expect(section()).toBeNull();
+    const status = [...host.querySelectorAll("[role=status]")].find((p) =>
+      p.textContent?.includes("until your archived articles have loaded"),
+    );
+    expect(status).toBeDefined();
+    /* This was a background ownership read, not an Include archived action: its
+       contextual status above is enough, and a generic red shelf notice would
+       make an unasked-for archive failure look like the reader's action failed. */
+    expect(host.querySelector('[class*="bg-destructive"]')).toBeNull();
+
+    archiveFails = false;
+    const retry = [...(status?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Try again")!;
+    await act(async () => retry.click());
     await settle();
     expect(publicReads).toBe(1);
     expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
@@ -369,6 +415,22 @@ describe("beside the search's answer (spya-s9fhmw)", () => {
     await show("/?q=ann");
     expect(buttons()).toEqual(["Include archived", "Include public"]);
     expect(line()?.textContent).not.toContain("public article");
+  });
+
+  it("retries a failed background archive read when Include archived is pressed", async () => {
+    archiveFails = true;
+    await show("/?q=ann");
+    expect(archiveReads).toBe(1);
+    expect(publicReads).toBe(0);
+    expect(host.querySelector('[class*="bg-destructive"]')).toBeNull();
+
+    archiveFails = false;
+    const press = [...(line()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Include archived")!;
+    act(() => press.click());
+    await settle();
+    expect(archiveReads).toBe(2);
+    expect(publicReads).toBe(1);
+    expect(line()?.textContent).toContain("1 public article matches");
   });
 
   it("does not count public cards against an incomplete cached owner shelf", async () => {

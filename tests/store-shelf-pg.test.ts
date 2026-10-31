@@ -813,22 +813,24 @@ describe("the Postgres shelf and library search", () => {
       const stamped = async () =>
         (await getDb().select({ at: articles.updatedAt }).from(articles).where(eq(articles.slug, SLUG)))[0]!.at;
       const archivedStamp = await stamped();
-      expect(await pgShelfStore.recordOpen(SLUG)).toEqual({ restored: true });
+      await pgShelfStore.recordOpen(SLUG);
       expect((await pgShelfStore.read(SLUG)).archivedAt).toBeUndefined();
       /* Un-archiving is a change to the reader's settings, so it moves
          `updated_at` as Put back does (schema.ts § `updatedAt`)… */
       const unarchivedStamp = await stamped();
       expect(unarchivedStamp!.getTime()).toBeGreaterThan(archivedStamp!.getTime());
       /* …and an open of an article already on the shelf does not. */
-      expect(await pgShelfStore.recordOpen(SLUG)).toEqual({ restored: false });
+      await pgShelfStore.recordOpen(SLUG);
       expect((await stamped())!.getTime()).toBe(unarchivedStamp!.getTime());
     });
 
-    it("reports one restore when two tabs open an archived article together", async () => {
+    it("puts it back when two tabs open an archived article together", async () => {
       await pgShelfStore.patch(SLUG, { archived: true });
-      const opened = await Promise.all([pgShelfStore.recordOpen(SLUG), pgShelfStore.recordOpen(SLUG)]);
-      expect(opened.map(({ restored }) => restored).sort()).toEqual([false, true]);
-      expect((await pgShelfStore.read(SLUG)).archivedAt).toBeUndefined();
+      const before = (await pgShelfStore.read(SLUG)).opens;
+      await Promise.all([pgShelfStore.recordOpen(SLUG), pgShelfStore.recordOpen(SLUG)]);
+      const after = await pgShelfStore.read(SLUG);
+      expect(after.archivedAt).toBeUndefined();
+      expect(after.opens).toBe(before + 2);
     });
 
     it("counts concurrent opens without losing any", async () => {

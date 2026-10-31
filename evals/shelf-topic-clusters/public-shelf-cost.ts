@@ -64,7 +64,7 @@ async function publicShelf(): Promise<TopicWork[]> {
                   left(r.root_gist, $2) as gist
              from spideryarn.articles a
              join spideryarn.article_revisions r on r.id = a.current_revision_id
-            where a.visibility = 'public' and a.archived_at is null and r.tree is not null
+            where a.visibility = 'public' and r.tree is not null
               and exists (select 1 from spideryarn.revision_blocks b where b.revision_id = r.id)
             order by a.public_at desc nulls last, a.slug
             limit 200`,

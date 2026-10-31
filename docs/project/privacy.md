@@ -1227,10 +1227,10 @@ these moves:
   controls: Archive is reversible and destroys nothing, Delete permanently erases the article and
   everything made from it with no undo, and neither can reach a copy already downloaded to a device.
   Rewrite that section if either control changes what it does. The page also says what archiving
-  does to an article that was *shared*: it drops
-  out of the public listing (`publicLibraryQuery` filters `archived_at`) and the link keeps working,
-  which is [library.md](library.md#archive-and-undo-is-the-confirmation)'s split between listing and
-  access. If `publicSlug` ever starts filtering too, that sentence is wrong
+  does to an article that was *shared*: nothing public — it stays on the public list and the link
+  keeps working (since 2026-10-31; neither `publicLibraryQuery` nor `publicSlug` reads
+  `archived_at`, [library.md](library.md#archive-and-undo-is-the-confirmation)). If either ever
+  starts filtering on it, that sentence is wrong
 - what actually survives a delete — the page names three kinds of thing, and both were checked against the
   schema rather than assumed: `raw_sources` has no lifecycle at all (nothing deletes a row from it,
   and the bytes are content-addressed, so two readers who add the same document share one object),

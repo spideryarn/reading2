@@ -69,7 +69,8 @@ const FIXTURES: Fixture[] = [
   { n: 5, owner: OTHER, slug: "cited-pg-other-public", visibility: "public", readable: true, archived: false, title: "Other public extracted", titleOverride: "Other secret rename" },
   /* Public but unreadable — its link would 404 — so not a candidate. */
   { n: 6, owner: OTHER, slug: "cited-pg-other-public-unreadable", visibility: "public", readable: false, archived: false, title: "Other unreadable" },
-  /* Public but archived by its owner, off the public shelf, so not a candidate. */
+  /* Public but archived by its owner: archiving is the owner's shelf alone, so
+     still a candidate, and never said to be archived to anybody else (plan 261031c). */
   { n: 7, owner: OTHER, slug: "cited-pg-other-public-archived", visibility: "public", readable: true, archived: true, title: "Other archived" },
   /* Public, readable, but fetched through a signed address: a candidate that must not be matchable by it. */
   { n: 8, owner: OTHER, slug: "cited-pg-other-public-signed", visibility: "public", readable: true, archived: false, title: "Other signed", finalUrl: SIGNED },
@@ -199,7 +200,7 @@ describe("the articles a cited work may be matched to", { timeout: 20_000 }, () 
     await closeDb();
   });
 
-  it("are the reader's own, archived or not, and the public ones on the shelf, readable, and nothing else", async () => {
+  it("are the reader's own, archived or not, and the public ones, archived or not, readable, and nothing else", async () => {
     const candidates = (await asReader(READER, () => citedCandidates("x"))).filter((c) => ours(c.slug));
     expect(candidates.map((c) => c.slug).sort()).toEqual([
       "cited-pg-mine-archived",
@@ -207,9 +208,11 @@ describe("the articles a cited work may be matched to", { timeout: 20_000 }, () 
       "cited-pg-mine-upload",
       "cited-pg-mine-upload-matching",
       "cited-pg-other-public",
+      "cited-pg-other-public-archived",
       "cited-pg-other-public-signed",
       "cited-pg-other-public-upload",
     ]);
+    /* A stranger's archive state is theirs: only the reader's own says archived. */
     const archived = candidates.filter((c) => c.archived).map((c) => c.slug);
     expect(archived).toEqual(["cited-pg-mine-archived"]);
   });
@@ -300,10 +303,11 @@ describe("the articles a cited work may be matched to", { timeout: 20_000 }, () 
   it("asks whose in the where, as one grouped clause, beside the shelf and readability bars", () => {
     const { sql, params } = citedCandidatesQuery(getDb(), READER).toSQL();
     const where = sql.slice(sql.indexOf(" where "));
-    /* Theirs, archived or not; or public and on the public shelf (plan 261001i). */
+    /* Theirs, or public, archived or not (plans 261001i, 261031c). */
     expect(where).toMatch(
-      /\("spideryarn"\."articles"\."owner_id" = \$\d+ or \("spideryarn"\."articles"\."visibility" = \$\d+ and "spideryarn"\."articles"\."archived_at" is null\)\)/,
+      /\("spideryarn"\."articles"\."owner_id" = \$\d+ or "spideryarn"\."articles"\."visibility" = \$\d+\)/,
     );
+    expect(where).not.toMatch(/archived_at/);
     expect(where).toContain('"spideryarn"."article_revisions"."tree" is not null');
     expect(where).toContain("exists (");
     expect(params).toContain(READER);

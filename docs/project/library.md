@@ -362,26 +362,36 @@ The open's own UPDATE clears `archived_at` (`recordOpen`, src/store/pg-shelf.ts)
 owner's page alone — from the shelf, from Include archived, from a link to their own article, or its
 metadata page — and never a visitor, *view as*, chat or MCP, none of which record an open. The
 masthead's Archive leaves you on the page, so a reload after it puts the article back: the rule as
-stated, accepted. A shared article goes back on `/read/public` with it, as Put back does, and the
-public topics are refreshed. On the page, the open goes through `useArchive`, so an Archive pressed
+stated, accepted. Nothing public moves with it — see below. On the page, the open goes through `useArchive`, so an Archive pressed
 while it is still out waits for it rather than racing it —
 [261030f](../plans/261030f-opening-an-archived-article-puts-it-back-on-the-shelf.md). The library *search* is the exception:
 an archived article is out of the index unless the reader turns on Include archived, because an
 unmarked hit that opens an article you archived reads as a ghost. Chat's `search_library` never
 turns it on.
 
-**And archiving takes it out of the public listing too**, which is the one place the shelf rule bends.
-[`publicLibraryQuery`](../../src/store/public-library.ts) asks for `visibility = 'public'`, a
-published revision **and `archived_at is null`** — so an article its owner has shared *and* archived
-is answered at its own link and named in no list. (That query is what `/read/public` lists —
-`PublicLibraryPage` in [`App.tsx`](../../src/web/App.tsx); [public-shelf.md](public-shelf.md).)
+**And archiving leaves a shared article on the public list**, since 2026-10-31:
 
-The first version
-had no clause, on the rule above — visibility is a property of the work, archiving is a property of
-one person's shelf — and the consequence is what settles it: without it an owner loses sight of the
-article on their own shelf while strangers go on finding it, and since the payload carries no
-`archived_at` at all, nothing on either end would ever show that it had. Listing is the half
-archiving owns; the link is the half sharing owns, and `publicSlug` is deliberately left alone.
+> If I archive an article, to me that just signals it's not something I'm actively reading right
+> now. It doesn't mean I'm deleting it.
+>
+> And so archiving it shouldn't take it off the public list. You know, if the article's public, it
+> stays public the whole time.
+>
+> — Greg, 2026-10-31 (spya-zyh56c, his reply to
+> [q-d4586t](../user-feedback/questions/q-d4586t.md))
+
+So archiving is a property of one person's shelf and nothing else: sharing alone decides whether
+strangers can find an article. [`publicLibraryQuery`](../../src/store/public-library.ts) asks for
+`visibility = 'public'` and a readable revision, and never reads `archived_at`; Bibliography's
+"in Spideryarn" candidates and the import-time public-copy offer
+([bibliography.md](bibliography.md)) admit a stranger's archived public article too, without saying
+it is archived. Archive, Put back and an open therefore never touch the public topic pills. The only
+ways off `/read/public` are Stop sharing and Delete.
+
+From 2026-09-04 until then it was the other way round: the listing had an `archived_at is null`
+clause, on the argument that an owner who archives a shared piece loses sight of it on their own
+shelf while strangers go on finding it. Greg has accepted exactly that consequence — an archived
+article is still yours, behind Include archived — [261031c](../plans/261031c-archiving-leaves-a-public-article-on-the-public-list.md).
 
 ### Include public, and an empty shelf that says where to go
 
@@ -399,7 +409,9 @@ opens and a rename and Put back; a public one has none of those, so a row for it
 `ShelfCard` with every owner verb switched off, the design [public-shelf.md](public-shelf.md)
 § The parts rejected. It draws the public page's own `PublicCard` off the same anonymous read
 `/read/public` makes, so it adds nothing to the public import graph. Your own shared articles are
-left out of it, being already above.
+left out of it, being already above — **archived ones too, so the section loads your archive before
+it reads the public list**, and says so if the archive cannot be loaded rather than calling one of
+yours somebody else's (plan [261031c](../plans/261031c-archiving-leaves-a-public-article-on-the-public-list.md)).
 
 **The search box narrows it, by the cards' words only.** The same `filterEntries` rule as the shelf
 (title, byline, site, gist), in the browser. The *text* of public articles is not searched — the

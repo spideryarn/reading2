@@ -105,11 +105,16 @@ export interface Shelf {
   /**
    * The last `loadArchived` failed, and `archived` is still `null` because of
    * it — so the shelf can say "couldn't" rather than "loading" for ever. The
-   * reason itself is in `actionError`. Cleared by the next attempt.
+   * archive/public surface that asked shows the reason in context. Cleared by
+   * the next attempt.
    */
   archivedFailed: boolean;
-  /** Fetch the other half of the shelf. Idempotent, and one request at a time. */
-  loadArchived: () => Promise<void>;
+  /**
+   * Fetch the other half of the shelf. Idempotent, and one request at a time.
+   * `reportFailure` is for a direct Include archived ask; the background read
+   * used to classify public cards reports beside that surface instead.
+   */
+  loadArchived: (reportFailure?: boolean) => Promise<void>;
   /**
    * Put an archived article back on the shelf.
    *
@@ -572,11 +577,15 @@ export function useShelf(readerId: string): Shelf {
   const beginRename = useCallback((slug: string) => setRenaming(slug), []);
   const cancelRename = useCallback(() => setRenaming(null), []);
 
-  const loadArchived = useCallback(async () => {
+  const loadArchived = useCallback(async (reportFailure = true) => {
     if (loadingArchived.current) return;
     loadingArchived.current = true;
     const asked = reader.current;
-    setNotice(null);
+    /* A background read for Include public or its search count must not clear
+       an unrelated button's notice, or put a generic shelf error above a
+       control the reader never pressed. Those surfaces use `archivedFailed`
+       to say what they could not show. */
+    if (reportFailure) setNotice(null);
     setArchivedFailed(false);
     try {
       const r = await apiFetch("/api/library?archived=1");
@@ -595,7 +604,7 @@ export function useShelf(readerId: string): Shelf {
       setArchivedEdits(new Map());
     } catch (e) {
       if (stillOurs(asked)) {
-        setNotice(byButton(readableFailure(e)));
+        if (reportFailure) setNotice(byButton(readableFailure(e)));
         setArchivedFailed(true);
       }
     } finally {

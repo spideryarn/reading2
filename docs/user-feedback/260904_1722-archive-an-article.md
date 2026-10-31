@@ -55,6 +55,11 @@ owner could lose sight of an article on their own shelf while strangers could st
 a poor privacy asymmetry. `publicSlug` is deliberately untouched, which draws the line cleanly:
 **visibility controls whether the link works; archiving controls listings.**
 
+**Superseded 2026-10-31:** Greg decided that archiving is one person's shelf
+only, so a shared article now stays on the public list as well as keeping its
+link. See [library.md § Archive](../project/library.md#archive-and-undo-is-the-confirmation)
+and plan [261031c](../plans/261031c-archiving-leaves-a-public-article-on-the-public-list.md).
+
 `PrivacyPage.tsx` is a published page and said *"The Delete button on your shelf is really an
 archive… under 'show deleted'"* — circular after the rename. Rewritten, checked sentence by sentence
 against the code, and it now says what happens to an already-shared article.

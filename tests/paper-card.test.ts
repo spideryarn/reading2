@@ -5,7 +5,7 @@
  * be false for an unusual entry.
  */
 import { describe, expect, it } from "vitest";
-import { SHARING_MARK_ON_ARCHIVED } from "../src/messages.js";
+import { SHARING_ON } from "../src/messages.js";
 import type { LibraryEntry } from "../src/types.js";
 import { ABSTRACT_PREVIEW, CARD_TOPICS, paperCardFacts } from "../src/web/PaperCard.js";
 import { exactly } from "../src/web/relative-time.js";
@@ -88,7 +88,8 @@ describe("paperCardFacts", () => {
     );
     expect(value(card, "Last opened")).toBe("never");
     expect(value(card, "Archived")).toBe(exactly("2026-09-25T10:00:00.000Z"));
-    expect(value(card, "Shared")).toBe(SHARING_MARK_ON_ARCHIVED);
+    /* Archived and shared is still listed publicly (plan 261031c). */
+    expect(value(card, "Shared")).toBe(SHARING_ON);
   });
 
   it("cuts an abstract at an available word boundary even when the next token is very long", () => {

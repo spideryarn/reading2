@@ -427,7 +427,7 @@ const rawPgShelfStore: ShelfStore = {
     return entryFor(slug, !!row.archivedAt);
   },
 
-  async recordOpen(slug: string): Promise<{ restored: boolean }> {
+  async recordOpen(slug: string): Promise<void> {
     requireSlug(slug);
     /* `opens + 1` computed by Postgres, never read-then-write from here. Two
        tabs opening the same article at once would otherwise both read 4, both
@@ -442,27 +442,23 @@ const rawPgShelfStore: ShelfStore = {
          unarchive it."* In this UPDATE, so the open and the un-archive cannot
          disagree. Un-archiving is a reader-settings change, so it moves
          `updated_at` as Put back does; an open of an article already on the
-         shelf does not (schema.ts § `updatedAt`).
+         shelf does not (schema.ts § `updatedAt`) — so the `case` reads the
+         row's own old value, in the one statement. Plan 261030f.
 
-         The row is locked and read first only to say whether it was archived:
-         RETURNING sees the new row, and the route needs the old fact, because
-         putting a shared article back lists it publicly again and the public
-         shelf's topics must hear about it. Plan 261030f. */
-      const [was] = await tx
-        .select({ archivedAt: articles.archivedAt })
-        .from(articles)
-        .where(ownedSlug(slug, ownerId))
-        .for("update");
-      if (!was) throw notFound(slug);
-      const restored = was.archivedAt !== null;
-      await tx
+         Nothing public moves with it: a shared article is on `/read/public`
+         archived or not (plan 261031c), so the route has nobody to tell. */
+      const [row] = await tx
         .update(articles)
         .set({
           opens: sql`${articles.opens} + 1`,
           lastOpenedAt: sql`now()`,
-          ...(restored ? { archivedAt: null, updatedAt: sql`clock_timestamp()` } : {}),
+          archivedAt: null,
+          updatedAt: sql`case when ${articles.archivedAt} is not null
+            then clock_timestamp() else ${articles.updatedAt} end`,
         })
-        .where(ownedSlug(slug, ownerId));
+        .where(ownedSlug(slug, ownerId))
+        .returning({ id: articles.id });
+      if (!row) throw notFound(slug);
       /* **And when, for Active days on /admin/users** (src/db/schema.ts §
          `articleOpenTimes`). After the update, so an open of somebody else's
          slug has already 404'd. The primary key is the throttle: a second open
@@ -474,7 +470,6 @@ const rawPgShelfStore: ShelfStore = {
         .insert(articleOpenTimes)
         .values({ ownerId, slot: openSlot(sql`now()`), openedAt: sql`now()` })
         .onConflictDoNothing({ target: [articleOpenTimes.ownerId, articleOpenTimes.slot] });
-      return { restored };
     }, READ_COMMITTED);
   },
 

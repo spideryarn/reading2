@@ -7265,10 +7265,9 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
  */
 /**
  * **Answer, then bring the public shelf's topic pills up to date**, before the
- * handler returns: the three routes that can move an article on or off
- * `/read/public` — share and un-share, archive and restore, delete. (A fourth,
- * an open that puts an archived article back, answers 204 and calls
- * `refreshPublicShelfTopics` itself: `POST /api/library/:slug/open`.)
+ * handler returns: the two routes that can move an article on or off
+ * `/read/public` — share and un-share, and delete. Archive, Put back and an
+ * open do not, since a shared article is listed archived or not (plan 261031c).
  *
  * Awaited after the answer is sent, as `/api/library/terms` does, so the spend
  * lands in this request's collector — booked to the site account with no
@@ -11940,10 +11939,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const slug = slugPart(captures, 1);
       const body = await readBody(req);
       const answer = await patchShelf(slug, body);
-      /* Archiving or restoring moves a shared article off or onto the public
-         shelf; a rename or a purpose does not touch it. */
-      const listing = typeof body === "object" && body !== null && "archived" in body;
-      await sendThenRefreshPublicTopics(res, answer, listing);
+      /* Nothing here moves an article on or off `/read/public`: a rename or a
+         purpose never did, and since plan 261031c archiving does not either —
+         a shared article is listed archived or not. */
+      send(res, 200, answer);
     },
   },
 
@@ -12244,15 +12243,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/library\/([\w.%-]+)\/open$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      const { restored } = await shelfStore.recordOpen(slugPart(captures, 1));
+      await shelfStore.recordOpen(slugPart(captures, 1));
       // 204: there is nothing worth reading back, and a body would invite
       // somebody to render a counter that is one behind.
       res.statusCode = 204;
       res.end();
-      /* An open that put an archived article back is a fourth way onto
-         `/read/public` (plan 261030f), so the topic pills hear about it as
-         they do from `sendThenRefreshPublicTopics`'s three. Never throws. */
-      if (restored) await refreshPublicShelfTopics();
     },
   },
 
