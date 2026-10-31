@@ -151,8 +151,11 @@ export type { SourcesDigest } from "./types.js";
  * fenced bibliography and the writer's fenced article.
  * `sources-digest/3`, 2026-10-31: the planner is asked for a range of leads,
  * not only a ceiling (spya-f37ug4; postmortem 261031b).
+ * `sources-digest/4`, 2026-10-31: the writer is told a citation that checks
+ * out ("says-it") does not go under "check", whose heading promises places to
+ * check (plan 261031d § 3, the reader's review).
  */
-export const PROMPT_VERSION = "sources-digest/3";
+export const PROMPT_VERSION = "sources-digest/4";
 
 /** Leads the planner may write, and the fewest worth searching for. */
 export const MAX_LEADS = 16;
@@ -907,7 +910,10 @@ to ${MAX_PARAGRAPHS_PER_SECTION} short paragraphs, the most telling first:
 - "missed": important, directly relevant work or positions it does not cite.
 - "check": citations that may not say quite what the passage uses them for.
   Word these as something to check, never as "wrong". A "partly" verdict means
-  the work says some of it, or says it with conditions: say which.
+  the work says some of it, or says it with conditions: say which. A citation
+  whose report says "says-it" does not belong here: the heading promises
+  places to check, so one that checks out goes in "cites" if it adds anything,
+  or nowhere.
 And "overview": two to ${MAX_OVERVIEW_SENTENCES} sentences, the shape of it.
 
 Leave a section empty when the reports have nothing for it. Never fill one in
