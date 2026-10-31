@@ -300,11 +300,13 @@ to play with it."* Several small questions, each with an ASCII sketch, not one b
 ## Deferred, each queued before the note says shipped
 
 - **Measure a real run** (cost, time, quality on three or four articles beside the dossier) once
-  the OpenRouter key resets on 1 November; written up under `docs/investigations/`.
-- **Readers that search again or fetch a page themselves**, waiting on Greg's answer to question 7
-  and a security design reviewed on its own (F1).
-- **Brief and Fuller levels**, if Greg's answer to question 5 says so.
-- **An abort signal through the OpenAlex citer lookup** (GPT Sol's SD1-04): the digest stops
+  the OpenRouter key resets on 1 November; written up under `docs/investigations/`. Queued as
+  `qi-dykn3xjh`.
+- **Readers that search again or fetch a page themselves**, waiting on Greg's answer to question 2
+  of `q-v03wmh` and a security design reviewed on its own (F1). Queued as `qi-xgnn5fpb`.
+- **Brief and Fuller levels, and the other layouts**, if Greg's answers to question 3 of
+  `q-v03wmh` pick them. Queued as `qi-eerykqdn`.
+- **An abort signal through the OpenAlex citer lookup** (`qi-nc9rjdcv`; GPT Sol's SD1-04): the digest stops
   waiting at 40 s or on cancellation, but the lookup itself runs on in the background (free, each
   request under its own 8 s fetch deadline). Threading a signal through `situateCiters`, the
   citation index and the limiter's sleep is shared code, so it is its own small job.
