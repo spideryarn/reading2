@@ -300,6 +300,21 @@ describe("matchCited", () => {
     expect(matchCited([ARXIV_WORK], [live]).get(ARXIV_WORK.id)).not.toHaveProperty("archived");
   });
 
+  it("never exposes a public candidate's archive state", () => {
+    /* The SQL projection already forces this false for a stranger. Keep the
+       response boundary defensive too: even a malformed internal candidate
+       cannot turn another reader's shelf state into Bibliography output. */
+    const malformedPublic = candidate({
+      slug: "public-archived",
+      mine: false,
+      archived: true,
+      urls: ["https://arxiv.org/abs/2001.08361"],
+    });
+    const match = matchCited([ARXIV_WORK], [malformedPublic]).get(ARXIV_WORK.id);
+    expect(match).toMatchObject({ slug: "public-archived", whose: "public" });
+    expect(match).not.toHaveProperty("archived");
+  });
+
   it("gives an unmatched work nothing", () => {
     expect(matchCited([work()], [candidate({ matchTitle: "Something else entirely here" })]).size).toBe(0);
   });

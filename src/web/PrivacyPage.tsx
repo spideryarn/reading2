@@ -880,9 +880,10 @@ export function PrivacyPage() {
           image your browser or somebody else’s has kept is out of our hands.
         </p>
         <p>
-          If you had shared an article and then archive it, it stops being listed anywhere public —
-          but the link you gave out still opens it. Archiving is about your shelf; sharing is about
-          the link. To close the link, use{" "}
+          If you had shared an article and then archive it, nothing public changes: it stays on the
+          public list and the link you gave out still opens it. Archiving is about your shelf;
+          sharing is about who else can read it. To take it off the public list and close the link,
+          use{" "}
           <strong className="tw:text-foreground">Stop sharing</strong> on the article’s own page.
           A private link is the same: archiving leaves it working, and{" "}
           <strong className="tw:text-foreground">Turn off</strong> on the article’s own page closes

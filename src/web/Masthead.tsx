@@ -56,8 +56,6 @@ import {
   SHARING_MARK_HOW_PUBLIC,
   SHARING_MARK_NAME_PRIVATE,
   SHARING_MARK_NAME_PUBLIC,
-  SHARING_MARK_ON_ARCHIVE_UNKNOWN,
-  SHARING_MARK_ON_ARCHIVED,
   SHARING_MARK_PRESS_PRIVATE,
   SHARING_MARK_PRESS_PUBLIC,
   SHARING_OFF,
@@ -241,11 +239,10 @@ export function Masthead({ article, slug, onRenamed, archive, readBand }: Props)
         slug={slug}
         visibility={onRenamed === undefined ? undefined : article.visibility}
         privateLinkOn={article.privateLinkOn}
-        archived={archive?.at === undefined ? undefined : archive.at !== null}
       />
       {/* Owner-only: the controller is mounted by OwnedArticle and is absent
-          from the visitor arm altogether. `shared` because archiving a shared
-          article also takes it off the public list — and optional because an
+          from the visitor arm altogether. `shared` so the card can say the
+          public list is untouched (plan 261031c) — and optional because an
           uncertain sharing write must not be collapsed into private. */}
       {onRenamed !== undefined && archive !== undefined ? (
         <ArchiveMark
@@ -982,24 +979,15 @@ function SharingMark({
   slug,
   visibility,
   privateLinkOn,
-  archived,
 }: {
   slug: string;
   /** `undefined` means the store could not say — see the header. */
   visibility: Visibility | undefined;
   privateLinkOn: boolean | undefined;
-  /**
-   * Whether the article is archived, `undefined` when we do not know. **Archived
-   * means off the public list too** (public-library.ts § the `archivedAt`
-   * clause), while the public link keeps working — so a shared, archived
-   * article must not be told *"it's listed publicly"*. GPT Sol, plan review of
-   * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
-   * Unknown keeps only the fact visibility can establish: the public link
-   * works. It cannot promise the listing, whose query also requires a known
-   * unarchived state.
-   */
-  archived: boolean | undefined;
 }) {
+  /* No archive state here, deliberately: a shared article is listed publicly
+     whether or not it is archived (Greg, 2026-10-31; plan 261031c). From
+     261002e until then this took `archived` and said otherwise. */
   if (visibility === undefined) return null;
 
   const shared = visibility === "public";
@@ -1028,9 +1016,7 @@ function SharingMark({
      icon together so they describe the same access state. */
   const { tip, name, head, how, press, icon } = shared
     ? {
-        tip: archived === true
-          ? SHARING_MARK_ON_ARCHIVED
-          : archived === false ? SHARING_ON : SHARING_MARK_ON_ARCHIVE_UNKNOWN,
+        tip: SHARING_ON,
         name: SHARING_MARK_NAME_PUBLIC,
         head: SHARING_BADGE,
         how: SHARING_MARK_HOW_PUBLIC,
@@ -1127,19 +1113,13 @@ function ArchiveMark({ archive, shared }: { archive: ArchiveControl; shared: boo
     : archived
       ? "Off your shelf, and still readable here."
       : "Archiving takes it off your shelf, and can be undone.";
-  /* On a shared article archiving is also the public listing — public-library.ts
-     § the `archivedAt` clause — so *"Nothing else changes"* was false there.
-     Unknown is its own branch too: a failed sharing write is not proof of the
-     private state. GPT Sol, plan review of 261002e. The link itself keeps
-     working either way only when sharing is known on. */
-  const how =
-    shared === undefined
-      ? "You stay here and can carry on reading. Whether this also changes a public listing couldn't be confirmed."
-      : !shared
-        ? "Nothing else changes — you stay here and can carry on reading."
-        : archived
-          ? "Putting it back lists it publicly again. Its public link works either way, and you stay here."
-          : "It comes off the public list too, though its public link keeps working. You stay here and can carry on reading.";
+  /* Archiving is your shelf and nothing else (Greg, 2026-10-31; plan 261031c),
+     so on a shared article the card says the public list is untouched — the
+     one thing a sharer would wonder. Unknown sharing gets the plain line,
+     which is true either way. */
+  const how = shared
+    ? "Nothing else changes: it stays on the public list while it's shared, and you stay here."
+    : "Nothing else changes — you stay here and can carry on reading.";
   const press = error ? undefined : archived ? "Press to put it back on your shelf." : "Press to archive it.";
   return (
     /* `tip-soon`, which `SharingMark` beside it has always carried and this

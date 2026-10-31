@@ -1026,22 +1026,16 @@ describe("the one query that lists articles for nobody in particular", () => {
   });
 
   /**
-   * **An archived article is off this shelf too.**
+   * **Archiving does not take an article off this shelf.**
    *
-   * Visibility decides whether the *link* works; archiving decides whether the
-   * article is *listed*. Without this clause an owner who archives something
-   * they had shared loses sight of it on their own shelf while strangers go on
-   * finding it here — and the payload carries no `archived_at`, so nothing on
-   * either end would ever show that it had. GPT Sol, 2026-09-04.
-   *
-   * In the `where` for the same reason the readability bar is: `limit` should
-   * count rows a visitor is actually going to be shown.
-   *
-   * **Red first:** deleting `isNull(articles.archivedAt)` from the `where` on
-   * 2026-09-04 failed this.
+   * Sharing alone decides whether strangers can find it; archiving is one
+   * person's shelf. Greg, 2026-10-31 (spya-zyh56c): *"if the article's public,
+   * it stays public the whole time."* It was the other way round from
+   * 2026-09-04 until plan 261031c. `archived_at` is not read at all, so the
+   * listing cannot say anything about it either.
    */
-  it("and leaves out an article its owner has archived", () => {
-    expect(whereClause).toMatch(/"spideryarn"\."articles"\."archived_at" is null/);
+  it("and does not ask whether its owner has archived it", () => {
+    expect(listing.sql).not.toMatch(/archived_at/);
   });
 
   /**

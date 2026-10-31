@@ -16,7 +16,8 @@
  * 3. **A ninth share is filed**, one filing call, not a re-think.
  * 4. **An un-share rebuilds** under 20 cards, and the gone article leaves the
  *    tree. **When that rebuild fails, nothing is sent** until one succeeds.
- * 5. **Archive and delete** trigger the same.
+ * 5. **Delete** triggers the same; archive and an open do not, since a shared
+ *    article stays listed whether or not it is archived (plan 261031c).
  * 6. **Past the cut-off** a due re-think does not run by itself, and the
  *    administrator's Rebuild runs it.
  * 7. **A stranger's request spends nothing** and makes no claim.
@@ -367,26 +368,24 @@ describe("the public shelf's topic pills", () => {
     expect((await publicShelf()).topics.length).toBeGreaterThan(0);
   });
 
-  it("archiving and deleting a shared article rebuild too", async () => {
-    /* Ten listed, so an archive and a delete each leave eight or more. */
+  it("archiving a shared article leaves it listed and spends nothing; deleting one rebuilds", async () => {
+    /* Greg, 2026-10-31 (spya-zyh56c, plan 261031c): "if the article's public,
+       it stays public the whole time." Archive, and the open that un-archives
+       it, are the owner's own shelf alone, so the public topics hear nothing. */
     await share(ownerOf(1), slug(1));
     await share(ownerOf(9), slug(9));
     seen = [];
     const archived = await call("PATCH", `/api/library/${slug(3)}`, { body: { archived: true }, as: ownerOf(3) });
     expect(archived.status, archived.text).toBe(200);
-    expect(Object.keys((await siteRow())?.members ?? {})).not.toContain(ids[3]);
-    expect(nameCalls().length).toBeGreaterThan(0);
+    expect((await publicShelf()).entries.map((c) => c.slug)).toContain(slug(3));
+    expect(Object.keys((await siteRow())?.members ?? {})).toContain(ids[3]);
+    expect(nameCalls()).toEqual([]);
     expect((await publicShelf()).topics.length).toBeGreaterThan(0);
 
-    /* Its owner opening it puts it back on the shelf, and so back on the
-       public list (plan 261030f): the topics hear about that too. Archived
-       again afterwards, so the rest of this file sees the shelf it expects. */
-    seen = [];
     const opened = await call("POST", `/api/library/${slug(3)}/open`, { as: ownerOf(3) });
     expect(opened.status, opened.text).toBe(204);
-    expect(Object.keys((await siteRow())?.members ?? {})).toContain(ids[3]);
-    const rearchived = await call("PATCH", `/api/library/${slug(3)}`, { body: { archived: true }, as: ownerOf(3) });
-    expect(rearchived.status, rearchived.text).toBe(200);
+    expect(nameCalls()).toEqual([]);
+    expect((await publicShelf()).entries.map((c) => c.slug)).toContain(slug(3));
 
     seen = [];
     const deleted = await call("DELETE", `/api/library/${slug(5)}`, { as: ownerOf(5) });

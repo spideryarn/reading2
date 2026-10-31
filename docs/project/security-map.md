@@ -300,7 +300,7 @@ breadth and broader topic — and on each card the keys of its topics. What chan
   `auth.users` row that owns nothing and cannot sign in. That file imports no owner context, and
   `tests/public-imports.test.ts` § `ALLOWED_IN` lets it, and only it, name the table. The writer is
   the authenticated coordinator ([`src/public-shelf-topics.ts`](../../src/public-shelf-topics.ts)),
-  run after a share, un-share, archive or delete, and it stays out of the public import graph with
+  run after a share, un-share or delete, and it stays out of the public import graph with
   every model and gateway module.
 - **The model's input is the listing itself** — the same closed query, so only what the page already
   shows, titles and one-line summaries. No reader profile, nothing private.

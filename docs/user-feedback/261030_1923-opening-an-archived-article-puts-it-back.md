@@ -36,6 +36,9 @@ cannot race. Plan:
 - A shared article you archived to take it off `/read/public` goes back on the public list when you
   open it, as Put back already does (its tooltip says so). If you would rather an open leave a public
   article's listing alone, that is a separate switch to add; say so.
+  **Superseded 2026-10-31** by Greg's answer to [q-d4586t](questions/q-d4586t.md): archiving no
+  longer takes a shared article off the public list at all, so there is nothing for an open to put
+  back — plan [261031c](../plans/261031c-archiving-leaves-a-public-article-on-the-public-list.md).
 
 **Checks.** Tests written first and watched red: the store (`tests/store-shelf-pg.test.ts`), the
 page's half (`tests/open-unarchives.test.tsx`), and the public topics refresh

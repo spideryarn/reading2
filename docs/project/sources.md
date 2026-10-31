@@ -364,7 +364,10 @@ revision (`sources_digest`), read by `GET /api/sources-digest/:slug`, and in the
   readers searching again; a query written after reading a stranger's page is a search that page
   steered, so every query is the planner's, from the article alone, through `validateQueries`. The
   readers have no tools: what one would still dig into comes back as words under *More*, and the
-  digging is the chat's. Whether readers may search again is Greg's question 7 in the plan.
+  digging is the chat's. Greg asked what is best for the reader (2026-10-31); the answer, with Opus
+  and GPT Sol, is no for now, and later only a narrow follow-up whose query code writes from a
+  work already named, if the first live runs show depth is missing
+  ([261031d § 2](../plans/261031d-sources-digest-acting-on-greg-s-answers-principles-readers-that-search-again-layout-choices.md#2-may-the-readers-search-again-a-for-now-a-narrow-b-only-if-the-measurement-asks-for-it)).
 - **Untrusted text is fenced at both boundaries** (F2): the article and every page at the readers,
   and at the writer the article and every reader's report, since a report is model text that read a
   stranger's page. The instructions come after the last fence (SD1-01).

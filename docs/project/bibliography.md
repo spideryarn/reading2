@@ -1256,7 +1256,7 @@ The design and GPT Sol's review of it are
 
 **Never another reader's private article, not even its existence.** The candidates are one query,
 [`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts), whose `where` is *mine (archived
-or not), or public and not archived*, readable, with the owner taken from the request rather than passed in. Of
+or not), or public (archived or not, since 2026-10-31)*, readable, with the owner taken from the request rather than passed in. Of
 a stranger's public article it matches only what its public page already publishes — the extracted
 title and byline, never the owner's rename, and the source address only as `publicSourceUrl` passes
 it, never the address it was requested from.
@@ -1274,7 +1274,10 @@ three things 260930b deferred:
 - **The hover card in the prose** draws the same line, from the same component.
 - **The reader's own archived articles** are matched too — archived is off the shelf, but the article
   still opens for its owner by link — and the line says **In your library · archived**, so nobody
-  goes looking for it on the shelf. A stranger's archived article is still never a candidate.
+  goes looking for it on the shelf. A stranger's archived *public* article has been a candidate
+  since 2026-10-31, because archiving no longer takes anything off the public side
+  ([261031c](../plans/261031c-archiving-leaves-a-public-article-on-the-public-list.md)) — and it is never said to be archived: that flag is the
+  reader's own only.
 - **An uploaded PDF** has no address, so it could only match by title. Now the reader's own upload
   also matches by the DOI or arXiv id we found for it (`upload_source_guesses`, a `canonical` row
   only — one built from an identifier checked against the PDF, never a page that merely looked

@@ -11,7 +11,7 @@
  * ## Withheld whole, not trimmed
  *
  * If any article the tree was built from or filed into is no longer listed —
- * un-shared, archived, deleted — **no topic is sent at all** until the tree is
+ * un-shared or deleted (archiving no longer unlists, plan 261031c) — **no topic is sent at all** until the tree is
  * rebuilt. Cutting just that article's memberships is not enough: a label may
  * have been worded from its title, and un-sharing must take effect on the next
  * request, as it does for the card. Under 20 cards the un-share itself

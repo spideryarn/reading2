@@ -20,14 +20,14 @@ describe("the cited-candidate query's privacy boundary", () => {
     const { sql, params } = query();
     const where = sql.slice(sql.indexOf(" where "));
     expect(where).toMatch(
-      /\("spideryarn"\."articles"\."owner_id" = \$\d+ or \("spideryarn"\."articles"\."visibility" = \$\d+ and "spideryarn"\."articles"\."archived_at" is null\)\) and "spideryarn"\."article_revisions"\."tree" is not null and exists/,
+      /\("spideryarn"\."articles"\."owner_id" = \$\d+ or "spideryarn"\."articles"\."visibility" = \$\d+\) and "spideryarn"\."article_revisions"\."tree" is not null and exists/,
     );
     expect(where).toContain('"spideryarn"."revision_blocks"."revision_id" = "spideryarn"."article_revisions"."id"');
     expect(params).toContain(OWNER);
     expect(params).toContain("public");
   });
 
-  it("keeps owner-only addresses, renames, and upload guesses behind SQL cases", () => {
+  it("keeps owner-only addresses, renames, archive state, and upload guesses behind SQL gates", () => {
     const { sql } = query();
     const projection = sql.slice(0, sql.indexOf(" from "));
     expect(projection).toMatch(
@@ -38,6 +38,9 @@ describe("the cited-candidate query's privacy boundary", () => {
     );
     expect(projection).toMatch(
       /case when "spideryarn"\."articles"\."owner_id" = \$\d+\s+and "spideryarn"\."upload_source_guesses"\."status" = 'found' and "spideryarn"\."upload_source_guesses"\."kind" = 'canonical'\s+then left\("spideryarn"\."upload_source_guesses"\."url", 2048\) end as "guessed_url"/,
+    );
+    expect(projection).toMatch(
+      /\("spideryarn"\."articles"\."owner_id" = \$\d+ and "spideryarn"\."articles"\."archived_at" is not null\) as "archived"/,
     );
   });
 

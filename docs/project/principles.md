@@ -48,6 +48,25 @@ default to this."* And 2026-10-18 (`spya-r8arjm`): *"assume that we're not going
 of the existing articles unless I explicitly ask you to, because that would be somewhat expensive
 and probably a bit disruptive. So assume that we're just going to fix or improve things for new."*
 
+## 2. Progressive disclosure: start clean, and always a way further
+
+The first thing a reader meets is short and uncluttered; everything has more one press away: an
+(i) saying what it is and how it was made, a More that opens the detail, the sources, and finally a
+chat.
+
+Greg asked for it in `spya-vqmfrs` (2026-10-30), and said yes to this wording on 2026-10-31
+(`spya-dvq5b4`, answering [q-v03wmh](../user-feedback/questions/q-v03wmh.md)). The Sources digest
+is built this way ([sources.md § Digest](sources.md#digest)).
+
+## 3. Build a version, then ask in small pieces
+
+When the right design is unclear, build the simplest good version for Greg to play with, and
+alongside it show the alternatives as ASCII sketches, broken into several small questions he can
+mix and match rather than one big A/B/C.
+
+Greg asked for it in `spya-vqmfrs` (2026-10-30), and said yes to this wording on 2026-10-31
+(`spya-dvq5b4`). How to ask is [ask-me-questions.md](../reusable/ask-me-questions.md).
+
 ---
 
 Up: [vision.md](vision.md)

@@ -19,9 +19,11 @@
  * - **Openable**: a current revision with a tree and at least one block — the
  *   bar `loadArticle` and the shelf both apply, so a link we draw never opens a
  *   404. **Archived**: the reader's own archived article is a candidate — it
- *   still opens for them by direct link, and the match says it is archived —
- *   but a stranger's is not, because archiving took it off the public shelf
- *   (plan 261001i).
+ *   still opens for them by direct link, and the match says it is archived
+ *   (plan 261001i). A stranger's public article is a candidate archived or not,
+ *   because archiving no longer takes anything off the public side (Greg,
+ *   2026-10-31, plan 261031c) — and `archived` is false for it, so the
+ *   stranger's archive state never leaves the database.
  *
  * **What of a stranger's article may be matched against** is the second rule,
  * and it is what the public page itself already publishes:
@@ -50,7 +52,7 @@
  * plan names the next step (a stored match key) for when it is thousands.
  */
 
-import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 
 import type { CitedCandidate } from "../cited-in-spideryarn.js";
 import { getDb } from "../db/client.js";
@@ -80,8 +82,10 @@ export function citedCandidatesQuery(db: Pick<ReturnType<typeof getDb>, "select"
           then coalesce(${articles.titleOverride}, ${articleRevisions.title})
           else ${articleRevisions.title} end, ${cap(TEXT_CHARS)})`.as("display_title"),
       byline: sql<string | null>`left(${articleRevisions.byline}, ${cap(TEXT_CHARS)})`.as("byline"),
-      /* Only ever true for the reader's own: the `where` admits no stranger's archived article. */
-      archived: sql<boolean>`(${articles.archivedAt} is not null)`.as("archived"),
+      /* Only ever true for the reader's own. A stranger's public article is a
+         candidate archived or not (plan 261031c), and whether its owner has
+         archived it is the owner's business, so it is never read out. */
+      archived: sql<boolean>`(${mine} and ${articles.archivedAt} is not null)`.as("archived"),
       guessedUrl: sql<string | null>`case when ${mine}
           and ${uploadSourceGuesses.status} = 'found' and ${uploadSourceGuesses.kind} = 'canonical'
           then left(${uploadSourceGuesses.url}, ${cap(URL_CHARS)}) end`.as("guessed_url"),
@@ -91,7 +95,7 @@ export function citedCandidatesQuery(db: Pick<ReturnType<typeof getDb>, "select"
     .leftJoin(uploadSourceGuesses, eq(uploadSourceGuesses.articleId, articles.id))
     .where(
       and(
-        or(eq(articles.ownerId, ownerId), and(eq(articles.visibility, "public"), isNull(articles.archivedAt))),
+        or(eq(articles.ownerId, ownerId), eq(articles.visibility, "public")),
         isNotNull(articleRevisions.tree),
         sql`exists (
           select 1 from ${revisionBlocks}

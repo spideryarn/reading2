@@ -284,13 +284,24 @@ export function Library({
   );
 
   /* Every slug that is yours, so Include public does not list your own shared
-     articles a second time without your verbs on them. Include archive edits
-     even before the archive is loaded: the shared public snapshot can still
-     contain an article you have just archived. */
+     articles a second time without your verbs on them. **Archived ones
+     included, and that needs the archive loaded**: a shared article stays on
+     the public list when you archive it (Greg, 2026-10-31; plan 261031c), so
+     without your archive an article you archived last month would come back
+     under "Shared by other readers". Archive edits count before the archive
+     has loaded, as they always did. */
   const ownSlugs = useMemo(
     () => new Set([...(articles ?? []), ...shelf.archivedVisible].map((a) => a.slug)),
     [articles, shelf.archivedVisible],
   );
+  /* Something wants the public listing: the Include public section, or the
+     count beside a search's answer. A boolean, so typing does not re-run the
+     effect below. */
+  const wantsPublic = publicOn || queryTerms(query).length > 0;
+  /* **Whose is whose is known**: the live owner shelf, and the archive. Until
+     both are in, the public listing is not read, because it could not be told
+     apart from your own. */
+  const ownKnown = shelf.liveArticlesLoaded && shelf.archived !== null;
 
   /* The archive is fetched when the chip is on and the list is missing — on a
      press, on a direct `?archived=1` visit, and after anything sets the list
@@ -299,9 +310,20 @@ export function Library({
      failure is not retried in a loop: `archived` stays `null` and nothing
      here changes until the chip is turned off and on again. */
   const { archived: archivedList, loadArchived } = shelf;
+  /* And when the public listing is wanted, for `ownKnown` above. The same
+     no-loop property: a failure leaves the list `null` and changes none of
+     these dependencies, so it is retried only when a chip is turned off and
+     on again (or by the public section's own Try again). The reporting mode is
+     a dependency in its own right: `archiveWanted` can stay true when a search
+     already wanted the same read, but pressing Include archived changes a
+     background ask into a direct one and must retry it. A generic shelf notice
+     belongs only to Include archived on its own; with Include public on, both
+     consumers have a contextual status beside them. */
+  const archiveWanted = archivedOn || (wantsPublic && shelf.liveArticlesLoaded);
+  const reportArchiveFailure = archivedOn && !publicOn;
   useEffect(() => {
-    if (archivedOn && archivedList === null) void loadArchived();
-  }, [archivedOn, archivedList, loadArchived]);
+    if (archiveWanted && archivedList === null) void loadArchived(reportArchiveFailure);
+  }, [archiveWanted, archivedList, reportArchiveFailure, loadArchived]);
 
   /* Matcher one: the shelf itself, filtered in the browser, then narrowed by
      the Unread chip, then by every chosen topic — one function, in one order,
@@ -463,9 +485,7 @@ export function Library({
      (plan 261002b § Part D). Started only once the live owner shelf is in —
      a saved copy cannot say which public articles are somebody else's — and
      only when something wants it. */
-  const publicListing = usePublicShelf(
-    shelf.liveArticlesLoaded && (publicOn || queryTerms(query).length > 0),
-  );
+  const publicListing = usePublicShelf(ownKnown && wantsPublic);
 
   /* The archive's half of that count: the server's, off the passage search
      run without the archive — taken only from the answer to *this* query, and
@@ -969,7 +989,7 @@ export function Library({
           publicOn={publicOn}
           archived={archivedTally}
           listing={publicListing}
-          listingReady={shelf.liveArticlesLoaded}
+          listingReady={ownKnown}
           ownSlugs={ownSlugs}
           narrowedElsewhere={show === "unread" || topics.length > 0}
           onArchived={() => pushView(() => void setArchivedOn(true))}
@@ -987,7 +1007,9 @@ export function Library({
         listing={publicListing}
         enabled={publicOn}
         ownerLoaded={articles !== null}
-        ownerReady={shelf.liveArticlesLoaded}
+        ownerReady={ownKnown}
+        archiveFailed={shelf.archivedFailed}
+        retryArchive={() => void loadArchived(reportArchiveFailure)}
         query={query}
         ownSlugs={ownSlugs}
         narrowedElsewhere={show === "unread" || topics.length > 0}

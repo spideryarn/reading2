@@ -824,13 +824,10 @@ export interface ShelfStore {
 
   /**
    * One more open — **and, if the article was archived, back on the shelf**
-   * (Greg, spya-h8cda9; plan 261030f).
-   *
-   * Returns only whether it was put back, for the route to bring the public
-   * shelf's topics up to date. Nothing reaches the client: a response body
+   * (Greg, spya-h8cda9; plan 261030f). Nothing comes back: a response body
    * would only invite somebody to render a counter that is one behind.
    */
-  recordOpen(slug: string): Promise<{ restored: boolean }>;
+  recordOpen(slug: string): Promise<void>;
 
   /**
    * **How many other articles this reader has opened**: theirs, on the shelf
