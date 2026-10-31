@@ -1401,6 +1401,22 @@ describe("the ask box under the sources digest, and each paragraph's chat", () =
     expect(server.filter((t) => t.origin?.mode === "sources-digest"), "and starts no second chat").toHaveLength(1);
   });
 
+  it("shows Continue, not a fresh box, before the chat-summary list has heard of the sent chat", async () => {
+    who.set(OWNER);
+    await open("?mode=sources&sources=digest");
+    await until(() => askBox() !== null, "the digest's ask box");
+    frozenSummaries = structuredClone(server);
+    nextAnswer = "The digest's first answer.";
+    await ask("Is this fair to Dennett?");
+    await until(() => param("mode") === "chat" && chatPosts().length === 1, "the new chat");
+
+    await goTo("?mode=sources&sources=digest");
+    await settle();
+    expect(askMark(), "the just-started chat's Continue mark").not.toBeNull();
+    expect(askBox(), "no second box whose words would only reopen the first chat").toBeNull();
+    expect(chatPosts(), "returning starts no second turn").toHaveLength(1);
+  });
+
   it("starts a paragraph's own chat, named by its number across the sections, and then marks it", async () => {
     who.set(OWNER);
     await open("?mode=sources&sources=digest");
@@ -1524,6 +1540,7 @@ describe("no ask box for a visitor, or while viewing as the owner", () => {
       await until(() => host.querySelectorAll(".mode-band .simple-para").length === 2, "the owner's summary, viewed as them");
       expect(askBox()).toBeNull();
       expect(host.querySelector(".mode-band .simple-ask-box")).toBeNull();
+      expect(summaryParagraphButtons()).toHaveLength(0);
       expect(chatPosts()).toHaveLength(0);
     } finally {
       stop();

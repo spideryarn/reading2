@@ -41,6 +41,8 @@ remains.
 | Sources › Claims | each claim's heading (icon only) | [`ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) § `ClaimsList` | [reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat) |
 | Sources › Investigate | the question box and each suggested question (a *lens*: the words, no item); its claim and work rows use Claims' and Bibliography's senders | [`InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx) § `InvestigatePanel` | [reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle) |
 | Sources › Where it sits | each finding of the literature search, beside its passage (since 2026-10-25, plan 261025h: an id-shaped origin, `situate`, the finding's id and its passage; before then a lens, which such a chat still is); and its overview, beside the overview (since 2026-10-26, plan 261026g: the same origin, with an overview id, `so-` and the dossier's time; its way back lands on the summary box) | [`SituateDossier.tsx`](../../src/web/SituateDossier.tsx) § `Finding`, `OverviewChat` | [sources.md § Where this piece sits](sources.md#where-this-piece-sits) |
+| Sources › Digest | the ask box under the whole digest, and each paragraph (since 2026-10-31, plan 261030b: an id-shaped origin, `sources-digest`, `sd-` and the digest's time, `-p<N>` for a paragraph numbered across the four sections; a paragraph's way back lands on it) | [`SourcesDigestPanel.tsx`](../../src/web/SourcesDigestPanel.tsx) § `DigestAsk`, `DigestParagraph`; the box is [`AskBox.tsx`](../../src/web/AskBox.tsx) | [sources.md § Digest](sources.md#digest) |
+| Summary | the ask box under the Brief or the Fuller text, not Thread (since 2026-10-31, plan 261030b: an id-shaped origin, `summary`, `ss-brief-`/`ss-fuller-` and the summary's time; its way back opens that level). Not the paragraph button, which stores no origin | [`SimplePanel.tsx`](../../src/web/SimplePanel.tsx) § `LevelAsk` | [summaries.md § Ask about the summary](summaries.md#ask-about-the-summary) |
 | Glossary | the open entry, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
 | Glossary | a term's hover card in the prose, and Skim's term chip (which draws the same card), in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `TermCard` (`onAskTerm`) | [glossary.md § The hover card](glossary.md#the-hover-card) |
 | Sources › Bibliography | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work) |
@@ -148,6 +150,8 @@ A press calls `openOrigin` in [`Reader.tsx`](../../src/web/reader/Reader.tsx), o
 | Ideas | one push of `mode=ideas&idea=`, and a focus | the idea open, its row in view; not the row press, which jumps the prose |
 | Sources › Claims, a claim | one push of `mode=sources&sources=claims` that clears `?bears=` and `?receptionthread=`, and a focus | the claim's row in view, an older search's claim unfolded |
 | Sources › Investigate, a lens question (including an angle chat made before Investigate) | one push of `mode=sources&sources=investigate`, keeping `?thread=` | the question under *Your questions*, its conversation still open beside it |
+| Sources › Digest | one push of `mode=sources&sources=digest` that clears `?thread=`, `?bears=` and `?receptionthread=`; for a paragraph, a focus (`digestFocus`) | a paragraph scrolled into view and flashed; the whole digest's chat, or a paragraph of an older digest, opens the digest at its top |
+| Summary, a level | one push of `mode=summary&summary=<level>` that clears `?thread=`; a URL write, so it never starts a run | that level of the summary |
 
 **The way back lands on the item, and the item is one press from its block.** No arm jumps the
 prose: on a phone the band lies over it, and the flash would be held until the band moved (GPT
@@ -164,7 +168,7 @@ otherwise opens the newest one (Greg, spya-nhwy3d;
 **A focus** is the one-shot that Bibliography had first (`CiteFocus`), now
 [`item-focus.ts`](../../src/web/item-focus.ts) § `ItemFocus` and `useLandOnItem`, one piece of
 state per band in `Reader`. Once the row (`data-term-id`, `data-citation-id`, `data-idea-id`,
-`data-claim-key`) is drawn, the band centres it in the list's own scroller — never the page — and
+`data-claim-key`, `data-digest-paragraph` since 2026-10-31) is drawn, the band centres it in the list's own scroller — never the page — and
 flashes it, then hands the request back. Centred and flashed since 2026-10-17, for all four lists
 alike; it was `block: "nearest"` until then, which left a row already on screen where it was
 (Greg, `spya-m53cdk`: *"can we scroll to the right source (perhaps centred in the scrollable

@@ -48,7 +48,6 @@ import {
   explanationPassage,
   ASK_ABOUT_HEADINGS,
   ASK_ABOUT_MIN_QUOTE_ROOM,
-  ASK_ABOUT_NO_ROOM,
   ASK_ABOUT_QUESTION_HEADING,
   askAboutModelText,
   MAX_ASK_ABOUT_QUESTION_CHARS,
@@ -652,13 +651,10 @@ describe("askAboutModelText", () => {
     expect(shown.length).toBeGreaterThanOrEqual(ASK_ABOUT_MIN_QUOTE_ROOM);
   });
 
-  it("keeps a question longer than the box takes whole, and says the text was left out when it fills the room", () => {
+  it("refuses a hand-made question longer than the box takes instead of building a message the route will reject", () => {
     const question = "w".repeat(MAX_CHAT_QUESTION_CHARS);
-    const asked = askAboutModelText({ kind: "fuller", question, text: "In plain words." });
-    expect(asked).toContain(question);
-    expect(asked).toContain(`"""\n${ASK_ABOUT_NO_ROOM}\n"""`);
-    expect(asked).not.toContain("In plain words.");
-    /* Longer than the route takes, which refuses it with a 413 the reader sees. */
-    expect(asked.length).toBeGreaterThan(MAX_CHAT_QUESTION_CHARS);
+    expect(() => askAboutModelText({ kind: "fuller", question, text: "In plain words." })).toThrow(
+      `at most ${MAX_ASK_ABOUT_QUESTION_CHARS} characters`,
+    );
   });
 });

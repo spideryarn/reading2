@@ -521,9 +521,6 @@ export type AskAboutKind = keyof typeof ASK_ABOUT_HEADINGS;
  */
 export const ASK_ABOUT_QUESTION_HEADING = "My question:";
 
-/** What stands in the fence when there was no room for any of the text. */
-export const ASK_ABOUT_NO_ROOM = "(left out: the question took all the room)";
-
 /**
  * **The first message of a chat started from an ask box under the digest or
  * under a Summary level** (plan 261030b § The ask box, F4), and from a digest
@@ -545,14 +542,15 @@ export const ASK_ABOUT_NO_ROOM = "(left out: the question took all the room)";
  *
  * **The reader's words are never cut.** A question within
  * `MAX_ASK_ABOUT_QUESTION_CHARS` (the box's `maxLength`) leaves at least
- * `ASK_ABOUT_MIN_QUOTE_ROOM` for the text. A longer one, which only a hand-made
- * call can send, is kept whole; the text shrinks to what is left, and with no
- * room left at all the fence says so (`ASK_ABOUT_NO_ROOM`) and the message is
- * longer than the route takes, which refuses it with a 413 the reader sees.
- * A cut question would be a different question sent in their name.
+ * `ASK_ABOUT_MIN_QUOTE_ROOM` for the text. A hand-made call above that cap is
+ * rejected here rather than constructing a first message Chat's route will
+ * reject; cutting it would be a different question sent in the reader's name.
  */
 export function askAboutModelText(parts: { kind: AskAboutKind; question: string; text: string }): string {
   const question = parts.question.trim();
+  if (question.length > MAX_ASK_ABOUT_QUESTION_CHARS) {
+    throw new RangeError(`An ask-box question may be at most ${MAX_ASK_ABOUT_QUESTION_CHARS} characters`);
+  }
   const head = `${ASK_ABOUT_QUESTION_HEADING}\n\n${question}\n\n${ASK_ABOUT_HEADINGS[parts.kind]}\n\n`;
   const fenceOpen = '"""\n';
   const fenceClose = '\n"""';
@@ -561,8 +559,6 @@ export function askAboutModelText(parts: { kind: AskAboutKind; question: string;
   let shown: string;
   if (escaped.length <= room) {
     shown = escaped;
-  } else if (room <= 1) {
-    shown = ASK_ABOUT_NO_ROOM;
   } else {
     shown = `${cutAtWord(escaped, room - 1)}…`;
   }

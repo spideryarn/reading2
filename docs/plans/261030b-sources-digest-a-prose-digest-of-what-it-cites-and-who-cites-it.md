@@ -350,3 +350,22 @@ to play with it."* Several small questions, each with an ASCII sketch, not one b
   fixed in its own commit; SD2-03 (a writer answer empty once checked is a failed answer, not a
   blank `written` digest) fixed here, red first; SD2-04 (admin view-as sees the digest as the owner
   does) kept as the standing view-as design and written into sources.md in Stage 4.
+- 2026-10-30: SD2-02 fixed (8df753813): Where it sits and the Digest share one hook,
+  `useCompletionLanding`, whose ref the paid action reads at action time.
+- 2026-10-31: Stage 3 built in two halves. 3a (a9386ceae): the `sources-digest` and `summary`
+  origins through every step of chat-from-a-mode.md, migration
+  `20261030220450_chat_thread_origin_sources_digest_and_summary`, `askAboutModelText`, the shared
+  `AskBox` lifted from Investigate. 3b (ca3f258b2): the boxes under the digest and under Summary's
+  Brief and Fuller, each digest paragraph's Ask in chat, the way back landing on a paragraph, the
+  sections' order in one place. Browser pass (Sonnet): send, mark, reopen, way back and Chat's
+  list all work, console clean; the box was inset twice under a panel's text and its field cut
+  short (fixed in CSS). GPT Sol's review
+  ([261030b-stage3-code-review-sol.md](261030b-stage3-code-review-sol.md)), *approve with
+  changes*, all fixed by Sol, each red first: SD3-01 (Summary's paragraph buttons were live in
+  view-as), SD3-02 (a slow chat list put a fresh box back, whose words were then dropped; the
+  handoff now carries a pending summary), SD3-03 (the migration first clears the old reserved
+  `summary` marker; production holds no such row, read-only check 2026-10-31), SD3-04 (the
+  builder refuses a question over the box's cap rather than return one Chat must refuse). SD3-05
+  (the tables in chat-from-a-mode.md) done here: that doc is not a rule doc.
+- 2026-10-31: Stage 4 docs (f24d4957a): sources.md § Digest, summaries.md § Ask about the
+  summary, privacy.md and the privacy page, the help pages; question file q-v03wmh for Greg.

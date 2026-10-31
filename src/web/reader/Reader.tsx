@@ -45,6 +45,7 @@ import {
   sourcesDigestParagraphOf,
   summaryLevelOf,
   type ThreadOrigin,
+  type ThreadSummary,
 } from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
 import {
@@ -284,6 +285,27 @@ const NO_PUBLIC_QUOTES: Quote[] = [];
  * slightly different ways. visitor.ts § markedModes.
  */
 const EVERY_MODE_AVAILABLE: ReadonlyMap<Mode, string> = new Map();
+
+/** The mark a caller mode can draw before the server-backed summary list catches up. */
+function immediateHandoffSummary(
+  taken: ChatHandoff,
+  origin: ThreadOrigin,
+  id: string,
+  previous: ThreadSummary | undefined,
+): ThreadSummary {
+  if (previous) return { ...previous, id };
+  const now = new Date().toISOString();
+  return {
+    id,
+    title: taken.question.slice(0, 60),
+    createdAt: now,
+    updatedAt: now,
+    ...(origin.mode === "cite-check" ? { anchor: { blockId: origin.blockId } } : {}),
+    origin,
+    kind: "chat",
+    turns: 1,
+  };
+}
 
 /**
  * The reading view — **one reading view, for the owner and for a visitor.**
@@ -1326,8 +1348,9 @@ export function Reader({
    * an entry goes once the summaries carry that id, and from then on they are
    * the record. A waiting Quiz handoff has no `onHandoffThread`; its durable
    * draft-origin bridge is `chatDraftsFor(slug)` below.
-   */
-  const handedItemChats = useRef<{ origin: ThreadOrigin; id: string }[]>([]);
+  */
+  const handedItemChats = useRef<{ origin: ThreadOrigin; id: string; summary: ThreadSummary }[]>([]);
+  const [handedItemChatSummaries, setHandedItemChatSummaries] = useState<ThreadSummary[]>([]);
   const handedItemChatsSlug = useRef(slug);
   const handoffThread = useCallback(
     (taken: ChatHandoff, id: string) => {
@@ -1336,28 +1359,23 @@ export function Reader({
       const origin = taken.target === "chat" ? taken.origin : undefined;
       if (origin) {
         const previous = handedItemChats.current.find((h) => sameOrigin(h.origin, origin));
+        const summary = immediateHandoffSummary(taken, origin, id, previous?.summary);
         handedItemChats.current = [
           ...handedItemChats.current.filter((h) => !sameOrigin(h.origin, origin)),
-          { origin, id },
+          { origin, id, summary },
         ];
+        setHandedItemChatSummaries((summaries) => [
+          ...summaries.filter(
+            (candidate) => candidate.origin === undefined || !sameOrigin(candidate.origin, origin),
+          ),
+          summary,
+        ]);
         /* A cite-check's card reads chatAnchors directly, unlike the item
            buttons' short-lived bridge above. Tell it about a manual press as
            soon as Chat names the thread, including a server id correction. */
         if (origin.mode === "cite-check") {
           if (previous && previous.id !== id) owner?.chatAnchors.rename(previous.id, id);
-          else if (!previous) {
-            const now = new Date().toISOString();
-            owner?.chatAnchors.add({
-              id,
-              title: taken.question.slice(0, 60),
-              createdAt: now,
-              updatedAt: now,
-              anchor: { blockId: origin.blockId },
-              origin,
-              kind: "chat",
-              turns: 1,
-            });
-          }
+          else if (!previous) owner?.chatAnchors.add(summary);
         }
       }
     },
@@ -1369,6 +1387,11 @@ export function Reader({
     if (!origin) return;
     handedItemChats.current = handedItemChats.current.filter(
       (handed) => handed.id !== id || !sameOrigin(handed.origin, origin),
+    );
+    setHandedItemChatSummaries((summaries) =>
+      summaries.filter(
+        (summary) => summary.id !== id || summary.origin === undefined || !sameOrigin(summary.origin, origin),
+      ),
     );
     if (origin.mode === "cite-check") owner?.chatAnchors.drop(id);
     refusedHandoffs.current.add(id);
@@ -1384,6 +1407,7 @@ export function Reader({
   useEffect(() => {
     if (handedItemChatsSlug.current !== slug) {
       handedItemChats.current = [];
+      setHandedItemChatSummaries([]);
       refusedHandoffs.current = new Set();
     }
     handedItemChatsSlug.current = slug;
@@ -1486,6 +1510,21 @@ export function Reader({
   const chatSummaries = owner?.chatAnchors.summaries ?? NO_THREADS;
   /* Whether that list has answered yet: an empty one before it has is "not known". */
   const chatSummariesLoaded = owner?.chatAnchors.loaded ?? false;
+  /**
+   * The item summaries plus an immediately sent handoff the server-backed
+   * list has not heard of yet. Digest and Summary use this to replace their
+   * ask box with Continue as soon as the first question leaves. It is a view,
+   * not a write to `chatAnchors`: treating an optimistic row as confirmed
+   * would clear the pending origin that a refused first turn keeps for its
+   * way back. `reopenItemChat` uses the same ref as its synchronous guard.
+   */
+  const itemChatSummaries = useMemo(() => {
+    if (handedItemChatsSlug.current !== slug || handedItemChats.current.length === 0) return chatSummaries;
+    const pending = handedItemChatSummaries.filter(
+      (summary) => summary.origin && threadForOrigin(chatSummaries, summary.origin) === undefined,
+    );
+    return pending.length === 0 ? chatSummaries : [...chatSummaries, ...pending];
+  }, [chatSummaries, handedItemChatSummaries, slug]);
 
   /* Memoised, and this is a performance fix rather than tidiness. Both of these
      build a fresh array and a fresh Map, so calling them inline in the JSX
@@ -3193,6 +3232,10 @@ export function Reader({
     if (handedItemChats.current.length > 0) {
       handedItemChats.current = handedItemChats.current.filter((h) => !known.has(h.id));
     }
+    setHandedItemChatSummaries((summaries) => {
+      const waiting = summaries.filter((summary) => !known.has(summary.id));
+      return waiting.length === summaries.length ? summaries : waiting;
+    });
     /* Waiting handoffs are not in `handedItemChats`: they become a stored
        thread only when the reader later sends the seeded question. Their
        draft origin is the bridge across that send and any corrected id, and
@@ -3389,19 +3432,19 @@ export function Reader({
   );
   /* What the two boxes are handed: the owner's, and **not in view-as**, where
      nothing may be sent on the owner's behalf; `null` draws no box, no
-     paragraph button and no mark. The raw summaries, for `entryChats`'
-     reason below. */
+     paragraph button and no mark. The server-backed summaries plus the direct
+     handoff bridge, so a slow refresh cannot put a fresh box back after Send. */
   const digestChats = useMemo<SourcesDigestChats | null>(
     () =>
       owner && viewAsNonce() === null
-        ? { summaries: chatSummaries, onAsk: askDigest, onParagraph: askDigestParagraph, onOpen: openClaimChat }
+        ? { summaries: itemChatSummaries, onAsk: askDigest, onParagraph: askDigestParagraph, onOpen: openClaimChat }
         : null,
-    [owner, chatSummaries, askDigest, askDigestParagraph, openClaimChat],
+    [owner, itemChatSummaries, askDigest, askDigestParagraph, openClaimChat],
   );
   const summaryChats = useMemo<SummaryLevelChats | null>(
     () =>
-      owner && viewAsNonce() === null ? { summaries: chatSummaries, onAsk: askSummaryLevel, onOpen: openClaimChat } : null,
-    [owner, chatSummaries, askSummaryLevel, openClaimChat],
+      owner && viewAsNonce() === null ? { summaries: itemChatSummaries, onAsk: askSummaryLevel, onOpen: openClaimChat } : null,
+    [owner, itemChatSummaries, askSummaryLevel, openClaimChat],
   );
   /* What Claims' claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
      Memoised on the summaries, so the band re-renders when a chat appears or
@@ -4394,7 +4437,7 @@ export function Reader({
             slug={slug}
             article={article}
             onJump={bandJump}
-            onAskChat={askAboutSummary}
+            onAskChat={viewAsNonce() === null ? askAboutSummary : undefined}
             chats={summaryChats}
           />
         );

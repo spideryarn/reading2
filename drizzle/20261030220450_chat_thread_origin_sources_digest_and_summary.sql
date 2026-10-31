@@ -4,7 +4,10 @@
 -- like a glossary entry; and each gets a CHECK on its id's form (SOURCES_DIGEST_ITEM_ID and SUMMARY_ITEM_ID in
 -- src/types.ts). 'summary' was reserved with no shape until now (plan 261009k, F8), and the old
 -- chat_threads_origin_summary refused every shape column; this one requires its id instead. The route never
--- accepted 'summary', so no stored row has it; every other row the old CHECKs admitted, the new ones admit.
+-- accepted that reserved shape, but the old database contract did. Preserve any such conversation as an
+-- ordinary no-origin chat before `summary` comes to mean a shaped origin, so adding the new CHECK cannot fail
+-- on a row the previous schema admitted.
+UPDATE "spideryarn"."chat_threads" SET "origin_mode" = null WHERE "origin_mode" = 'summary';--> statement-breakpoint
 ALTER TABLE "spideryarn"."chat_threads" DROP CONSTRAINT "chat_threads_origin_mode";--> statement-breakpoint
 ALTER TABLE "spideryarn"."chat_threads" DROP CONSTRAINT "chat_threads_origin_item";--> statement-breakpoint
 ALTER TABLE "spideryarn"."chat_threads" DROP CONSTRAINT "chat_threads_origin_summary";--> statement-breakpoint
