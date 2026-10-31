@@ -347,8 +347,10 @@ costs the most afterwards"* — and is the fallback if the cost does not pay. Th
 and its reviews are [261030b](../plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md).
 
 **One step, `sources-digest`, in four phases**: a planner (Sonnet; Opus under
-[high-powered AI](high-powered-ai.md)) writes up to 16 *leads* from the article, each a question with
-its passages and one or two searches; the searches run on Exa through OpenRouter, with OpenAlex's
+[high-powered AI](high-powered-ai.md)) writes 8 to 16 *leads* from the article, each a question with
+its passages and one or two searches (fewer than 3 usable ones and it stops before searching —
+[261031b](../postmortems/261031b-a-validator-floor-the-prompt-never-states.md) is why the prompt
+says the floor); the searches run on Exa through OpenRouter, with OpenAlex's
 citers beside them; one Haiku reader per lead reports on what its searches found; and Opus, for
 every article, writes the digest from those reports. The diagram, the caps and what each call is
 sent are the plan's § The pipeline and the header of [`src/sources-digest.ts`](../../src/sources-digest.ts),

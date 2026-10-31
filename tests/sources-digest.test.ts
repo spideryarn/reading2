@@ -26,10 +26,13 @@ import { DIGEST_READ_MODEL, HIGH_POWER_MODEL_OPENROUTER, modelFor } from "../src
 import { DEFAULT_INGEST_STEPS, FORCE_ONLY_WHEN_NAMED, STEP_ORDER, STEPS, sourcesDigestStep } from "../src/pipeline.js";
 import type { SearchCall, SituateCitersResult } from "../src/situate.js";
 import {
+  ASKED_MIN_LEADS,
   checkDigest,
   checkReport,
   citersWithin,
   DIGEST_EXTRACT_CHARS,
+  DIGEST_PLAN_SCHEMA,
+  DIGEST_PLAN_SYSTEM,
   DIGEST_STEP_BUDGET_MS,
   emptyCounts,
   generateSourcesDigest,
@@ -38,6 +41,7 @@ import {
   MAX_LEAD_QUERIES,
   MAX_LEADS,
   MAX_QUERIES_PER_LEAD,
+  MIN_LEADS,
   planPrompt,
   READER_MAX_SOURCES,
   SOURCES_DIGEST_RATE_POLICY,
@@ -223,6 +227,27 @@ function userText(body: unknown): string {
 const of = (task: string) => sent.filter((s) => s.task === task);
 
 /* ------------------------------------------------------------------ caps -- */
+
+describe("the planner is told the floor the code enforces (spya-f37ug4)", () => {
+  /* Production, 2026-10-31: the prompt said "UP TO 16 LEADS", the model wrote
+     one, and the code refused anything under MIN_LEADS. A floor the model is
+     never told is a floor it may miss (postmortem 261031b). */
+  it("asks for a range of leads whose lower bound is at least MIN_LEADS", () => {
+    const asked = /WRITE (\d+)[–-](\d+) LEADS/.exec(DIGEST_PLAN_SYSTEM);
+    expect(asked, "the plan prompt states a range of leads, not only a ceiling").not.toBeNull();
+    expect(Number(asked?.[1])).toBeGreaterThanOrEqual(MIN_LEADS);
+    expect(Number(asked?.[1])).toBe(ASKED_MIN_LEADS);
+    expect(Number(asked?.[2])).toBe(MAX_LEADS);
+    expect(ASKED_MIN_LEADS).toBeLessThanOrEqual(MAX_LEADS);
+  });
+
+  it("the schema refuses an empty list of leads, passages or searches (the most it can say)", () => {
+    const leads = DIGEST_PLAN_SCHEMA.properties.leads;
+    expect(leads.minItems).toBe(1);
+    expect(leads.items.properties.blocks.minItems).toBe(1);
+    expect(leads.items.properties.queries.minItems).toBe(1);
+  });
+});
 
 describe("the caps are enforced in code, not only asked for (F5, F6)", () => {
   it("keeps at most 16 leads, 2 queries a lead, 32 queries and the piece query, 3 passages a lead", async () => {

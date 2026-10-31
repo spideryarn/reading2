@@ -6,7 +6,7 @@
  * (§ The pipeline); its research is docs/research/261030a.
  *
  * ```
- * plan     one capable call over the fenced article: up to 16 LEADS, each   digest-plan
+ * plan     one capable call over the fenced article: 8–16 LEADS, each       digest-plan
  *          an angle, a question, 1–3 passages and 1–2 searches
  * check    the leads and their queries, in code, before anything leaves
  * search   every query one forced Exa search, eight at a time, each with    digest-search
@@ -149,12 +149,25 @@ export type { SourcesDigest } from "./types.js";
  * `sources-digest/1`, 2026-10-30: the first (plan 261030b stage 1).
  * `sources-digest/2`, 2026-10-30: put trusted instructions after the planner's
  * fenced bibliography and the writer's fenced article.
+ * `sources-digest/3`, 2026-10-31: the planner is asked for a range of leads,
+ * not only a ceiling (spya-f37ug4; postmortem 261031b).
  */
-export const PROMPT_VERSION = "sources-digest/2";
+export const PROMPT_VERSION = "sources-digest/3";
 
 /** Leads the planner may write, and the fewest worth searching for. */
 export const MAX_LEADS = 16;
 export const MIN_LEADS = 3;
+/**
+ * **The fewest leads the planner is asked for**, the bottom of the range in
+ * `DIGEST_PLAN_SYSTEM`. It must never fall below `MIN_LEADS`: on 2026-10-31
+ * the prompt said only "up to 16", the model wrote one lead, and the code
+ * refused it (spya-f37ug4, postmortem 261031b). A floor the code enforces is
+ * a floor the prompt states.
+ */
+export const ASKED_MIN_LEADS = 8;
+if (!(MIN_LEADS <= ASKED_MIN_LEADS && ASKED_MIN_LEADS <= MAX_LEADS)) {
+  throw new Error(`sources-digest: need MIN_LEADS ≤ ASKED_MIN_LEADS ≤ MAX_LEADS, got ${MIN_LEADS}, ${ASKED_MIN_LEADS}, ${MAX_LEADS}.`);
+}
 /** Searches one lead may ask for, and all the leads together (the piece query is on top). */
 export const MAX_QUERIES_PER_LEAD = 2;
 export const MAX_LEAD_QUERIES = 32;
@@ -410,10 +423,11 @@ missed, and whether its key citations say what it uses them for. Your job is
 to choose the questions worth answering, and the web searches that would
 answer them. Others will read what the searches find.
 
-WRITE UP TO ${MAX_LEADS} LEADS
+WRITE ${ASKED_MIN_LEADS}–${MAX_LEADS} LEADS
 
 Each lead is one question a few web searches could answer, tied to the
-passages it is about. Its "angle":
+passages it is about. If the piece is short or cites little, write more
+"missed" and "cited-by" leads rather than fewer leads. Its "angle":
 - "cites": what a work the piece builds on actually says or found. About a
   third of the leads, on the works that carry the most weight.
 - "check": whether a citation says what this passage uses it for. A few, on the
@@ -442,13 +456,16 @@ export const DIGEST_PLAN_SCHEMA = {
   properties: {
     leads: {
       type: "array",
+      /* 1 is all the schema language allows; the real floor is in the prompt
+         (`ASKED_MIN_LEADS`) and in `readPlan` (`MIN_LEADS`). */
+      minItems: 1,
       items: {
         type: "object",
         properties: {
           angle: { type: "string", enum: [...SOURCES_DIGEST_ANGLES] },
           question: stringSchema,
-          blocks: { type: "array", items: stringSchema },
-          queries: { type: "array", items: stringSchema },
+          blocks: { type: "array", minItems: 1, items: stringSchema },
+          queries: { type: "array", minItems: 1, items: stringSchema },
         },
         required: ["angle", "question", "blocks", "queries"],
         additionalProperties: false,

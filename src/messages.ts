@@ -1805,14 +1805,15 @@ export const SITUATE_RESTING: ReaderFacingFailure = {
 
 /**
  * **The sources digest stopped before it searched** (the `sources-digest`
- * step, plan 261030b): the plan came back with too few usable questions.
+ * step, plan 261030b): the planner returned fewer than `MIN_LEADS` usable
+ * questions (src/sources-digest.ts; spya-f37ug4, postmortem 261031b).
  * Nothing was searched, so nothing was paid for beyond the plan.
  */
 export const SOURCES_DIGEST_TOO_FEW_LEADS: ReaderFacingFailure = {
   kind: "retry",
   message:
-    "The plan for the digest did not come back with enough usable questions to search, so none " +
-    "was sent. Try again: another go plans afresh. [jb-digest-plan]",
+    "The AI service did not return enough questions to search for this digest, so no searches " +
+    "were run. Try again: each try starts afresh. [jb-digest-plan]",
 };
 
 /**

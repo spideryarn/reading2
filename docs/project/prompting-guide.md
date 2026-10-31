@@ -183,7 +183,7 @@ profile to work (`withExampleReminder` in `src/converse.ts`, conversations only)
 
 ## What the model writes back
 
-The prompt is half the contract; the other half is the code that reads the answer. These four traps
+The prompt is half the contract; the other half is the code that reads the answer. These traps
 have each cost a paid call or shown a reader something wrong, and each is written up where it
 happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts) §
 `parseJsonAnswer`.
@@ -229,6 +229,12 @@ happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts
   call, tool arguments) the reason is in
   [261001s § Stage 3a](../plans/261001s-structure-answer-writes-code-to-correct-an-id.md).
   [261002b](../postmortems/261002b-an-unconstrained-json-answer-fails-the-step.md).
+- **Every floor the code enforces on a model's list is stated in the prompt.** A ceiling such as
+  "up to 16" gives no lower bound. If the code refuses fewer than N, ask for a range whose bottom is
+  at least N, built from the constants, with a test that reads it back. If the code accepts any
+  number, say "fewer is fine" as `faq.ts` and `ideas.ts` do. The Sources digest asked for "up to 16
+  leads", got one, and refused it, on its first run in production.
+  [261031b](../postmortems/261031b-a-validator-floor-the-prompt-never-states.md).
 - **The JSON is somewhere in the answer, not the whole of it.** Models wrap their JSON in prose or a
   fence despite being told not to. The shared parser now *extracts but refuses to choose*: exactly
   one candidate document, or it throws. Taking "the first JSON in the response" would accept
