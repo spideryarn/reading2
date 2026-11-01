@@ -1079,8 +1079,14 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      19,421 output tokens — about 126 tokens a second. The answer budget allows
      ~28,400 for 80 works, which at that rate is ~225 s before the prompt, so
      240 s was a timeout waiting for the first full-cap article. 360 s leaves
-     the headroom. docs/plans/260911g-citations-mode.md § Progress. */
-  bibliography: 360_000,
+     the headroom. docs/plans/260911g-citations-mode.md § Progress.
+
+     **Re-measured for `citations/8`** (Haiku 5.5 at high effort, every work
+     up to 300; investigation 261101a, arm H2, cold): 70–115 s for the short
+     articles, 100–234 s for the long ones, the longest writing 67K output
+     tokens, about 290 a second. The call's ceiling is the model's 128K, about
+     450 s at that rate. 480 s, rounded up. Plan 261101c. */
+  bibliography: 480_000,
   /* **NOT MEASURED** — the design's budget (plan 261017h stage 3, § 3): at most
      120 s of registry lookups (`LOOKUP_BUDGET_MS`, src/citation-evidence.ts),
      then batches of twenty works two at a time, each aborted at 120 s, and a

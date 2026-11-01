@@ -111,8 +111,20 @@ describe("a work cited in the text that the model did not list", () => {
   it("does not count against the model's cap, and leaves `capped` the model's word", () => {
     const { bibliography } = build([CRAIK, BRYSON], [block("spya-p00001", LEVINE)]);
     expect(bibliography.capped).toBe(false);
-    const { rows, bibliography: big } = build([{ ...CRAIK, mentions: [{ block: "spya-q00000", quote: "A claim" }] }], citing(MAX_CITATIONS + 5));
-    expect(rows.filter((r) => r.listedBy === "text")).toHaveLength(MAX_CITATIONS + 5);
+    /* The model's full allowance, and five more works only the text names: the
+       list holds more than `MAX_CITATIONS`, and it is still not `capped`.
+       Until `citations/8` this built `MAX_CITATIONS + 5` rows from the text
+       alone, which `MAX_TEXT_ROWS` (200) no longer allows at a cap of 300
+       (plan 261101c). */
+    const listed = Array.from({ length: MAX_CITATIONS }, (_, i) =>
+      row(`Work ${i}`, surname(i), "2001", `spya-q${String(i).padStart(5, "0")}`, `${surname(i)}, 2001`),
+    );
+    const { rows, bibliography: big } = build(listed, citing(MAX_CITATIONS + 5));
+    expect(rows.filter((r) => r.listedBy !== "text")).toHaveLength(MAX_CITATIONS);
+    expect(rows.filter((r) => r.listedBy === "text").map((r) => r.title)).toEqual(
+      Array.from({ length: 5 }, (_, i) => `${surname(MAX_CITATIONS + i)} (2001)`),
+    );
+    expect(rows.length).toBeGreaterThan(MAX_CITATIONS);
     expect(big.capped).toBe(false);
   });
 

@@ -662,9 +662,11 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     elapsedMs: 1,
   });
   /* **An EMPTY list**, like `timeline`'s events: an article that cites no work
-     is a real answer, and `SHAPE.citations` accepts it. */
+     is a real answer, and `SHAPE.citations` accepts it. Stamped with the
+     model the step writes, Haiku at both powers since `citations/8` (plan
+     261101c): `CAPABLE_MODEL` here would be another generation, not done. */
   store.plant(SLUG, "bibliography", "bibliography", {
-    generator: CAPABLE_MODEL,
+    generator: modelFor("bibliography", "standard"),
     slug: SLUG,
     sourceHash: BIBLIOGRAPHY_SOURCE_HASH,
     version: BIBLIOGRAPHY_VERSION,

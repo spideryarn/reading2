@@ -32,8 +32,48 @@ The design, the review that reshaped it and the real runs are
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## Who makes the list
+
+**One call to Haiku 5.5 at high effort, asked for every work the article cites, up to 300**
+(`citations/8`, since 2026-11-01). `BIBLIOGRAPHY_MODEL` in [`src/models.ts`](../../src/models.ts),
+held by `PINNED_MODEL`, so it is Haiku at both powers: [High-powered AI](high-powered-ai.md) does
+not move it. The stored list's `generator` names the model that ran.
+
+> Okay, I'm leaning towards A, but I'm wondering if we can split this into two stages. PMaybe Haiku
+> to find them all, and then try some experiments to see if you can make this work better with Haiku
+> to improve the notes.
+>
+> — Greg, 2026-11-01 (`spya-mgvawf`, answering
+> [q-ns76uq](../user-feedback/questions/q-ns76uq.md))
+
+Until then it was Sonnet at medium, told to keep "the 80 it leans on most". That instruction was half
+of why long papers' lists stopped at a fraction; the other half was effort. On seven test papers,
+production's request as shipped gave a reader 98–100% of the works on every article and every
+completed run, against 22% (a footnoted Wikipedia page) and 6% (a superscript-numbered PDF) from
+the old list, for about a seventh of the cost ($0.13 for all seven, against $0.89). Its one-line
+`why`s were a little worse than Sonnet's in a blind read. The evidence is
+[investigation 261101a](../investigations/261101a-citations-recall-haiku-vs-sonnet-prompt-eval.md);
+the build and its measurements, [plan 261101c](../plans/261101c-citations-list-on-haiku-and-better-notes.md).
+
+What it takes:
+
+- **The prompt** asks for every work, shows the shapes a citation takes (lists split by `;` or `,`,
+  `2020a, 2020b`, `[3–6]`, superscripts run into a word, footnotes), and says to go block by block.
+- **`MAX_CITATIONS` is 300.** Past it the model is told to list the first 300 it cites and say
+  `capped`, and code keeps the first 300 it listed (`keepFirstListed`); the band's (i) then says the
+  list holds fewer works than the piece cites, without naming a number, because an older list was
+  cut at 80 by a different rule.
+- **`max_tokens` is the model's whole 128K** (`bibliographyMaxTokens`): 300 rows' estimate plus the
+  usual thinking headroom is over it. The longest measured answer used 76K.
+- **Two to five minutes on a long paper**, one or two on a short one; the step's time budget
+  (`STEP_BUDGET_MS.bibliography`) is 480 s.
+- **The notes from abstracts reach a long list over several runs.** Their title searches stop at 60
+  a run (`MAX_TITLE_SEARCHES`), so on a 272-row list the first run left 154 rows to try again and
+  the second 94. That was already true of a long list's rows from code before the raise.
+
 ## In this doc
 
+- [§ Who makes the list](#who-makes-the-list) — Haiku 5.5 at high effort, every work up to 300, and why
 - [§ A row](#a-row) — what one row draws, and where its two scores come from
 - [§ Crossref's citation count](#crossrefs-citation-count) — why a row says "cited 357 times", and which rows never do
 - [§ A note from the abstract](#a-note-from-the-abstract) — an AI's sentence or two about the work, from its abstract alone, and when it is shown
@@ -124,7 +164,8 @@ is hidden from assistive technology, so the title and entry are each spoken once
 
 **The registry's record** (since 2026-10-01,
 [261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md)
-stage 5): at the end of the step, each row whose link is a DOI or arXiv address — at most 80 — is
+stage 5): at the end of the step, each row whose link is a DOI or arXiv address — at most
+`MAX_REGISTRY_LOOKUPS` (80), independently of the list's 300-row model cap — is
 looked up at Crossref or DataCite through the shared, cached lookup
 ([`bibliographic.ts`](../../src/bibliographic.ts)), and the record is kept on the row only when
 `registryIdentifiesCitation` confirms it. Usually the titles agree. When the article gives only an
@@ -655,8 +696,8 @@ What is not obvious:
 - **Its own ceiling, not the model's.** `MAX_CITATIONS` bounds the model's answer; these rows cost
   no tokens, so they come after it. They still have a ceiling, `MAX_TEXT_ROWS` (200), first cited
   first, and the rest are counted (`textOverCap`). `capped` stays the model's word. When a capped
-  list has code's rows too, the band's (i) says how many (`cappedNote`), because *these are the 80*
-  would be false.
+  list has code's rows too, the band's (i) says how many (`cappedNote`), because a count of the
+  model's rows alone would be false.
 - **After the "nothing anchored" guard.** A model answer none of whose works could be anchored
   still fails. It never becomes a list code wrote alone.
 - **The id crosses between code's row and the model's** for one work (`authorYearAlias`), when
@@ -718,8 +759,8 @@ available on a list that had none.
 
 Only the two raw scores are drawn on a row, never the combination — the glossary's rule. An **(i)**
 in the band's top-right corner (`BandAbout`, shared by every mode) says `influence` is the model's
-memory, not a citation count, and what *influence unknown* means, whose count *cited 357 times · Crossref* is, and, **only when the model reported it**, that the list was capped at
-80; it also carries the work count and provenance. The two notes were a foot pinned under the list
+memory, not a citation count, and what *influence unknown* means, whose count *cited 357 times · Crossref* is, and, **only when the model reported it**, that the list holds fewer
+works than the piece cites; it also carries the work count and provenance. The two notes were a foot pinned under the list
 until Greg, 2026-09-30 (`spya-nca765`), then briefly lived in the order row; the count was in that
 row too, shown only outside *prioritised*, whose threshold row already says "n of m"
 ([261001l](../plans/261001l-compact-quotes-and-citations-band-tops-and-click-a-diagram-to-enlarge.md)).
@@ -1326,7 +1367,7 @@ from the press until the new list has been read
 After a refused start, the panel's foot also offers *Find them again* on a current list, held in
 the same way.
 A press is one
-model call and no web search (that is *Look it up*, per row); the list is replaced only if the run
+model call (Haiku, a few cents) and no web search (that is *Look it up*, per row); the list is replaced only if the run
 succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The
 Metadata row is drawn independently of the experimental switch; Sources itself is outside it.
 Why it is safe to offer is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).

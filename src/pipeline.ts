@@ -6270,7 +6270,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         inputHash: bibliographyFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: BIBLIOGRAPHY_PROMPT_VERSION,
-        model: CAPABLE_MODEL,
+        /* The model that writes it — Haiku at both powers since `citations/8`
+           (plan 261101c, GPT Sol's plan review 1). `CAPABLE_MODEL` here would
+           call every Haiku list not current. Same as src/store/pg.ts. */
+        model: modelFor("bibliography", ctx.power),
       };
     },
     async run(ctx, store) {

@@ -3801,7 +3801,9 @@ const rawPgArticleReader: ArticleReader = {
             {
               inputHash: bibliographyFingerprint(blocks, tree, citedFingerprint),
               promptVersion: BIBLIOGRAPHY_PROMPT_VERSION,
-              model: CAPABLE_MODEL,
+              /* What src/pipeline.ts's stamp expects: the pinned model, the same
+                 at both powers (plan 261101c). */
+              model: modelFor("bibliography", "standard"),
             },
           );
         }

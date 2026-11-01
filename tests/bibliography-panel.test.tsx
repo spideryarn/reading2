@@ -26,7 +26,7 @@ import {
 } from "../src/citation-blurb-words.js";
 
 const {
-  CAPPED_NOTE,
+  CAPPED_NOTE_OPENING,
   cappedNote,
   CITE_FROM_TEXT_LABEL,
   BIBLIOGRAPHY_NONE,
@@ -783,7 +783,7 @@ describe("BibliographyPanel", () => {
     };
     await draw(owner());
     let text = await card();
-    expect(text).not.toContain(CAPPED_NOTE);
+    expect(text).not.toContain(CAPPED_NOTE_OPENING);
     expect(text).toContain(INFLUENCE_NOTE);
     /* The owner's (i) says what a kept web estimate is (plan 261003m stage 2),
        and since 261009k offers no Dig deeper to make one. */
@@ -795,8 +795,10 @@ describe("BibliographyPanel", () => {
     text = await card();
     /* Four rows, not 80: the note counts what the list holds (plan 261027b). */
     expect(text).toContain(cappedNote(WORKS.length, 0));
-    expect(CAPPED_NOTE).toBe(
-      "This piece cites more than 80 works; these are the 80 we judged it leans on most.",
+    /* Neither the cap nor the rule: a stored list may be `citations/7`'s 80
+       by relevance or `citations/8`'s 300 in order (plan 261101c). */
+    expect(cappedNote(WORKS.length, 0)).toBe(
+      `This piece cites more works than this list holds. The model that made it listed ${WORKS.length} works.`,
     );
   });
 
@@ -812,10 +814,9 @@ describe("BibliographyPanel", () => {
     await act(async () => about?.click());
     const text = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
     await act(async () => about?.click());
-    expect(text).not.toContain(CAPPED_NOTE);
-    expect(text).toContain(`The model listed ${WORKS.length} works`);
+    expect(text).toContain(`The model that made it listed ${WORKS.length} works;`);
     expect(cappedNote(WORKS.length, 1)).toBe(
-      `This piece cites more than 80 works. The model listed ${WORKS.length} works it judged the piece leans on most; 1 more, found in the article's text, is listed by name only.`,
+      `This piece cites more works than this list holds. The model that made it listed ${WORKS.length} works; 1 more, found in the article's text, is listed by name only.`,
     );
     const fromTextRow = [...host.querySelectorAll(".cite-item")].find((r) => r.textContent?.includes("Levine (2021)"));
     expect(fromTextRow?.querySelector(".cite-from-text")?.textContent).toBe(CITE_FROM_TEXT_LABEL);
@@ -823,9 +824,10 @@ describe("BibliographyPanel", () => {
 
   /* Synesthesia's list said `capped: true` over 44 rows: "these are the 80"
      was false before any row came from the text (plan 261027b, code review). */
-  it("says how many the model listed when it said capped and listed fewer than 80", () => {
-    expect(cappedNote(80, 0)).toBe(CAPPED_NOTE);
-    expect(cappedNote(44, 0)).toBe("This piece cites more than 80 works; these are the 44 we judged it leans on most.");
+  it("says how many the model listed when it said capped, whatever the cap was", () => {
+    expect(cappedNote(44, 0)).toBe("This piece cites more works than this list holds. The model that made it listed 44 works.");
+    expect(cappedNote(1, 0)).toBe("This piece cites more works than this list holds. The model that made it listed 1 work.");
+    for (const note of [cappedNote(80, 0), cappedNote(300, 2)]) expect(note).not.toMatch(/more than \d+|leans on most/);
   });
 
   it("treats a piece that cites nothing as an answer, with no retry", async () => {

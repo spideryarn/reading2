@@ -793,7 +793,7 @@ export type PublicCitationRegistry = Extract<CitationRegistry, { kind: "found" }
  * mode plan 260929c moved off `owners-only` (SPIDERYARN-READING2-56).
  *
  * `capped` crosses for `PublicQuotes.discarded`'s reason: the panel prints it
- * (*"This piece cites more than 80 works…"*), so a visitor is shown it. The
+ * (*"This piece cites more works than this list holds…"*), so a visitor is shown it. The
  * pipeline facts do not: `version`, `generator`, `slug`, `sourceHash`,
  * `generatedAt`, `elapsedMs`. No profile is in this stage.
  */
