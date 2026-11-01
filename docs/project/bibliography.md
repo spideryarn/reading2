@@ -55,6 +55,14 @@ the old list, for about a seventh of the cost ($0.13 for all seven, against $0.8
 [investigation 261101a](../investigations/261101a-citations-recall-haiku-vs-sonnet-prompt-eval.md);
 the build and its measurements, [plan 261101c](../plans/261101c-citations-list-on-haiku-and-better-notes.md).
 
+**Better notes from Haiku were tried, and none shipped**
+([investigation 261101d](../investigations/261101d-citations-notes-from-haiku-three-ways.md)).
+Rules for `why` and `relevance` in the one call reduced judged slips but cost recall. A second
+Haiku pass that writes only the notes, from the passages that cite each work, met the aggregate
+preference threshold and had no relevance slips, for about one cent a paper. But its error
+comparison showed a harness mismatch: the pass could see more passages than the judges. It did not
+establish that it made no more errors than Sonnet. That shape is the next thing to try.
+
 What it takes:
 
 - **The prompt** asks for every work, shows the shapes a citation takes (lists split by `;` or `,`,

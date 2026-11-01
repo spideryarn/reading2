@@ -53,7 +53,7 @@ type Effort = "low" | "medium" | "high" | "xhigh";
 export interface Arm {
   model: string;
   /** "today" and "candidate" are `citations/7`-era arms; "production" is `bibliographyRequest`'s body. */
-  prompt: "today" | "candidate" | "production";
+  prompt: "today" | "candidate" | "production" | "notes1";
   effort: Effort;
 }
 export const ARMS: Record<string, Arm> = {
@@ -67,7 +67,13 @@ export const ARMS: Record<string, Arm> = {
   /* Plan 261101c stage 1: production's own request, as shipped. Its model and
      effort are checked against production's at run time, not trusted. */
   P: { model: HAIKU, prompt: "production", effort: "high" },
+  /* Plan 261101c stage 2, arm N1: production's request with only the `why`
+     and `relevance` instructions replaced (./notes-prompt.ts). */
+  N1: { model: HAIKU, prompt: "notes1", effort: "high" },
 };
+
+/** An arm built on today's production request, so its model and effort must be production's. */
+const onProduction = (arm: Arm): boolean => arm.prompt === "production" || arm.prompt === "notes1";
 
 /**
  * Refuse an arm whose label no longer describes the request it would send.
@@ -79,7 +85,7 @@ export function assertArmRunnable(
   arm: Arm,
   production: { promptVersion: string; model: string; effort: Effort },
 ): void {
-  if (arm.prompt !== "production") {
+  if (!onProduction(arm)) {
     if (production.promptVersion !== "citations/7") {
       throw new Error(
         `arm ${name} was measured against citations/7; production is ${production.promptVersion}, ` +
@@ -87,6 +93,12 @@ export function assertArmRunnable(
       );
     }
     return;
+  }
+  if (arm.prompt === "notes1" && production.promptVersion !== "citations/8") {
+    throw new Error(
+      `arm ${name} was measured against citations/8; production is ${production.promptVersion}, ` +
+        "so it would not be the same notes arm",
+    );
   }
   if (arm.model !== production.model) {
     throw new Error(`arm ${name} says ${arm.model}, production sends ${production.model}`);
@@ -180,12 +192,28 @@ async function main(): Promise<void> {
   const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
   const { costStore } = await import("../../src/store/ai-calls.js");
   const { candidateSystem, CANDIDATE_USER } = await import("./prompt.js");
+  const { notesSystem } = await import("./notes-prompt.js");
+  /**
+   * N1's request is production's with the last system block — the
+   * instructions, after the article and any reference list — swapped for
+   * `notesSystem()`. It refuses if that block is not production's prompt, so
+   * a reordering in `bibliographyRequest` cannot make N1 swap the article out.
+   */
+  const withSystem = (body: ReturnType<typeof bibliographyRequest>): ReturnType<typeof bibliographyRequest> => {
+    if (arm.prompt !== "notes1") return body;
+    const blocks = Array.isArray(body.system) ? body.system : [];
+    const last = blocks[blocks.length - 1];
+    if (last?.type !== "text" || last.text !== systemPrompt()) {
+      throw new Error("N1: the request's last system block is not production's prompt");
+    }
+    return { ...body, system: [...blocks.slice(0, -1), { ...last, text: notesSystem() }] };
+  };
 
-  const system = arm.prompt === "candidate" ? candidateSystem() : systemPrompt();
+  const system = arm.prompt === "candidate" ? candidateSystem() : arm.prompt === "notes1" ? notesSystem() : systemPrompt();
   const user = arm.prompt === "candidate" ? CANDIDATE_USER : renderPrompt();
   const maxTokens = arm.prompt === "today"
     ? budgetFor("bibliography", answerEstimate())
-    : arm.prompt === "production"
+    : onProduction(arm)
       ? bibliographyMaxTokens()
       : MODEL_MAX_TOKENS;
   const systemSha256 = createHash("sha256").update(system).digest("hex");
@@ -218,8 +246,8 @@ async function main(): Promise<void> {
           /* Its own spend collector, so the dollars are this call's as OpenRouter billed them,
              retries and failed attempts included (Sol's plan review, 9). No cache_control: cold. */
           const { report } = await collectSpend(async () => { try {
-            const body = arm.prompt === "production"
-              ? bibliographyRequest({ meta, blocks: article.blocks as never, referenceList, cacheArticle: false })
+            const body = onProduction(arm)
+              ? withSystem(bibliographyRequest({ meta, blocks: article.blocks as never, referenceList, cacheArticle: false }))
               : withMessagesJsonSchema(
                 {
                   max_tokens: maxTokens,
@@ -236,7 +264,7 @@ async function main(): Promise<void> {
                 },
                 BIBLIOGRAPHY_OUTPUT_SCHEMA,
               );
-            if (arm.prompt === "production" && body.output_config?.effort !== arm.effort) {
+            if (onProduction(arm) && body.output_config?.effort !== arm.effort) {
               throw new Error(`arm ${armName} says ${arm.effort}, production sends ${body.output_config?.effort}`);
             }
             const call = streamMessage("bibliography", body, { power: "standard", model: arm.model });

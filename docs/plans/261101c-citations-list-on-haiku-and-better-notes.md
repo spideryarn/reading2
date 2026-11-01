@@ -139,8 +139,29 @@ slips to Sonnet's 1, and scoring relevance too confidently 3 times to Sonnet's 1
 as Sonnet over the 48, has **no more probable errors and no more "relevance clearly off" than
 Sonnet**, and recall stays inside stage 1's rule, with the list still **under half of today's
 Sonnet cost**. If both N1 and N2 pass, N1 (fewer parts). If none does, nothing ships and the
-write-up (investigation 261101c) says what each arm did. A shipped N1 is `citations/9`; a shipped N2
+write-up (investigation 261101d) says what each arm did. A shipped N1 is `citations/9`; a shipped N2
 puts its prompt version and model in the stored list's stamp.
+
+### Stage 2, measured: nothing ships
+
+[Investigation 261101d](../investigations/261101d-citations-notes-from-haiku-three-ways.md) has the
+whole of it. On the 48 frozen works, against Sonnet, with Opus and GPT Sol judging blind:
+
+- **N0** (stage 1 as shipped): Opus prefers Sonnet's 14 : 8; errors 9 : 3; relevance off 5 : 0.
+  Sol prefers Haiku 20 : 17, but finds Haiku's relevance off more often (7 : 3).
+- **N1** (rules in the one call): errors 2 : 1 and relevance 1 : 1 under Opus, but still 10 : 14
+  on preference, and **recall fell**: one run failed on Vaswani (98 invented block ids), and
+  Synesthesia fell to 38%. Fails.
+- **N2** (a notes-only second pass), with its generation harness fixed on the third run: meets the
+  preference threshold (Opus 16 : 15, Sol 21 : 15), has no relevance slips, recall untouched, +$0.07
+  for seven papers. The raw tally has more errors (Opus 9 : 4, Sol 20 : 19), but is not a fair error
+  comparison: the pass could see two passages while the judges saw one, accounting for six of the
+  nine Opus errors. N2 therefore has not established the pre-declared "no more errors" condition;
+  it also loses the held-out half (Opus 4 : 10, Sol 6 : 10). Its first two runs were harness faults
+  (it was shown reference entries, not citing passages); the investigation says how each was found.
+
+So stage 1's notes stay as they are. N2's shape is the next thing to try, with better choice of
+the passage it is shown.
 
 ## Passed over
 

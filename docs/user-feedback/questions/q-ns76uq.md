@@ -1,11 +1,11 @@
 ---
 id: q-ns76uq
 report: spya-d5e2jk
-status: open
+status: answered
 asked: 2026-10-29
 title: Should Haiku write the citations list? It finds far more, for a seventh of the cost, but describes a little worse.
-refs: qi-cypykdrn · qi-mf9r5hjk · q-knkbsk · docs/investigations/261101a-citations-recall-haiku-vs-sonnet-prompt-eval.md · docs/plans/261101a-citations-every-work-cheaply-with-haiku.md · docs/plans/261029b-citations-in-a-comma-separated-list-are-all-read.md · docs/user-feedback/261028_2353-citations-in-a-comma-separated-list.md · docs/investigations/261027a-how-often-citations-are-missed.md
-acted: spya-yyvxm0
+refs: qi-cypykdrn · qi-mf9r5hjk · qi-9vtdezfs · q-knkbsk · docs/plans/261101c-citations-list-on-haiku-and-better-notes.md · docs/investigations/261101d-citations-notes-from-haiku-three-ways.md · docs/investigations/261101a-citations-recall-haiku-vs-sonnet-prompt-eval.md · docs/plans/261101a-citations-every-work-cheaply-with-haiku.md · docs/plans/261029b-citations-in-a-comma-separated-list-are-all-read.md · docs/user-feedback/261028_2353-citations-in-a-comma-separated-list.md · docs/investigations/261027a-how-often-citations-are-missed.md
+acted: spya-yyvxm0, spya-mgvawf
 ---
 I ran the evals you asked for. You were right: the prompt told the model to stop at 80 works, and Haiku 5.5 at high effort, with a prompt that asks for every work and shows many citation shapes, found more than today's Sonnet on 5 of 7 test papers and the same on the other 2, which were already complete, in every run, for about a seventh of the cost. But its one-line notes on each work are a little worse, and a long list takes 2 to 4 minutes instead of 1. Switch?
 
@@ -36,3 +36,10 @@ If you say A, the build is: Haiku pinned for this step, with its name shown trut
 
 Greg's reply, 2026-10-29 (spya-yyvxm0):
 "Let's run some evals on a few papers. I'm hoping we can do this with Haiku v5.5, maybe with a medium or higher amount of reasoning. Give it a bunch of examples of what citation formats can look like, and we definitely want it to find all of the citations, but I also feel like it should be able to do this more cheaply. I'm surprised that the model didn't find them all. I feel like that's probably a failure of prompting, or we need to pick a different model."
+
+Greg's reply, 2026-11-01 (spya-mgvawf):
+"Okay, I'm leaning towards A, but I'm wondering if we can split this into two stages. PMaybe Haiku to find them all, and then try some experiments to see if you can make this work better with Haiku to improve the notes."
+
+What I did, 2026-11-01 (plan 261101c):
+- On dev, not deployed: option A. Production's own request found 98% to 100% of the works on every completed run of the seven papers, for $0.13 against $0.89. Your paper, re-made locally: 272 works in 3 minutes, 3.5 cents. Your own list is re-made only if you press Find them again.
+- The notes: nothing ships yet. A second Haiku pass that only writes them drew level with Sonnet on preference and fixed relevance, for about a cent a paper, but the judges found more mistakes, partly because it read a different passage from theirs. That is the next thing to try. Investigation 261101d.
