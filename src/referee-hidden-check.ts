@@ -143,7 +143,7 @@ export const outputTokensFor = (rows: number): number => OUTPUT_FLOOR_TOKENS + O
  *
  * It was a flat 60 s until 2026-11-01, against a ceiling that reaches ~35,000
  * tokens on the most rows one call carries (GPT Sol, plan 261010f F5). The
- * worst case measured 41 s at 108 rows, two thirds of that clock with almost no
+ * synthetic run measured 41 s at 108 rows, two thirds of that clock with almost no
  * thinking, and its whole allowance would need ~7½ minutes. So this fires only
  * on a stream still moving at the end of an unusually long answer; a hung one
  * is the stall clock's job. docs/plans/261101b-referee-hidden-text-deadline-from-its-ceiling.md.

@@ -12,7 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ScanFinding } from "../src/injection-scan-types.js";
-import { PROVIDER_UNREADABLE } from "../src/messages.js";
+import { PROVIDER_UNREADABLE, tookTooLong } from "../src/messages.js";
 import { CAPABLE_MODEL_OPENROUTER, HIGH_POWER_MODEL_OPENROUTER, modelFor } from "../src/models.js";
 import {
   HIDDEN_CHECK_JOB,
@@ -22,6 +22,7 @@ import {
   MAX_REASON_CHARS,
   MAX_TEXT_CHARS,
   type SentRow,
+  type HiddenCheckRequest,
   defaultModel,
   HIDDEN_CHECK_MIN_TIMEOUT_MS,
   hiddenCheckStream,
@@ -275,7 +276,15 @@ describe("a run, over the wire", () => {
      a `setTimeout`), so each one it arms is swapped for a controller the test
      fires — proving the clock that governs the request, not merely one that
      was made. */
-  async function runWithClocks(groups: ReturnType<typeof grouped>) {
+  async function withClocks(
+    groups: ReturnType<typeof grouped>,
+    check: (clocks: {
+      armed: { ms: number; fire: () => void }[];
+      requestSignal: AbortSignal;
+      failure: () => Promise<void>;
+    }) => Promise<void>,
+    { timeoutMs, abortMode = "error" }: Pick<HiddenCheckRequest, "timeoutMs"> & { abortMode?: "error" | "cancel" } = {},
+  ) {
     const armed: { ms: number; fire: () => void }[] = [];
     const spy = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
       const c = new AbortController();
@@ -283,26 +292,59 @@ describe("a run, over the wire", () => {
       return c.signal;
     });
     let requestSignal: AbortSignal | undefined;
+    let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_url: string, init: RequestInit) => {
         bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
         requestSignal = init.signal ?? undefined;
-        /* A stream that stays open, moving, until the request is aborted. */
+        /* One delta, then silence until abort. "cancel" exercises the clean
+           read completion in sseChunks, rather than a fetch body error. */
         const body = new ReadableStream<Uint8Array>({
           start(c) {
+            stream = c;
             c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: "{" } }] })}\n\n`));
-            init.signal?.addEventListener("abort", () => c.error(init.signal?.reason));
+            if (abortMode === "error") {
+              init.signal?.addEventListener("abort", () => c.error(init.signal?.reason), { once: true });
+            }
           },
         });
         return { ok: true, status: 200, headers: new Headers(), body } as unknown as Response;
       }),
     );
+    let sawDelta = false;
     const run = (async () => {
-      for await (const _ of hiddenCheckStream({ power: "standard", groups })) void _;
+      for await (const event of hiddenCheckStream({ power: "standard", groups, ...(timeoutMs === undefined ? {} : { timeoutMs }) })) {
+        if (event.type === "delta") sawDelta = true;
+      }
     })();
-    await vi.waitFor(() => expect(requestSignal).toBeDefined());
-    return { armed, run, requestSignal: requestSignal!, restore: () => spy.mockRestore() };
+    /* Observe rejection immediately, including failures before readiness. */
+    let settled = false;
+    const observed = run.then(() => { settled = true; }, () => { settled = true; });
+    try {
+      await vi.waitFor(() => {
+        if (settled && !sawDelta) throw new Error("The check ended before its first delta.");
+        expect(sawDelta).toBe(true);
+      });
+      expect(requestSignal).toBeDefined();
+      await check({
+        armed,
+        requestSignal: requestSignal!,
+        failure: async () => {
+          /* A disconnected deadline fails promptly, then the finally below
+             releases the open stream independently of the signal wiring. */
+          await vi.waitFor(() => expect(settled).toBe(true));
+          await run;
+        },
+      });
+    } finally {
+      try {
+        stream?.error(new Error("Test finished."));
+        await observed;
+      } finally {
+        spy.mockRestore();
+      }
+    }
   }
 
   it("arms one deadline, long enough for the whole ceiling of the rows it sent, and that one ends the call", async () => {
@@ -313,39 +355,62 @@ describe("a run, over the wire", () => {
     const { sent } = prepareHiddenCheck(groups);
     expect(sent.length).toBeGreaterThan(100);
     expect(sent.length).toBeLessThan(groups.length);
-    const { armed, run, requestSignal, restore } = await runWithClocks(groups);
-    try {
+    await withClocks(groups, async ({ armed, failure, requestSignal }) => {
       const maxTokens = bodies[0]?.max_tokens as number;
       expect(maxTokens).toBe(outputTokensFor(sent.length));
       expect(armed.map((a) => a.ms)).toEqual([hiddenCheckTimeoutFor(sent.length)]);
       expect(armed[0]!.ms).toBeGreaterThanOrEqual(deadlineFor(maxTokens));
       expect(requestSignal.aborted).toBe(false);
       armed[0]!.fire();
-      await expect(run).rejects.toThrow(String(Math.round(armed[0]!.ms / 1000)));
+      await expect(failure()).rejects.toThrow(tookTooLong(Math.round(armed[0]!.ms / 1000)).message);
       expect(requestSignal.aborted).toBe(true);
-    } finally {
-      restore();
-    }
+    });
   });
 
   it("keeps a small call's deadline at the old 60 s floor", async () => {
-    const { armed, run, restore } = await runWithClocks(grouped([finding(), finding({ text: "two" })]));
-    try {
+    await withClocks(grouped([finding(), finding({ text: "two" })]), async ({ armed, failure }) => {
       expect(deadlineFor(outputTokensFor(2))).toBeLessThan(HIDDEN_CHECK_MIN_TIMEOUT_MS);
       expect(armed.map((a) => a.ms)).toEqual([HIDDEN_CHECK_MIN_TIMEOUT_MS]);
       armed[0]!.fire();
-      await expect(run).rejects.toThrow();
-    } finally {
-      restore();
-    }
+      await expect(failure()).rejects.toThrow(tookTooLong(60).message);
+    });
+  });
+
+  it.each(["error", "cancel"] as const)("uses an explicit override for the clock and the %s abort message", async (abortMode) => {
+    await withClocks(grouped([finding()]), async ({ armed, failure, requestSignal }) => {
+      expect(armed.map((a) => a.ms)).toEqual([123_000]);
+      armed[0]!.fire();
+      expect(requestSignal.aborted).toBe(true);
+      await expect(failure()).rejects.toThrow(tookTooLong(123).message);
+    }, { timeoutMs: 123_000, abortMode });
+  });
+
+  it("releases the stream and restores the clock spy when an assertion fails", async () => {
+    const timeout = AbortSignal.timeout;
+    await expect(withClocks(grouped([finding()]), async () => {
+      expect("actual").toBe("deliberately wrong");
+    })).rejects.toThrow("deliberately wrong");
+    expect(AbortSignal.timeout).toBe(timeout);
+  });
+
+  it("restores the clock spy when the run ends before readiness", async () => {
+    const timeout = AbortSignal.timeout;
+    await expect(withClocks([], async () => {})).rejects.toThrow("before its first delta");
+    expect(AbortSignal.timeout).toBe(timeout);
   });
 
   it("spends nothing on no rows", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const events = [];
-    for await (const e of hiddenCheckStream({ power: "standard", groups: [] })) events.push(e);
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(events).toEqual([{ type: "done", judgments: [], unanswered: 0, notSent: 0, model: "none" }]);
+    try {
+      const events = [];
+      for await (const e of hiddenCheckStream({ power: "standard", groups: [] })) events.push(e);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(timeout).not.toHaveBeenCalled();
+      expect(events).toEqual([{ type: "done", judgments: [], unanswered: 0, notSent: 0, model: "none" }]);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });

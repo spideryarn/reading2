@@ -31,7 +31,7 @@ one call, Opus 5.5 at `medium`.
 |---|---|---|---|---|---|
 | 108 (of 400; the budget stopped it) | 32,080 | 5,912 | 3.3 s | **41.3 s** | $0.25 |
 
-So the worst case already uses **69% of the 60 s clock** with almost no thinking (text arrived at
+So this synthetic run already uses **69% of the 60 s clock** with almost no thinking (text arrived at
 3.3 s). A run that thinks more at `medium`, writes longer reasons, or meets a slower upstream is a
 few seconds from the line, and its full allowance (34,448 tokens) could not arrive in 60 s at any
 speed we have measured. The input comment's "about 15k tokens, under ten cents" was also wrong by
@@ -41,7 +41,7 @@ tokens and ~25 cents. Corrected at the constant.
 ## What we do
 
 **Derive the deadline from the ceiling, per call, never below the old 60 s:**
-`hiddenCheckTimeoutFor(sent) = max(60 s, deadlineFor(outputTokensFor(sent.length)))`,
+`hiddenCheckTimeoutFor(sent.length) = max(60 s, deadlineFor(outputTokensFor(sent.length)))`,
 the way Search (`SEARCH_TIMEOUT_MS`) and Criteria (`CRITERION_TIMEOUT_MS`) already do. It differs
 from theirs only in being computed per call, because this ceiling depends on how many rows went.
 The stall clock (30 s with nothing arriving) is unchanged and is still what catches a hung stream;
@@ -65,14 +65,25 @@ count; heartbeats keep the connection open meanwhile.)
 
 Red first: a run over 400 rows (the budget sends ~116), with `fetch` stubbed by a stream that
 stays open and `AbortSignal.timeout` replaced by controllers the test fires. It asserts exactly one
-clock is armed, at `hiddenCheckTimeoutFor(sent)` and at least `deadlineFor` of the `max_tokens` on
+clock is armed, at `hiddenCheckTimeoutFor(sent.length)` and at least `deadlineFor` of the `max_tokens` on
 the wire, and that firing *that* clock is what aborts the request and ends the run with the
 took-too-long message. Sol's review (2) asked for the firing, so the test proves the clock that
 governs the request rather than one that was merely made. With the old 60 s it fails
 (`[60000]` vs `[485000]`). A second case pins the 60 s floor at two rows.
+
+The code review tightened the harness: it observes rejection immediately, owns cleanup before
+waiting for the first delta, and releases the stream independently of the signal wiring in a
+`finally`. A deadline assertion that fails cannot leave a live stream or timeout spy behind.
+Additional cases exercise the explicit override through both a body error and a cancelled read,
+check the full timeout message, and prove that the no-rows return arms no deadline. The synthetic
+run above is a measurement, not a worst-case bound.
 
 ## Reviews
 
 - Plan: GPT Sol, read-only — [261101b-plan-review-sol.md](261101b-plan-review-sol.md). GO, with
   four findings, all taken: the floor (1), the stronger test (2), the client's stall clock and the
   progress claim (3), the row count as an example (4).
+- Code: GPT Sol, write-capable — [261101b-code-review-sol.md](261101b-code-review-sol.md). SHIP.
+  It hardened the test harness (cleanup on a failed assertion, override and no-rows cases) and
+  reworded "worst case" to "synthetic run". Its one out-of-scope finding, the 261009 feedback note
+  still listing the flat deadline as outstanding, is updated.
