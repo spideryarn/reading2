@@ -16,7 +16,10 @@ let answer = "";
 let stop: "end_turn" | "max_tokens" = "end_turn";
 /** What the last call sent — the reference list test reads its system blocks. */
 let sent: {
-  system?: { text: string }[];
+  system?: { type?: string; text: string; cache_control?: { type: string } }[];
+  messages?: unknown;
+  thinking?: unknown;
+  max_tokens?: number;
   output_config?: { effort?: string; format?: unknown };
 } | null = null;
 
@@ -48,6 +51,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
 import {
   buildBibliography,
   BIBLIOGRAPHY_OUTPUT_SCHEMA,
+  bibliographyRequest,
   type Draft,
   emptyDrops,
   ENTRY_CAP,
@@ -61,12 +65,15 @@ import {
   noScoreDrops,
   noteMarkers,
   PROMPT_VERSION,
+  renderPrompt,
   scholarUrl,
   systemPrompt,
   toDrafts,
   verifyEntry,
 } from "../src/bibliography.js";
 import { plainWords } from "../src/plain-words.js";
+import { BIBLIOGRAPHY_MODEL, CAPABLE_MODEL, modelFor, sameGenerator } from "../src/models.js";
+import { MODEL_MAX_TOKENS } from "../src/token-budget.js";
 import { validateAnthropicJsonSchema, validateOpenAiJsonSchema } from "../src/messages-structured-output.js";
 import { type NumberedReferenceList, referenceListFrom } from "../src/citation-reference-list.js";
 import type { Block, Tree } from "../src/types.js";
@@ -897,21 +904,24 @@ describe("the cap", () => {
     expect(over.citations.capped).toBe(true);
   });
 
-  it("past the cap, the works the piece leans on most are kept — not the first 80 the model wrote", () => {
-    /* spider-silk returned 100 rows against a stated cap of 80. The prompt's
-       instruction is "keep the ones it leans on most", so the cut honours it. */
+  it("past the cap, the first works the model listed are kept, whatever their relevance", () => {
+    /* `citations/8` asks for every work block by block and "the first 300 it
+       cites" (plan 261101c). Until `citations/7` the cut kept the highest
+       relevance; this pins that the cut and the prompt now agree (GPT Sol's
+       plan review 3): Work 0 is least relevant and still kept, the last is
+       most relevant and still cut. */
     const body = block("spya-body09", "Smith (2019).");
     const many = Array.from({ length: MAX_CITATIONS + 1 }, (_, i) => ({
       title: `Work ${i}`,
       why: "a",
-      relevance: i === 0 ? 0.1 : 0.5,
+      relevance: i === 0 ? 0.1 : i === MAX_CITATIONS ? 1 : 0.5,
       influence: 0.5,
       mentions: [{ block: body.id, quote: "Smith (2019)" }],
     }));
     const over = build(many, [body]);
     expect(over.rows).toHaveLength(MAX_CITATIONS);
-    expect(over.rows.map((r) => r.title)).not.toContain("Work 0");
-    expect(over.rows.map((r) => r.title)).toContain(`Work ${MAX_CITATIONS}`);
+    expect(over.rows.map((r) => r.title)).toContain("Work 0");
+    expect(over.rows.map((r) => r.title)).not.toContain(`Work ${MAX_CITATIONS}`);
   });
 
   it("uses an explicit eval cap without changing the default production cap", () => {
@@ -1002,6 +1012,46 @@ function tree(): Tree {
   } as unknown as Tree;
 }
 
+describe("bibliographyRequest", () => {
+  const body = block("spya-b00001", "People recall narratives [1].");
+  const list: NumberedReferenceList = { entries: new Map([[1, "1. Lee (2020). Narratives and memory."]]) };
+
+  it("owns the complete production body, with the cache marker on the article only", () => {
+    const request = bibliographyRequest({
+      meta: { title: "Narratives" } as never,
+      blocks: [body],
+      referenceList: list,
+      cacheArticle: true,
+    });
+
+    expect(request.max_tokens).toBe(MODEL_MAX_TOKENS);
+    expect(request.thinking).toEqual({ type: "adaptive" });
+    expect(request.output_config).toEqual({ effort: "high", format: { type: "json_schema", schema: BIBLIOGRAPHY_OUTPUT_SCHEMA } });
+    expect(request.messages).toEqual([{ role: "user", content: renderPrompt() }]);
+    const system = request.system;
+    if (!Array.isArray(system)) throw new Error("bibliography request did not carry system blocks");
+    expect(system).toHaveLength(3);
+    expect(system[0]).toMatchObject({ type: "text", cache_control: { type: "ephemeral" } });
+    expect(system[1]?.text).toContain("<reference-list>\n[1] Lee (2020). Narratives and memory.\n</reference-list>");
+    expect(system[1]).not.toHaveProperty("cache_control");
+    expect(system[2]).toEqual({ type: "text", text: systemPrompt() });
+  });
+
+  it("omits both the reference-list block and cache marker when production asks it to", () => {
+    const request = bibliographyRequest({
+      meta: { title: "Narratives" } as never,
+      blocks: [body],
+      referenceList: null,
+      cacheArticle: false,
+    });
+    const system = request.system;
+    if (!Array.isArray(system)) throw new Error("bibliography request did not carry system blocks");
+    expect(system).toHaveLength(2);
+    expect(system.every((part) => !("cache_control" in part))).toBe(true);
+    expect(system.some((part) => part.text.includes("<reference-list>"))).toBe(false);
+  });
+});
+
 describe("generateBibliography", () => {
   it("inherits a unique legacy search row's id after dropping its unsupported author and year", async () => {
     const body = block("spya-b00001", "The Bitter Lesson is cited here.");
@@ -1035,13 +1085,38 @@ describe("generateBibliography", () => {
       authorYearFilled: 0,
       works: 1,
     });
-    expect(sent?.output_config?.effort).toBe("medium");
+    expect(sent?.output_config?.effort).toBe("high");
+    /* The model's whole ceiling: 300 works' estimate plus `budgetFor`'s
+       headroom is over it (plan 261101c). */
+    expect(sent?.max_tokens).toBe(MODEL_MAX_TOKENS);
+    /* The model that ran, not the tier's: Haiku at both powers. */
+    expect(run.bibliography.generator).toBe(BIBLIOGRAPHY_MODEL);
+    expect(run.model).toBe(BIBLIOGRAPHY_MODEL);
     expect(sent?.output_config?.format).toEqual({ type: "json_schema", schema: BIBLIOGRAPHY_OUTPUT_SCHEMA });
+  });
+
+  /* GPT Sol's plan review 261101c, 1: the step's stamp (src/pipeline.ts) and
+     the store's check (src/store/pg.ts) expected `CAPABLE_MODEL`, so a
+     Haiku-made list would never have been current. What is written must be
+     what both expect, at both powers. tests/freshness-deciders-agree.test.ts
+     holds the two deciders to each other; this holds the writer to them. */
+  it("writes the generator both freshness checks expect, at both powers", async () => {
+    for (const power of ["standard", "high"] as const) {
+      stop = "end_turn";
+      answer = JSON.stringify({
+        capped: false,
+        works: [{ title: "Silk", why: "Its model.", ...scored, reference: { block: "spya-n00001", quote: "Porter, D. (2005)" } }],
+      });
+      const run = await generateBibliography({ power, article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null });
+      expect(run.bibliography.generator, power).toBe(modelFor("bibliography", power));
+      expect(sameGenerator(run.bibliography.generator, modelFor("bibliography", "standard")), power).toBe(true);
+      expect(sameGenerator(run.bibliography.generator, CAPABLE_MODEL), power).toBe(false);
+    }
   });
 
   describe("SPIDERYARN_PIPELINE_EFFORT at this call site", () => {
     /* One of the three places that read the variable, each with its own
-       fallback (here `medium`). All three go through `pipelineEffortOverride`
+       fallback (here `high`, since `citations/8`). All three go through `pipelineEffortOverride`
        in src/models.ts since 2026-10-04; before that this one cast the raw
        string, so an empty value or a typo went to the provider as the effort.
        tests/pipeline-effort-override.test.ts has the parser's own table. */
@@ -1067,19 +1142,19 @@ describe("generateBibliography", () => {
       }
     };
 
-    it("keeps its own medium when the variable is unset or empty", async () => {
+    it("keeps its own high when the variable is unset or empty", async () => {
       for (const value of [undefined, ""]) {
         await withEnv(value, async () => {
           await run();
-          expect(sent?.output_config?.effort, String(value)).toBe("medium");
+          expect(sent?.output_config?.effort, String(value)).toBe("high");
         });
       }
     });
 
     it("takes a valid override", async () => {
-      await withEnv("high", async () => {
+      await withEnv("low", async () => {
         await run();
-        expect(sent?.output_config?.effort).toBe("high");
+        expect(sent?.output_config?.effort).toBe("low");
       });
     });
 
@@ -1102,8 +1177,21 @@ describe("generateBibliography", () => {
 });
 
 describe("the prompt", () => {
-  it("is citations/7, and asks for influence only when the model is confident it knows the work", () => {
-    expect(PROMPT_VERSION).toBe("citations/7");
+  it("is citations/8: every work, the shapes a citation takes, block by block", () => {
+    expect(PROMPT_VERSION).toBe("citations/8");
+    const said = systemPrompt().replace(/\s+/g, " ");
+    expect(said).toMatch(/EVERY work the article cites/);
+    expect(said).toContain(`more than ${MAX_CITATIONS} works, list the first ${MAX_CITATIONS} it cites`);
+    expect(said).toMatch(/WHAT A CITATION LOOKS LIKE/);
+    expect(said).toMatch(/a paragraph that cites ten works gives ten rows/);
+    /* `citations/7`'s instruction to stop, which was half of the recall fault
+       (investigation 261101a). */
+    expect(said).not.toMatch(/leans on most/);
+    expect(renderPrompt()).toBe("List every work this article cites.");
+    expect(renderPrompt()).not.toMatch(/at most/);
+  });
+
+  it("asks for influence only when the model is confident it knows the work", () => {
     const said = systemPrompt().replace(/\s+/g, " ");
     expect(said).toMatch(/"influence"[^.]*\bnull\b/);
     expect(said).toMatch(/in doubt[^.]*null/i);

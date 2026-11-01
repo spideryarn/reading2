@@ -48,7 +48,7 @@ import { findMathSpans } from "./maths-tex.js";
 import type { Article } from "./article-input.js";
 import { jsdom } from "./jsdom-lazy.js";
 import { finishedText, streamMessage } from "./messages-stream.js";
-import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
+import { type Effort, modelFor, type ModelPower, pipelineEffortOverride } from "./models.js";
 import { REF_ATTR } from "./notes.js";
 import { arxivIdOf } from "./paper-sources.js";
 import { AUTHOR_TITLE_ATTR } from "./sanitize-policy.js";
@@ -68,7 +68,7 @@ import {
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
 import type { ArtifactStore } from "./store/artifacts.js";
-import { budgetFor } from "./token-budget.js";
+import { MODEL_MAX_TOKENS } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
 import { firstAuthor, scholarUrl } from "./scholar-search.js";
 import { type AuthorYearCite, authorYearCites, citeKey, surnameKey } from "./citation-author-year.js";
@@ -117,8 +117,15 @@ export { MAX_MENTIONS };
  * every work the body cites author–year that the model left out
  * (`rowsFromText`), and a numbered run with no years is no longer sent as the
  * reference list — so the same article now yields a different list. Plan
- * docs/plans/261027b-citations-missed-in-the-text-filled-by-code.md. */
-export const PROMPT_VERSION = "citations/7";
+ * docs/plans/261027b-citations-missed-in-the-text-filled-by-code.md.
+ *
+ * `citations/8`, 2026-11-01: every work, up to `MAX_CITATIONS` (now 300) in
+ * the order cited, instead of "the 80 it leans on most"; a section of the
+ * shapes a citation takes; block by block. Written by Haiku 5.5 at high
+ * effort (`BIBLIOGRAPHY_MODEL`). Greg's choice of q-ns76uq's option A, plan
+ * docs/plans/261101c-citations-list-on-haiku-and-better-notes.md, measured in
+ * docs/investigations/261101a-citations-recall-haiku-vs-sonnet-prompt-eval.md. */
+export const PROMPT_VERSION = "citations/8";
 
 /** Field caps the prompt states, and what code clips to. They are also what `PER_WORK_TOKENS` is sized on. */
 export const TITLE_CAP = 120;
@@ -130,19 +137,22 @@ export const QUOTE_CAP = 120;
 export { ENTRY_CAP } from "./citation-entry.js";
 
 /**
- * `medium`, as a constant here rather than a row in `STAGE_EFFORT`, because this
+ * A constant here rather than a row in `STAGE_EFFORT`, because this
  * is not an `ArticleStage` (src/types.ts § StepName, the `bibliography` note): it
  * sends every block, bibliography included, so it shares no cached prefix with
- * the stages in that table. Medium because this is careful extraction rather
- * than argument — the judgement it does make, relevance, is a reading of the
- * whole piece and not a chain of inference. `SPIDERYARN_PIPELINE_EFFORT` still
+ * the stages in that table. It was medium until `citations/8`: careful
+ * extraction rather than argument. `SPIDERYARN_PIPELINE_EFFORT` still
  * overrides it, as it does for every stage `effortFor` serves, through the same
  * checked reader (src/models.ts § `pipelineEffortOverride`).
  */
-const EFFORT: Effort = "medium";
+/* **`high` since `citations/8`** (plan 261101c): on Haiku 5.5, medium stopped
+   at 24–45% of the two long papers, and high listed 100 to 260 rows; `xhigh`
+   ran out of room on a 152-note page and took seven minutes on another
+   (investigation 261101a). Exported so the eval sends exactly this. */
+export const EFFORT: Effort = "high";
 
 /**
- * **The answer estimate** — `base + entries × per-entry`, fed to `budgetFor`
+ * **The answer estimate** — `base + entries × per-entry`, once fed to `budgetFor`
  * (Sol's F10). Per entry: a title ≤ 120 chars (~30 tokens), authors (~25), a
  * year, `why` ≤ 160 chars (~40), two scores, a reference and up to three
  * mentions at a block id plus a ≤ 120-char quote each (~45 apiece), and the JSON
@@ -151,15 +161,23 @@ const EFFORT: Effort = "medium";
  * keeps this small — the model never lists the thirteen paragraphs a Wikipedia
  * note is cited from.
  *
- * **Sized for the cap, always**, rather than guessed from the article: a
- * bibliography's length is not readable off the word count, and `max_tokens` is
- * a ceiling, not a purchase. 400 + 80 × 350 = 28,400, plus the default
- * reasoning headroom.
+ * **Since `citations/8` this is not the budget.** 400 + 300 × 350 = 105,400,
+ * and `budgetFor`'s 40K of thinking headroom on top is over the model's 128K,
+ * so the call sends `MODEL_MAX_TOKENS` straight (`bibliographyMaxTokens`). The
+ * estimate stays, for the message a truncated answer gives. A bibliography's
+ * length is not readable off the word count, and `max_tokens` is a ceiling,
+ * not a purchase: the production-request eval's longest answer used 76K,
+ * thinking included (investigation 261101a; plan 261101c).
  */
 export const BASE_TOKENS = 400;
 export const PER_WORK_TOKENS = 350;
 export function answerEstimate(entries: number = MAX_CITATIONS): number {
   return BASE_TOKENS + entries * PER_WORK_TOKENS;
+}
+
+/** The `max_tokens` the call sends: the model's whole ceiling (above). Exported so the eval sends exactly this. */
+export function bibliographyMaxTokens(): number {
+  return MODEL_MAX_TOKENS;
 }
 
 /**
@@ -728,33 +746,27 @@ export function toDrafts(
   }
   /* **No cut here.** The cap counts works, and these are still rows — the
      shorthand cite and its full entry are two of them until `buildBibliography`
-     folds them. `keepLeanedOnMost` cuts after both folds. GPT Sol F13. */
+     folds them. `keepFirstListed` cuts after both folds. GPT Sol F13. */
   return out;
 }
 
 /**
- * **Past the cap, keep the works the piece leans on most** — the prompt's own
- * instruction, which the model does not always obey: spider silk came back with
- * 100 rows on the stage-1 run. Highest `relevance` first (an unscored work
- * last), the model's order as the tie-break, and the kept rows stay in the
- * model's order.
+ * **Past the cap, keep the first `cap` works, in the model's order** — the
+ * prompt's own rule since `citations/8` (plan 261101c): every work, block by
+ * block, "list the first 300 it cites". The model's order is the order it
+ * met them in. Until `citations/7` this kept the works with the highest
+ * `relevance` instead, matching that prompt's "keep the 80 it leans on most";
+ * GPT Sol's plan review (261101c, 3) caught the new prompt and the old cut
+ * disagreeing. Only an answer that ignored the cap reaches here.
  *
  * **Run on works, after both folds**, never on the raw rows: cut first and
- * eighty copies of one work take the whole allowance, the distinct work behind
- * them is gone, and the foot says "these are the 80" over one row. GPT Sol F13,
- * 2026-09-12.
+ * copies of one work take the whole allowance and the distinct work behind
+ * them is gone. GPT Sol F13, 2026-09-12.
  */
-function keepLeanedOnMost<T extends { draft: Draft }>(items: T[], drops: CitationDrops, cap: number = MAX_CITATIONS): T[] {
+function keepFirstListed<T>(items: T[], drops: CitationDrops, cap: number = MAX_CITATIONS): T[] {
   if (items.length <= cap) return items;
   drops.overCap += items.length - cap;
-  const kept = new Set(
-    items
-      .map((w, i) => ({ r: w.draft.relevance ?? -1, i }))
-      .sort((a, b) => b.r - a.r || a.i - b.i)
-      .slice(0, cap)
-      .map((x) => x.i),
-  );
-  return items.filter((_, i) => kept.has(i));
+  return items.slice(0, cap);
 }
 
 /** What a model writes when it should have left a field out. */
@@ -1865,7 +1877,7 @@ export function buildBibliography(
     /** A PDF's numbered reference list, or `null` — `generateBibliography`'s `referenceList`. */
     referenceList?: NumberedReferenceList | null;
     /**
-     * **Only for an eval**: where `keepLeanedOnMost` cuts, in place of
+     * **Only for an eval**: where `keepFirstListed` cuts, in place of
      * `MAX_CITATIONS` — evals/citations-recall/score.ts scores the folded list
      * uncapped as well as capped (plan 261101a). No production caller passes it.
      */
@@ -1961,7 +1973,7 @@ export function buildBibliography(
   );
 
   /* 3½ — the cap, on works rather than rows, now that both folds are done. */
-  const works = keepLeanedOnMost(folded, drops, opts.cap);
+  const works = keepFirstListed(folded, drops, opts.cap);
 
   if (works.length === 0 && parsed.works.length > 0) {
     const d = drops;
@@ -2055,7 +2067,9 @@ export function buildBibliography(
   const capped = parsed.capped === true || drops.overCap > 0;
   return {
     version: PROMPT_VERSION,
-    generator: generatorFor(opts.power),
+    /* The model that runs, not the tier's: Haiku at both powers since
+       `citations/8` (plan 261101c). */
+    generator: modelFor("bibliography", opts.power),
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     citations: inFirstCitedOrder(citations, position),
@@ -2186,6 +2200,31 @@ article itself.
 One row per work. If the article cites the same work in several places — a
 shorthand in the text and a full entry in the bibliography — that is ONE row.
 
+WHAT A CITATION LOOKS LIKE
+
+Citations come in many shapes. Each line below is one place in a text, and how
+many works it cites:
+
+  "(Tulving, 1983)" — one. "Tulving (1983) showed" — one.
+  "(Craik, 1943; Bryson and Ho, 1969)" — two, split by a semicolon.
+  "(Carruthers & Gennaro 2020, Rosenthal 2005)" — two, split by a comma.
+  "(e.g. Dehaene et al., 2017; see also Lau 2022, p. 14)" — two; "e.g.",
+      "see also" and page numbers do not change that.
+  "(Chen et al., 2020a, 2020b)" — two: the letters make them different works.
+  "Rosenthal (1997, 2005)" — two: one author, two years.
+  "(Block, forthcoming)", "(Smith, in press)", "(Jones, n.d.)" — one each.
+  "as Kaplan et al. 2020 argue" — one, with no brackets at all.
+  "[12]" — one. "[3, 7, 12]" — three. "[3–6]" — four: 3, 4, 5 and 6.
+  "memory1-7", "Wells et al.18", "shown before4,5" — superscript numbers that
+      lost their formatting and run into the word: 1 to 7 is seven works.
+  "[12]" or "12" before a Wikipedia-style notes list — the note's work.
+  A footnote marker, and the work named in that footnote.
+  A linked title, "in Attention Is All You Need", or a book named in the text
+      with its author — one.
+
+Every one of those is a row. A name on its own ("as Descartes thought") with no
+year, note, number or title is a person, not a citation.
+
 WHERE THE ARTICLE CITES IT
 
 Every place is {"block": "<block id>", "quote": "<words copied from that block>"}.
@@ -2247,9 +2286,19 @@ or null.
 
 HOW MANY
 
-At most ${MAX_CITATIONS} rows. If the article cites more than ${MAX_CITATIONS} works,
-keep the ${MAX_CITATIONS} it leans on most and set "capped": true. Otherwise
-"capped": false.
+EVERY work the article cites: one row for each. Do not choose the important
+ones, and do not stop early because the list is long; a paper that cites 250
+works needs 250 rows. Only if it cites more than ${MAX_CITATIONS} works, list the
+first ${MAX_CITATIONS} it cites and set "capped": true. Otherwise "capped": false.
+
+HOW TO WORK
+
+Go through the article block by block, from the first to the last, and list
+each work at the first block that cites it. Read every citation in a block, not
+only the first: a paragraph that cites ten works gives ten rows. A work cited
+again later is the same row, not a new one. Then check the bibliography,
+reference list and notes, if the article has them, for any entry you have not
+listed whose work the text cites.
 
 ${plainWords("explain")}
 
@@ -2277,7 +2326,7 @@ needs a reference or at least one mention. An article that cites nothing is
 
 /* Exported for the tests. */
 export function renderPrompt(): string {
-  return `List the works this article cites — at most ${MAX_CITATIONS}.`;
+  return "List every work this article cites.";
 }
 
 export function systemPrompt(): string {
@@ -2355,6 +2404,43 @@ assertNoBlockIdEnums(BIBLIOGRAPHY_OUTPUT_SCHEMA, ["block"]);
 
 /* -------------------------------------------------------------- the call -- */
 
+/**
+ * **The whole request body the call sends** — one builder, so that
+ * evals/citations-recall/run.ts's production arm sends exactly what
+ * `generateBibliography` sends rather than a copy that drifts (GPT Sol's plan
+ * review 261101c, 9). The model is not in it: `streamMessage` resolves the
+ * task's, which is `BIBLIOGRAPHY_MODEL` at both powers.
+ */
+export function bibliographyRequest(opts: {
+  meta: Meta;
+  blocks: readonly Block[];
+  referenceList: NumberedReferenceList | null;
+  /** Mark the article for the cache — a production job that shares its article-cache group. An eval sends false, so its cost is cold. */
+  cacheArticle: boolean;
+}) {
+  return withMessagesJsonSchema({
+    max_tokens: bibliographyMaxTokens(),
+    thinking: { type: "adaptive" as const },
+    output_config: { effort: pipelineEffortOverride() ?? EFFORT },
+    system: [
+      {
+        type: "text" as const,
+        /* **Every block**, not `isBodyEvidence`'s — the bibliography and the
+           notes are what this stage is for, and the one stage that must
+           read them. It is also why this shares no cached prefix with
+           `ideas` (src/types.ts § StepName). */
+        text: articleWithIds(opts.meta, [...opts.blocks]),
+        ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+      },
+      ...(opts.referenceList === null
+        ? []
+        : [{ type: "text" as const, text: referenceListPrompt(referenceListText(opts.referenceList)) }]),
+      { type: "text" as const, text: SYSTEM },
+    ],
+    messages: [{ role: "user" as const, content: renderPrompt() }],
+  }, BIBLIOGRAPHY_OUTPUT_SCHEMA);
+}
+
 export interface BibliographyRun {
   bibliography: Bibliography;
   drops: CitationDrops;
@@ -2383,7 +2469,7 @@ export async function generateBibliography(opts: {
    * run goes on reporting success and minting fresh ids.
    */
   previous: Bibliography | null;
-  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  /** The article's power, required by the shared call contract; Bibliography's pinned model is the same at both powers. */
   power: ModelPower;
   /**
    * **A PDF's reference list, or `null`** — src/pipeline.ts §
@@ -2404,34 +2490,19 @@ export async function generateBibliography(opts: {
   const started = Date.now();
 
   const answerTokens = answerEstimate();
-  const maxTokens = budgetFor("bibliography", answerTokens);
-  const effort = pipelineEffortOverride() ?? EFFORT;
+  const body = bibliographyRequest({
+    meta,
+    blocks,
+    referenceList: opts.referenceList,
+    cacheArticle: opts.cacheArticle === true,
+  });
+  const maxTokens = body.max_tokens;
 
   let message: Anthropic.Message;
   try {
     const call = streamMessage(
       "bibliography",
-      withMessagesJsonSchema({
-        max_tokens: maxTokens,
-        thinking: { type: "adaptive" },
-        output_config: { effort },
-        system: [
-          {
-            type: "text" as const,
-            /* **Every block**, not `isBodyEvidence`'s — the bibliography and the
-               notes are what this stage is for, and the one stage that must
-               read them. It is also why this shares no cached prefix with
-               `ideas` (src/types.ts § StepName). */
-            text: articleWithIds(meta, [...blocks]),
-            ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
-          },
-          ...(opts.referenceList === null
-            ? []
-            : [{ type: "text" as const, text: referenceListPrompt(referenceListText(opts.referenceList)) }]),
-          { type: "text" as const, text: SYSTEM },
-        ],
-        messages: [{ role: "user", content: renderPrompt() }],
-      }, BIBLIOGRAPHY_OUTPUT_SCHEMA),
+      body,
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
     if (opts.onProgress) {
@@ -2472,7 +2543,7 @@ export async function generateBibliography(opts: {
     coverage: coverageOf(blocks, bibliography),
     maxTokens,
     answerTokens,
-    model: generatorFor(opts.power),
+    model: modelFor("bibliography", opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

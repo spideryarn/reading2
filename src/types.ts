@@ -6105,12 +6105,14 @@ export interface CitationScoreDrops {
 }
 
 /**
- * The most works one list holds. The prompt asks the model to keep the ones the
- * piece leans on most and to say `capped: true` when it left works out.
- * Here rather than in src/bibliography.ts because the panel's foot sentence names
- * the number.
+ * The most works one list holds from the model. Since `citations/8` (plan
+ * 261101c) the prompt asks for every work the article cites, up to this many in
+ * the order cited, and `capped: true` only when it cites more. It was 80, with
+ * "keep the ones the piece leans on most", until 2026-11-01: that instruction
+ * was half of why long papers' lists stopped at a fraction (investigation
+ * 261101a). Here rather than in src/bibliography.ts because the client imports it.
  */
-export const MAX_CITATIONS = 80;
+export const MAX_CITATIONS = 300;
 
 /**
  * Direct mentions kept per work — occurrences, not distinct paragraphs. The
@@ -6153,7 +6155,7 @@ export interface Bibliography {
   /**
    * **The model said it left works out**, or returned more than
    * `MAX_CITATIONS`. Never inferred from the list's length — the panel's *"this
-   * piece cites more than 80 works"* sentence is drawn only from this.
+   * piece cites more works than this list holds"* sentence is drawn only from this.
    */
   capped: boolean;
   generatedAt: string;

@@ -1,7 +1,7 @@
 ---
 reports: spya-d5e2jk
 ending: shipped
-comment: A model lists them first, then code adds what it missed; code now reads comma-separated lists (214 of 243). Eval, 1 Nov: Haiku at high effort finds far more, at a seventh of the cost, with slightly worse notes. Switch? Asked as q-ns76uq.
+comment: Code reads comma-separated lists (214 of 243); since 1 Nov Haiku lists every work up to 300 (98-100% on seven test papers, a seventh of the cost), its notes a little worse than Sonnet's. Greg's choice, q-ns76uq.
 ---
 # Citations in a comma-separated list
 
@@ -17,6 +17,11 @@ before acting and before writing this).
 
 **Ending: shipped** on `dev` (the code half), with the model half put to Greg as
 [q-ns76uq](questions/q-ns76uq.md) and queued as `qi-mf9r5hjk`.
+
+**2026-11-01:** the model half is on `dev` too. Greg chose Haiku in q-ns76uq (`spya-mgvawf`):
+[plan 261101c](../plans/261101c-citations-list-on-haiku-and-better-notes.md) built it and measured
+it, and [investigation 261101d](../investigations/261101d-citations-notes-from-haiku-three-ways.md)
+tried three ways to make Haiku's notes as good as Sonnet's, none yet good enough to ship.
 
 **How it works, plainly:** one Sonnet call reads the article and lists the works it cites, with a
 quote of each place; code checks the quotes are real. Since 2026-10-27 code also reads author–year

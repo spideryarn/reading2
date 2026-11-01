@@ -577,6 +577,19 @@ export const SITUATE_TRIAGE_MODEL = "anthropic/claude-haiku-5.5";
 export const DIGEST_READ_MODEL = "anthropic/claude-haiku-5.5";
 
 /**
+ * **What lists every work an article cites** — the `bibliography` task
+ * (src/bibliography.ts), held here by `PINNED_MODEL`, so it is Haiku at both
+ * powers and High-powered AI does not move it. Chosen by measurement
+ * (docs/investigations/261101a-citations-recall-haiku-vs-sonnet-prompt-eval.md):
+ * at high effort with the every-work prompt it found more than Sonnet on five
+ * of seven papers and as many on the other two, for about a seventh of the
+ * cost; its notes on each work were a little worse. Greg chose it, 2026-11-01
+ * (q-ns76uq, plan 261101c). Its own constant for the reason the Haiku jobs
+ * above have theirs.
+ */
+export const BIBLIOGRAPHY_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What writes the one-line gist of a conversation** after each answer, so a
  * later conversation about the same article can see what an earlier one
  * covered (src/chat-gist.ts, plan
@@ -1000,8 +1013,9 @@ export type Task =
    */
   /**
    * **Every work the piece cites** — src/bibliography.ts,
-   * docs/plans/260911g-citations-mode.md. Messages wire, capable tier: the
-   * links are code's, but relevance is a reading of the whole argument.
+   * docs/plans/260911g-citations-mode.md. Messages wire, represented by the
+   * capable tier but pinned to `BIBLIOGRAPHY_MODEL` at both powers since plan
+   * 261101c. The links are code's; relevance is a reading of the whole argument.
    */
   | "bibliography"
   /**
@@ -1420,6 +1434,8 @@ export const TASK_TIER: Record<Task, Tier> = {
   reception: "capable",
   /* The same weighing as `debate`, for the claims a reader picked. */
   "sources-claim-check": "capable",
+  /* A pinned exception to the tier: `PINNED_MODEL` holds it on Haiku 5.5 at
+     both powers (plan 261101c). "capable" because it is on the Messages wire. */
   bibliography: "capable",
   /* Capable, for `debate`'s reason: the whole job is weighing a handful of
      search results against one cited work and saying which, if any, is its
@@ -1863,7 +1879,8 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   "situate-plan": null,
   "situate-triage": null,
   situate: null,
-  /* As Situate's: the Messages-wire stages hand their model straight through. */
+  /* As Situate's: the Messages-wire stages use the task resolver. Bibliography
+     is pinned there rather than taking an environment model override. */
   "digest-plan": null,
   "digest-read": null,
   "sources-digest": null,
@@ -2005,6 +2022,10 @@ const PINNED_MODEL: Partial<Record<Task, string>> = {
      261030b), for the triage's reason: many cheap reads of a few pages each.
      `DIGEST_READ_MODEL` above. */
   "digest-read": DIGEST_READ_MODEL,
+  /* **The citations list, on Haiku whatever the article's power** (plan
+     261101c): it found more works than Sonnet, for a seventh of the cost
+     (investigation 261101a). `BIBLIOGRAPHY_MODEL` above. */
+  bibliography: BIBLIOGRAPHY_MODEL,
 };
 
 export function resolveModel(task: Task, power: ModelPower): ResolvedModel {

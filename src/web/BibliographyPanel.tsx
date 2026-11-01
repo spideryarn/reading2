@@ -42,19 +42,18 @@ import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
 import { BookOpen, BookText, ExternalLink } from "lucide-react";
-import {
-  MAX_CITATIONS,
-  type BlockId,
-  type CitationLookup,
-  type CitationPlace,
-  type CitationSupport,
-  type CitedInSpideryarn,
-  type CitedMatchedBy,
-  type CitedWork,
-  type CitedWorkBlurb,
-  type CitedWorkWebNote,
-  type RegistryCitedBy,
-  type RegistrySource,
+import type {
+  BlockId,
+  CitationLookup,
+  CitationPlace,
+  CitationSupport,
+  CitedInSpideryarn,
+  CitedMatchedBy,
+  CitedWork,
+  CitedWorkBlurb,
+  CitedWorkWebNote,
+  RegistryCitedBy,
+  RegistrySource,
 } from "../types.js";
 import {
   BLURB_ASK_IN_CHAT,
@@ -615,28 +614,28 @@ export function sourceOf(work: Pick<CitedWork, "url" | "linkFrom">): Source {
 
 /**
  * Drawn **only when the model said it left works out** (`Bibliography.capped`) —
- * never inferred from the list being 80 long, and "we judged" rather than a
- * claim that the ranking is a fact. docs/plans/260911g-citations-mode.md § Long
- * bibliographies.
+ * never inferred from the list's length. docs/plans/260911g-citations-mode.md
+ * § Long bibliographies.
+ *
+ * **It names neither the cap nor how the kept works were chosen**, because a
+ * stored list may have been made under either rule: `citations/7` and before
+ * kept the 80 the piece leans on most, and `citations/8` (plan 261101c) lists
+ * every work up to 300, in the order cited. A visitor's copy carries no
+ * version to tell them apart, and the count of rows is true of both. It counts
+ * the rows rather than quoting the cap: the model can say `capped` over fewer
+ * (Synesthesia: 44), and verification can drop some.
  */
-export const CAPPED_NOTE = `This piece cites more than ${MAX_CITATIONS} works; these are the ${MAX_CITATIONS} we judged it leans on most.`;
+export const CAPPED_NOTE_OPENING = "This piece cites more works than this list holds.";
 
 /**
- * **The capped note when code also listed works from the text** (plan
- * 261027b): the list then holds more than the model's 80, so *these are the
- * 80* would be false. GPT Sol's plan review, 3.
+ * **The capped note**, with how many rows the model kept and, when code also
+ * listed works from the text (plan 261027b), how many those are.
  */
 export function cappedNote(modelRows: number, fromText: number): string {
-  /* The model can say `capped` over fewer than 80 rows (Synesthesia: 44), and
-     the verification can drop some, so the count is the rows', not the cap's. */
-  if (fromText === 0) {
-    return modelRows >= MAX_CITATIONS
-      ? CAPPED_NOTE
-      : `This piece cites more than ${MAX_CITATIONS} works; these are the ${modelRows} we judged it leans on most.`;
-  }
-  const more = fromText === 1 ? "1 more, found in the article's text, is" : `${fromText} more, found in the article's text, are`;
   const works = modelRows === 1 ? "1 work" : `${modelRows} works`;
-  return `This piece cites more than ${MAX_CITATIONS} works. The model listed ${works} it judged the piece leans on most; ${more} listed by name only.`;
+  if (fromText === 0) return `${CAPPED_NOTE_OPENING} The model that made it listed ${works}.`;
+  const more = fromText === 1 ? "1 more, found in the article's text, is" : `${fromText} more, found in the article's text, are`;
+  return `${CAPPED_NOTE_OPENING} The model that made it listed ${works}; ${more} listed by name only.`;
 }
 
 /**
@@ -1149,7 +1148,7 @@ export function BibliographyPanel({
         <div className="gloss-empty">
           <p>Nobody has listed the works this one cites yet.</p>
           <p className="gloss-hint">
-            One model call over the whole article — under a minute for a short piece, two or three on a long one.
+            One model call over the whole article — a minute or two for a short piece, up to five on a long one.
             Found once and kept — you will not be asked again unless the article changes.
           </p>
           {run("Find the citations")}

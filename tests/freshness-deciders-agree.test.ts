@@ -189,7 +189,8 @@ const EXCLUDED: Partial<Record<StepName, string>> = {};
  * below has nothing to ask of them: `sameGenerator` lumps only the capable
  * and high-power models together.
  */
-const OFF_THE_CAPABLE_GENERATION: readonly StepName[] = ["citation-blurbs"];
+/* `bibliography` since `citations/8`: Haiku at both powers (plan 261101c). */
+const OFF_THE_CAPABLE_GENERATION: readonly StepName[] = ["citation-blurbs", "bibliography"];
 
 /** What the two deciders said, in the order this file always writes them. */
 interface Pair {

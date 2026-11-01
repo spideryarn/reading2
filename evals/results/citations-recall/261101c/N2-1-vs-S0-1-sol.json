@@ -1,0 +1,434 @@
+[
+ {
+  "id": "10356-a-path:Bryson:1969",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B adds an unsupported Mode-2 link"
+ },
+ {
+  "id": "10356-a-path:Miller:2016",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B states the proposed resemblance more clearly"
+ },
+ {
+  "id": "10356-a-path:Kahneman:2011",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "The article maps the modes rather than claiming inspiration"
+ },
+ {
+  "id": "10356-a-path:Kingma:2013",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B adds unsupported uncertainty handling"
+ },
+ {
+  "id": "10356-a-path:Bardes:2021",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B closely follows the described criteria"
+ },
+ {
+  "id": "10356-a-path:Vaswani:2017",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A more fully states the article's use"
+ },
+ {
+  "id": "10356-a-path:Janner:2021",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A identifies the whole-trajectory example"
+ },
+ {
+  "id": "10356-a-path:Sutton:1991",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately describe the historical example"
+ },
+ {
+  "id": "arxiv-1706-0:#1",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B adds the decoder beyond this passage"
+ },
+ {
+  "id": "arxiv-1706-0:#2",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": true,
+  "relevanceOffB": false,
+  "reason": "Neither gives the passage's recurrent-model use"
+ },
+ {
+  "id": "arxiv-1706-0:#3",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A is complete; B trails off"
+ },
+ {
+  "id": "arxiv-1706-0:#4",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B names machine reading and the shared claim"
+ },
+ {
+  "id": "arxiv-1706-0:#5",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A adds unsupported claims about the Transformer"
+ },
+ {
+  "id": "arxiv-1706-0:#6",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A includes both reduced cost and comparison"
+ },
+ {
+  "id": "arxiv-1706-0:#7",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately state the background use"
+ },
+ {
+  "id": "arxiv-1706-0:#8",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Dyer is not the only prior higher score"
+ },
+ {
+  "id": "arxiv-2308-0:Block:1995",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "The passage explicitly uses phenomenal consciousness"
+ },
+ {
+  "id": "arxiv-2308-0:Nagel:1974",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A states the quoted conception exactly"
+ },
+ {
+  "id": "arxiv-2308-0:Schwitzgebel:2016",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "The article explicitly follows its example-based method"
+ },
+ {
+  "id": "arxiv-2308-0:Searle:1980",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B gives the stated opposing position"
+ },
+ {
+  "id": "arxiv-2308-0:Tononi:2015",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "B identifies the opposing view, though overrates it"
+ },
+ {
+  "id": "arxiv-2308-0:Birch:2022b",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A has the right distinction but adds objections"
+ },
+ {
+  "id": "arxiv-2308-0:Michel:2021",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Neither identifies the substrate qualification"
+ },
+ {
+  "id": "arxiv-2308-0:Block:2023",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B states the representational-format use"
+ },
+ {
+  "id": "clark-chalme:McClelland:1986",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately describe the multiplication example"
+ },
+ {
+  "id": "clark-chalme:Clark:1989",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately describe the environmental aid"
+ },
+ {
+  "id": "clark-chalme:Kirsh:1995",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately describe the Scrabble example"
+ },
+ {
+  "id": "clark-chalme:Hutchins:1995",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both capture its two stated uses"
+ },
+ {
+  "id": "clark-chalme:Kirsh:1994",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B includes the timing and epistemic-action point"
+ },
+ {
+  "id": "clark-chalme:Putnam:1975",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A mistakenly says Putnam is cited with Putnam"
+ },
+ {
+  "id": "clark-chalme:Burge:1979",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both state the contrasted externalism accurately"
+ },
+ {
+  "id": "clark-chalme:Suchman:1987",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately identify the situated-cognition example"
+ },
+ {
+  "id": "jmlr-v15-sri:Nowlan:1992",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately describe a listed regularizer"
+ },
+ {
+  "id": "jmlr-v15-sri:Xiong:2011",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "A includes the passage's use before adding unsupported detail"
+ },
+ {
+  "id": "jmlr-v15-sri:Salakhutdinov:2008",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both convey the small-model Bayesian example"
+ },
+ {
+  "id": "jmlr-v15-sri:Livnat:2010",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B most directly states the motivational use"
+ },
+ {
+  "id": "jmlr-v15-sri:Vincent:2008",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A adds unsupported pretraining use"
+ },
+ {
+  "id": "jmlr-v15-sri:van der Maaten:2013",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B is complete and avoids an unsupported build-on claim"
+ },
+ {
+  "id": "jmlr-v15-sri:Wang:2013",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A adds less unsupported detail"
+ },
+ {
+  "id": "jmlr-v15-sri:Chen:2012",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately identify the related work"
+ },
+ {
+  "id": "synesthesia-:#2",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B includes the definition but adds unsupported specifics"
+ },
+ {
+  "id": "synesthesia-:#3",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B includes the definition but adds unsupported criteria"
+ },
+ {
+  "id": "synesthesia-:#4",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A proposes uses; B falsely denies textual use"
+ },
+ {
+  "id": "synesthesia-:#5",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A includes the definition but adds unsupported criteria"
+ },
+ {
+  "id": "synesthesia-:#7",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B captures the range claim but adds media"
+ },
+ {
+  "id": "synesthesia-:#12",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A offers a plausible use; B falsely denies one"
+ },
+ {
+  "id": "synesthesia-:#13",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A identifies number forms but adds unsupported display detail"
+ },
+ {
+  "id": "synesthesia-:#16",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B states the cited developmental suggestion"
+ }
+]

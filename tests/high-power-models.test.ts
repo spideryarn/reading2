@@ -40,6 +40,7 @@ import {
   sameGenerator,
   SITUATE_TRIAGE_MODEL,
   DIGEST_READ_MODEL,
+  BIBLIOGRAPHY_MODEL,
   TASK_TIER,
   type Task,
 } from "../src/models.js";
@@ -52,11 +53,13 @@ const ALL_TASKS = Object.keys(TASK_TIER) as Task[];
  * model it stays on at both powers. `situate-triage` is on the Messages wire,
  * so its row says capable, but `PINNED_MODEL` holds it on Haiku: Haiku
  * shortlisting for an Opus writer is what plan 261025h's eval measured.
- * `digest-read` the same way, for the sources digest's readers (plan 261030b).
+ * `digest-read` the same way, for the sources digest's readers (plan 261030b),
+ * and `bibliography`, the citations list (plan 261101c).
  */
 const PINNED_CAPABLE: Partial<Record<Task, string>> = {
   "situate-triage": SITUATE_TRIAGE_MODEL,
   "digest-read": DIGEST_READ_MODEL,
+  bibliography: BIBLIOGRAPHY_MODEL,
 };
 
 afterEach(() => {
