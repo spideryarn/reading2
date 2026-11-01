@@ -23,12 +23,15 @@ import {
   MAX_TEXT_CHARS,
   type SentRow,
   defaultModel,
+  HIDDEN_CHECK_MIN_TIMEOUT_MS,
   hiddenCheckStream,
+  hiddenCheckTimeoutFor,
   outputTokensFor,
   prepareHiddenCheck,
   validateJudgments,
 } from "../src/referee-hidden-check.js";
 import { MAX_PATH_CHARS, MAX_PATHS_SENT, checkedInputs, grouped, ordered } from "../src/scan-groups.js";
+import { deadlineFor } from "../src/token-budget.js";
 
 const FENCE = "spya-fence-test";
 
@@ -263,6 +266,78 @@ describe("a run, over the wire", () => {
     expect(done && "judgments" in done ? done.judgments : []).toEqual([
       { row: checkedInputs(groups[1]!), verdict: "worth-a-look", reason: "White text." },
     ]);
+  });
+
+  /* The two limits on one stream, sized together (src/token-budget.ts §
+     `deadlineFor`): the ceiling grows with the rows sent, so the clock must
+     too. Plan 261101b; it was a flat 60 s, which a 100-row ceiling outruns.
+     `AbortSignal.timeout` is the only clock this run arms (the stall clock is
+     a `setTimeout`), so each one it arms is swapped for a controller the test
+     fires — proving the clock that governs the request, not merely one that
+     was made. */
+  async function runWithClocks(groups: ReturnType<typeof grouped>) {
+    const armed: { ms: number; fire: () => void }[] = [];
+    const spy = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
+      const c = new AbortController();
+      armed.push({ ms, fire: () => c.abort(new DOMException("timed out", "TimeoutError")) });
+      return c.signal;
+    });
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+        requestSignal = init.signal ?? undefined;
+        /* A stream that stays open, moving, until the request is aborted. */
+        const body = new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: "{" } }] })}\n\n`));
+            init.signal?.addEventListener("abort", () => c.error(init.signal?.reason));
+          },
+        });
+        return { ok: true, status: 200, headers: new Headers(), body } as unknown as Response;
+      }),
+    );
+    const run = (async () => {
+      for await (const _ of hiddenCheckStream({ power: "standard", groups })) void _;
+    })();
+    await vi.waitFor(() => expect(requestSignal).toBeDefined());
+    return { armed, run, requestSignal: requestSignal!, restore: () => spy.mockRestore() };
+  }
+
+  it("arms one deadline, long enough for the whole ceiling of the rows it sent, and that one ends the call", async () => {
+    /* More rows than the input budget admits, so "sent" and "scanned" differ. */
+    const groups = grouped(
+      ordered(Array.from({ length: 400 }, (_, i) => finding({ kind: "invisible-characters", where: `math#m${i}`, text: `x${i}`, detail: "U+2062" }))),
+    );
+    const { sent } = prepareHiddenCheck(groups);
+    expect(sent.length).toBeGreaterThan(100);
+    expect(sent.length).toBeLessThan(groups.length);
+    const { armed, run, requestSignal, restore } = await runWithClocks(groups);
+    try {
+      const maxTokens = bodies[0]?.max_tokens as number;
+      expect(maxTokens).toBe(outputTokensFor(sent.length));
+      expect(armed.map((a) => a.ms)).toEqual([hiddenCheckTimeoutFor(sent.length)]);
+      expect(armed[0]!.ms).toBeGreaterThanOrEqual(deadlineFor(maxTokens));
+      expect(requestSignal.aborted).toBe(false);
+      armed[0]!.fire();
+      await expect(run).rejects.toThrow(String(Math.round(armed[0]!.ms / 1000)));
+      expect(requestSignal.aborted).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("keeps a small call's deadline at the old 60 s floor", async () => {
+    const { armed, run, restore } = await runWithClocks(grouped([finding(), finding({ text: "two" })]));
+    try {
+      expect(deadlineFor(outputTokensFor(2))).toBeLessThan(HIDDEN_CHECK_MIN_TIMEOUT_MS);
+      expect(armed.map((a) => a.ms)).toEqual([HIDDEN_CHECK_MIN_TIMEOUT_MS]);
+      armed[0]!.fire();
+      await expect(run).rejects.toThrow();
+    } finally {
+      restore();
+    }
   });
 
   it("spends nothing on no rows", async () => {

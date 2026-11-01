@@ -77,6 +77,7 @@ import { validateAnthropicJsonSchema, withChatJsonSchema } from "./messages-stru
 import { type ModelPower, modelFor, powerFor } from "./models.js";
 import { plainWords } from "./plain-words.js";
 import { fenced, newFence } from "./prompt-fence.js";
+import { deadlineFor } from "./token-budget.js";
 /* One JSON object out of a reply, with the cut-off case told apart from the
    unreadable one — src/search.ts § `parseHits`, which Mirror uses too. */
 import { parseHits } from "./search.js";
@@ -96,8 +97,11 @@ export const HIDDEN_CHECK_JOB = "referee-hidden-check" as const;
 export const defaultModel = (articlePower: ModelPower): string =>
   modelFor(HIDDEN_CHECK_JOB, powerFor(HIDDEN_CHECK_JOB, articlePower));
 
-/** Mirror's clocks: a short input, a short answer, a person waiting. */
-export const HIDDEN_CHECK_TIMEOUT_MS = 60_000;
+/**
+ * **The stall clock: thirty seconds with nothing arriving is a hung stream.**
+ * Mirror's figure. The deadline is not a constant here; `deadlineFor` the
+ * ceiling, per call, below `outputTokensFor`.
+ */
 export const HIDDEN_CHECK_STALL_MS = 30_000;
 
 /**
@@ -109,9 +113,11 @@ export const MAX_TEXT_CHARS = 400;
 export const MAX_DETAIL_CHARS = 300;
 
 /**
- * **The whole input's budget, in characters of row text.** About 15k tokens,
- * under ten cents on Opus. Worst case is ~100 rows of ~2.2k characters each, so
- * this is what binds; arXiv's typical case is two or three rows.
+ * **The whole input's budget, in characters of row text.** Measured on
+ * 2026-11-01 at about 32k tokens and 25 cents on Opus when full: fenced rows
+ * tokenise at about one token per two characters (plan 261101b). It binds
+ * before the scan does — at ~500 characters a short row, ~116–118 rows;
+ * at ~2.2k characters, ~27 — and arXiv's typical case is two or three rows.
  */
 export const INPUT_BUDGET_CHARS = 60_000;
 
@@ -129,6 +135,30 @@ export const MAX_REASON_CHARS = 200;
 export const OUTPUT_FLOOR_TOKENS = 2048;
 export const OUTPUT_TOKENS_PER_ROW = 300;
 export const outputTokensFor = (rows: number): number => OUTPUT_FLOOR_TOKENS + OUTPUT_TOKENS_PER_ROW * rows;
+
+/**
+ * **The deadline: long enough for the whole ceiling to arrive**
+ * (src/token-budget.ts § `deadlineFor`), as Search and Criteria size theirs —
+ * per call here, because the ceiling depends on how many rows went.
+ *
+ * It was a flat 60 s until 2026-11-01, against a ceiling that reaches ~35,000
+ * tokens on the most rows one call carries (GPT Sol, plan 261010f F5). The
+ * worst case measured 41 s at 108 rows, two thirds of that clock with almost no
+ * thinking, and its whole allowance would need ~7½ minutes. So this fires only
+ * on a stream still moving at the end of an unusually long answer; a hung one
+ * is the stall clock's job. docs/plans/261101b-referee-hidden-text-deadline-from-its-ceiling.md.
+ */
+export const hiddenCheckTimeoutFor = (rows: number): number =>
+  Math.max(HIDDEN_CHECK_MIN_TIMEOUT_MS, deadlineFor(outputTokensFor(rows)));
+
+/**
+ * **Never shorter than the 60 s it used to be.** `deadlineFor` has no startup
+ * allowance and its rate was measured on Sonnet; two rows alone would get 35 s,
+ * and keep-alive comments reset the stall clock without any answer arriving.
+ * Nothing measured fails there — this keeps a small call where it was (GPT
+ * Sol, plan 261101b review, 1).
+ */
+export const HIDDEN_CHECK_MIN_TIMEOUT_MS = 60_000;
 
 /** The two verdicts, as the model must spell them. The words on screen are the panel's. */
 export const VERDICTS: readonly HiddenVerdict[] = ["probably-harmless", "worth-a-look"];
@@ -374,6 +404,7 @@ export interface HiddenCheckRequest {
   slug?: string;
   model?: string;
   signal?: AbortSignal;
+  /** Overrides `hiddenCheckTimeoutFor(rows sent)`. Tests and the timing spike only. */
   timeoutMs?: number;
   stallMs?: number;
 }
@@ -399,7 +430,7 @@ export async function* hiddenCheckStream({
   slug,
   model = defaultModel(power),
   signal,
-  timeoutMs = HIDDEN_CHECK_TIMEOUT_MS,
+  timeoutMs: timeoutOverride,
   stallMs = HIDDEN_CHECK_STALL_MS,
 }: HiddenCheckRequest): AsyncGenerator<HiddenCheckEvent> {
   const line = slug ? log("model").child({ slug }) : log("model");
@@ -411,6 +442,7 @@ export async function* hiddenCheckStream({
   }
 
   const { messages, sent, notSent, inputChars } = prepareHiddenCheck(groups);
+  const timeoutMs = timeoutOverride ?? hiddenCheckTimeoutFor(sent.length);
 
   const deadline = AbortSignal.timeout(timeoutMs);
   const stall = new AbortController();
