@@ -808,6 +808,36 @@ renamed its job — the article-level backstop, not the per-batch bound — and
 
 The two lines’ documented drift is in [261007l § Why they are two steps](../plans/261007g-structure-step-history.md#why-they-are-two-steps).
 
+### Stage 2: sub-sections where the author's own sub-headings divide a section <a id="subsections"></a>
+
+Since 2026-11-01 the whole-document call is **stage 1**, and a second, smaller pass runs on the tree
+it made: [`src/structure-subsections.ts`](../../src/structure-subsections.ts), plan
+[261101d](../plans/261101d-structure-fourth-level-staged-second-call.md), for Greg's report that
+Structure should go one level deeper (*"each of them have their own section"*). It is Greg's hunch
+in his own words — *"do the top level first, then the next level of granularity"* — and it exists
+because asking the one call for the extra level failed: two wordings each left one article with no
+sections at all ([261101b](../investigations/261101b-structure-fourth-level-two-wordings-measured.md)).
+
+- **It only adds.** Stage 1's call is byte for byte what it was; stage 2 gives a section children
+  (depth 3, each holding leaves) and touches nothing else, so it cannot take a section away.
+- **Code picks the sub-sections; the model only writes about them.** The author's *immediate*
+  sub-headings inside a section, measured from the section's own heading by number first ("2.4.1"
+  is one below "2.4", "2.4.5(a)" two) and tag second. A heading inside a section that is not below
+  its own — a sibling stage 1 swallowed, "2.5" inside 2.4 — makes the section ineligible: never
+  demoted. One scoped call per batch of sections writes a gist for each piece and a title for the
+  opening; the author's headings are the other titles, from code.
+- **A bad answer costs its own section**, which keeps stage 1's shape; a call that fails whole is
+  drawn once more. A throw is a `warn` and stage 1's tree (`subsectionPassFailed` on the run).
+- **Placed like the deepening wave below, for its reasons**: after stage 1's checkpoint, before
+  the labels, on the body tree, rebuilt by `buildTree`. Not run on the slices path, nor when the
+  deepening wave is switched on. Too near the step's deadline with a lease window left, it hands
+  the job back (`NeedsAnotherWindow`) before buying anything.
+- **On by default; `SPIDERYARN_SUBSECTIONS=0` turns it off** without a rebuild. Its counts are on
+  the step's log line as `subsectionPass`, at every value. No checkpoint: a retried step resumes
+  stage 1 free and buys stage 2 again, about a tenth of stage 1.
+- **Measured** on 19 documents: see the plan's results. The prose before the first sub-heading is
+  a sub-section of its own, titled by the model, as stage 1 already does for a part's opening.
+
 ### And, behind a switch that is off, a third pass <a id="deepening"></a>
 
 There is a **deepening wave** between the two passes above, and it does not run:
