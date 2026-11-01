@@ -1,0 +1,98 @@
+{
+  "10356-a-path:Bryson:1969": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "10356-a-path:Miller:2016": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "10356-a-path:Kahneman:2011": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "10356-a-path:Kingma:2013": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "arxiv-1706-0:#1": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "arxiv-1706-0:#2": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "arxiv-1706-0:#3": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "arxiv-1706-0:#4": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "arxiv-2308-0:Block:1995": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "arxiv-2308-0:Nagel:1974": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "arxiv-2308-0:Schwitzgebel:2016": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "arxiv-2308-0:Searle:1980": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "clark-chalme:McClelland:1986": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "clark-chalme:Clark:1989": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "clark-chalme:Kirsh:1995": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "clark-chalme:Hutchins:1995": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "jmlr-v15-sri:Nowlan:1992": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "jmlr-v15-sri:Xiong:2011": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "jmlr-v15-sri:Salakhutdinov:2008": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "jmlr-v15-sri:Livnat:2010": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "synesthesia-:#2": {
+    "A": "sonnet",
+    "B": "haiku"
+  },
+  "synesthesia-:#3": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "synesthesia-:#4": {
+    "A": "haiku",
+    "B": "sonnet"
+  },
+  "synesthesia-:#5": {
+    "A": "sonnet",
+    "B": "haiku"
+  }
+}

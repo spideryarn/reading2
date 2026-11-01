@@ -914,6 +914,39 @@ describe("the cap", () => {
     expect(over.rows.map((r) => r.title)).toContain(`Work ${MAX_CITATIONS}`);
   });
 
+  it("uses an explicit eval cap without changing the default production cap", () => {
+    const body = block("spya-body9x", "Smith (2019).");
+    const many = Array.from({ length: 4 }, (_, i) => ({
+      title: `Work ${i}`,
+      why: "a",
+      relevance: i / 10,
+      influence: null,
+      mentions: [{ block: body.id, quote: "Smith (2019)" }],
+    }));
+    const opts = {
+      slug: "test",
+      blocks: [body],
+      sourceHash: "test",
+      power: "standard" as const,
+      elapsedMs: 0,
+      inherit: null,
+      drops: emptyDrops(),
+      scores: noScoreDrops(),
+      cap: 2,
+    };
+
+    const evalBuild = buildBibliography({ works: many }, opts);
+    expect(evalBuild.citations).toHaveLength(2);
+    expect(opts.drops.overCap).toBe(2);
+
+    const { cap: _evalCap, ...productionOpts } = opts;
+    const productionBuild = buildBibliography(
+      { works: many },
+      { ...productionOpts, drops: emptyDrops(), scores: noScoreDrops() },
+    );
+    expect(productionBuild.citations).toHaveLength(4);
+  });
+
   it("folds duplicates BEFORE the cut, so copies of one work cannot crowd out another", () => {
     /* GPT Sol F13, 2026-09-12: the cut ran on the model's raw rows, before
        either fold, so eighty copies of one work took the whole allowance and

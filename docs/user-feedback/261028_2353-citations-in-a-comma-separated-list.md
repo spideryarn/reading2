@@ -1,7 +1,7 @@
 ---
 reports: spya-d5e2jk
 ending: shipped
-comment: A model lists them first, then code adds what it missed; here the call stopped at 70 of 243. Code now reads comma-separated lists too (214 of 243). More model calls for footnotes: question for you.
+comment: A model lists them first, then code adds what it missed; code now reads comma-separated lists (214 of 243). Eval, 1 Nov: Haiku at high effort finds far more, at a seventh of the cost, with slightly worse notes. Switch? Asked as q-ns76uq.
 ---
 # Citations in a comma-separated list
 
@@ -34,3 +34,12 @@ Plan, production reads, measurement and both GPT Sol reviews:
 production is re-made (principles.md § 1); *Find them again* on the article's Metadata page would
 give it code's fill (about $0.30) after the next deploy. Waiting for the 2026-11-01 OpenRouter reset:
 everything in `qi-mf9r5hjk`, which needs model calls from the box to build and measure.
+
+**2026-11-01, after Greg's reply** to q-ns76uq (`spya-yyvxm0`: run evals, try Haiku 5.5): measured
+in [investigation 261101a](../investigations/261101a-citations-recall-haiku-vs-sonnet-prompt-eval.md)
+on seven papers ($2.95). Haiku 5.5 at high effort, with a prompt that asks for every work and shows
+the shapes a citation takes, found more than today’s Sonnet on five papers and the same on two already complete, for about a
+seventh of the cost. Its one-line notes are a little worse in a blind read, and a long list takes 2–4
+minutes. Nothing shipped: that trade-off is Greg's, rewritten into
+[q-ns76uq](questions/q-ns76uq.md) (recommended: switch). No addenda (re-read 2026-11-01, before
+acting and before writing this).

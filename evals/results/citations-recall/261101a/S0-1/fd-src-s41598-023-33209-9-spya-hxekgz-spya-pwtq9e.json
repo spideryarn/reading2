@@ -1,0 +1,26 @@
+{
+  "slug": "fd-src-s41598-023-33209-9-spya-hxekgz-spya-pwtq9e",
+  "arm": "S0",
+  "run": 1,
+  "model": "anthropic/claude-sonnet-5.5",
+  "effort": "medium",
+  "prompt": "today",
+  "systemSha256": "450899eddefa8efaec99dfd5198c55d2987e3a6a01fd90422e21a7dc2f8f62da",
+  "maxTokens": 68400,
+  "at": "2026-11-01T01:43:47.925Z",
+  "referenceList": {
+    "entries": {},
+    "identifierEntries": {}
+  },
+  "elapsedMs": 5650,
+  "stopReason": "end_turn",
+  "usage": {
+    "input": 23063,
+    "output": 875,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "answer": "{\"capped\":false,\"works\":[{\"title\":\"Rearing on hind legs, environmental novelty, and the hippocampal formation\",\"authors\":\"Lever, Burton, O'Keefe\",\"year\":\"2006\",\"why\":\"Main review on rearing; its hypothesis that rearing marks novelty and ties to hippocampal learning is what the experiment tests.\",\"relevance\":0.95,\"influence\":0.5,\"reference\":{\"block\":\"spya-pcd3cc\",\"quote\":\"Lever, C., Burton, S. & Ο’Keefe, J. Rearing on hind legs\"},\"mentions\":[{\"block\":\"spya-uyy3vb\",\"quote\":\"Lever and colleagues15\"}],\"entry\":15},{\"title\":\"Hippocampal network dynamics during rearing episodes\",\"authors\":\"Barth, Domonkos, Fernandez-Ruiz, Freund, Varga\",\"year\":\"2018\",\"why\":\"Recordings showing the hippocampus switches to a distinct mode during rearing, suggesting it updates its map of the environment.\",\"relevance\":0.8,\"influence\":0.4,\"reference\":{\"block\":\"spya-pcd3cc\",\"quote\":\"Barth, A. M., Domonkos, A., Fernandez-Ruiz, A., Freund, T. F. & Varga, V.\"},\"mentions\":[{\"block\":\"spya-hf95nb\",\"quote\":\"Barth et al.24 suggested\"}],\"entry\":24},{\"title\":\"Self-directed exploration provides a Ncs1-dependent learning bonus\",\"authors\":\"Mun et al.\",\"year\":\"2015\",\"why\":\"Found that rearing frequency predicted memory in a hippocampus-dependent novel place task; the current study tests necessity directly.\",\"relevance\":0.7,\"influence\":0.3,\"reference\":{\"block\":\"spya-pcd3cc\",\"quote\":\"Mun, H. S. et al. Self-directed exploration provides\"},\"mentions\":[{\"block\":\"spya-t3p24n\",\"quote\":\"Mun et al.19 reported\"}],\"entry\":19},{\"title\":\"Novelty and anxiolytic drugs dissociate two components of hippocampal theta in behaving rats\",\"authors\":\"Wells et al.\",\"year\":\"2013\",\"why\":\"Showed novelty reduces theta speed modulation and increases rearing, linking hippocampal function and rearing.\",\"relevance\":0.6,\"influence\":0.3,\"reference\":{\"block\":\"spya-pcd3cc\",\"quote\":\"Wells, C. E. et al. Novelty and anxiolytic drugs\"},\"mentions\":[{\"block\":\"spya-t3p24n\",\"quote\":\"Wells et al. showed\"}],\"entry\":18}]}",
+  "dollars": 0.054876,
+  "calls": 1
+}
