@@ -617,7 +617,11 @@ a PDF has neither. Measured across six articles, a list is close to complete up 
 and falls to a quarter past 100
 ([investigation 261027a](../investigations/261027a-how-often-citations-are-missed.md); plan
 [261027b](../plans/261027b-citations-missed-in-the-text-filled-by-code.md); postmortem
-[261027a](../postmortems/261027a-citations-model-under-returned-with-no-witness.md)).
+[261027a](../postmortems/261027a-citations-model-under-returned-with-no-witness.md)). Whether
+another model or prompt does better — Haiku 5.5 at high effort, asked for every work, found far
+more for a seventh of the cost — is measured in
+[investigation 261101a](../investigations/261101a-citations-recall-haiku-vs-sonnet-prompt-eval.md)
+and waits on Greg as [q-ns76uq](../user-feedback/questions/q-ns76uq.md).
 
 **So code reads the body's author–year citations itself**
 ([`citation-author-year.ts`](../../src/citation-author-year.ts)): `(Craik, 1943)`, `(Bryson and
