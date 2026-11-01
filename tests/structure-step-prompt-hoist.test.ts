@@ -133,7 +133,7 @@ describe("hoisting the structure prompt's three values", () => {
    */
   it("mints one stable key for the toc/14 structure request", () => {
     expect(checkpointKey(canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard"))).toBe(
-      "556f053214f71e90",
+      "96cdf7f217a1ce41",
     );
   });
 });
