@@ -275,6 +275,72 @@ Greg picked "automatically" (reply `spya-b2ceuy`):
 
 Queued for the Overseer to pick up after 1 November: `overseer-queue.ts` item naming this plan.
 
+### Stage 2 as built (2026-11-01, `qi-negzd289`)
+
+The key had reset (`limit_remaining` $600). Greg said yes to the re-run on 2026-10-29 (reply
+`spya-yg89m9`): *"Yes, re-run this paper."*
+
+**One premise above was wrong, and it changes the opening-prose choice.** The recommended "opening
+prose stays a paragraph directly under the section" cannot be written in the model's answer: the
+answer gives each child a `start` only, and the first child's start is pinned to its parent's
+whatever it says (`src/start-ranges.ts`, the whole-document policy). So a section's sub-sections
+always tile the whole section. Making the bare-paragraph shape would need `buildTree` to split the
+first sub-section at its claimed heading after the fact — new machinery for a cosmetic gain. Taken
+instead, the simpler one, and the shape depth 2 already has (the paper's part 2 opens with the
+model's own "Aims of the Survey" section): **prose before the first sub-heading is a sub-section of
+its own, titled for what it says**. Cost: Structure numbers the author's 2.4.1 as .2 — but its
+numbers are already its own (`qi-ac2z88kt`). The eval counts how often the model folds the opening
+into the first sub-section instead.
+
+**The prompt, `toc/14`.** Only the STRUCTURE block moves; GISTS (whose "deeper than that" band
+already covers depth 3), QUESTIONS (depth 0–1 only, unchanged) and OUTPUT are byte-identical. The
+two bullets "Go 3 levels deep…" and "Do NOT emit leaf nodes… Stop at the section level." become:
+
+```
+- Go 3 levels deep: root (depth 0), chapters (depth 1), sections (depth 2).
+  A section may have ONE more level, sub-sections (depth 3), in two cases only:
+    - the author's own sub-headings divide it: headings deeper than the
+      heading the section starts with. Each of them starts a sub-section.
+    - it is longer than ~10 blocks and its topic clearly shifts inside it.
+      Then propose sub-sections at those shifts.
+  Never divide a section of fewer than 10 blocks at a join you chose
+  yourself. A divided section has at least 2 sub-sections. Most sections
+  have none: a tree where every section is divided is wrong.
+- Which level an author's heading starts: a heading at the same level as
+  the headings that start the neighbouring sections starts a section of its
+  own, never a sub-section, and is never left inside another section. A
+  deeper heading starts a sub-section. The author's headings outrank the
+  5-9 target and the 10-block rule. The 5-9 target does not apply to
+  sub-sections: make as many as the headings or the shifts give.
+- Sub-sections cover their whole section, from its first block. Where a
+  section has prose of its own before its first sub-heading, that prose is
+  its own first sub-section, titled for what it says.
+- Do NOT emit leaf nodes for individual blocks. Stop at the section level,
+  or at the sub-section level where there is one.
+```
+
+**The schema**: `depth2Schema` gains optional `children` of a `depth3Schema` (title, gist, start,
+sourceHeading; no question, no children) — four levels unrolled, as the provider refuses recursion.
+`minItems: 2` is not in the provider's subset, so "at least 2" is the prompt's; a lone sub-section
+that restates its section is already spliced away by `collapseRestatedRungs`.
+
+**On the run**: `src/structure-depth.ts` counts `subsections`, `deepenedSections` and
+`swallowedHeadings` on every finished tree, and the structure step logs them beside
+`droppedHeadings`, so a prompt that stops making the level, or swallows headings, shows in the
+step's log and not only in an eval. The headings fallback (`buildBoundedHeadingTree`) is untouched
+and stays three levels. The long-document slices path sends the same `wholeDocumentRequest` per
+slice, so it gets the level too; nothing there reads depth below 2 (`seamsHeld` reads depths 1–2).
+
+**The measurement**: `evals/structure-fourth-level/`, production's own request, parser and builder
+with its one re-ask, on 14 of Greg's own production articles (blocks read once, read-only, into
+gitignored `data/`): the report's paper, the Rovelli book (1,123 blocks), six whose sections the
+author divides with sub-headings and six with none. Arms separated in time: `before-1`, `before-2`
+on 087a9b260 (`toc/13`), `after-1`, `after-2` on the prompt commit. Per article: cost, latency,
+output tokens, sub-sections, heading-driven vs invented splits, invented splits in sections under 10
+blocks (target 0), sections the author divides that the model left whole, openings own vs folded,
+swallowed headings before and after. **Ship rule as written**: the median article's cost and time
+each grow under ~20%, judged against the spread between `before-1` and `before-2`.
+
 ## Not in this change
 
 - **A third column** — unless Greg chooses it.

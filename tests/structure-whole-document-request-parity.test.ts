@@ -57,6 +57,9 @@
  * **RE-PINNED 2026-10-03 for `toc/12`**: the paperwork list names the title
  * block and the reference list, and Structure's abstract paragraph follows it
  * (Greg, spya-abs6bj; plan 261003c).
+ * **RE-PINNED 2026-11-01 for `toc/14`**: a section may have sub-sections where
+ * the author's next heading level divides it, and the prompt says which level a
+ * heading starts (Greg, spya-pn7gvw; plan 261029a § Stage 2).
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
  *
  * **SPLIT 2026-10-04**: until then the production expectation was the toc/10
@@ -130,7 +133,28 @@ anywhere.
   boundaries inside it at genuine topic shifts, and title those nodes.
 - Aim for 5-9 children per node so each level is an even stride.
 - Go 3 levels deep: root (depth 0), chapters (depth 1), sections (depth 2).
-- Do NOT emit leaf nodes for individual blocks. Stop at the section level.
+  A section may have ONE more level, sub-sections (depth 3), in two cases only:
+    - the author divides it with headings one level down. Each of those
+      headings starts a sub-section.
+    - it has at least 10 blocks and holds several clearly separate topics.
+      Then propose sub-sections where each one begins. Length alone is not
+      enough: the ~9-block rule above is for chapters and sections, not for
+      sub-sections.
+  A divided section has at least 2 sub-sections. Most sections have none.
+- Work out the author's levels from the headings' numbering and neighbours
+  as well as their <hN> tags, which are sometimes wrong. A heading at the
+  level of the headings that start the neighbouring sections starts a
+  section of its own, never a sub-section, and is never left inside another
+  section. A heading one level below starts a sub-section. Headings deeper
+  still stay inside their sub-section: the tree stops at depth 3, so this is
+  the one place a heading does not begin a node. The 5-9 target does not
+  apply to sub-sections: make as many as the headings or topics give.
+- Sub-sections cover their whole section, from its first block. Where a
+  section has prose of its own before its first sub-heading, that prose is
+  its own first sub-section: give it a new title for what it says and no
+  "sourceHeading". Do not repeat the section's heading.
+- Do NOT emit leaf nodes for individual blocks. Stop at the section level,
+  or at the sub-section level where there is one.
 
 TITLES (internal nodes)
 

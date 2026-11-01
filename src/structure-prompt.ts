@@ -117,7 +117,11 @@ import type { Block } from "./types.js";
 /* **`toc/13`, 2026-10-20**: each child's `start` is the block's number, `[582]`,
    and the schema types it as an integer; the id is no longer copied. Existing
    trees stay as they are. docs/plans/261020aa-structure-answers-the-block-number-not-its-id.md. */
-export const PROMPT_VERSION = "toc/13";
+/* **`toc/14`, 2026-11-01**: a section may have sub-sections (depth 3) where the
+   author's sub-headings divide it or a long section clearly shifts topic, and a
+   heading at its neighbours' level starts a section of its own. Existing trees
+   stay as they are. docs/plans/261029a-structure-one-level-deeper.md § Stage 2. */
+export const PROMPT_VERSION = "toc/14";
 
 /**
  * How hard the model thinks before it starts writing.

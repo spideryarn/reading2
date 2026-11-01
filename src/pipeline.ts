@@ -4056,6 +4056,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              block, so it is its own figure rather than a repair.
              src/structure.ts § `collapseRestatedRungs`. */
           collapsedRungs: run.collapsedRungs,
+          /* **Sub-sections made, and author headings swallowed.** The fourth
+             level is optional, so its absence and a prompt that stopped making
+             it look the same on screen. src/structure-depth.ts. */
+          subsections: run.subsections,
+          deepenedSections: run.deepenedSections,
+          swallowedHeadings: run.swallowedHeadings,
           /* **`labelsDropped`, `labelBatches`, `labelsResumed` and `labelCalls`
              were here until 2026-09-06** and are on the `labels` step's own log
              line now. Not dropped: a paragraph the model would not label leaves

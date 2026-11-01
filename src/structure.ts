@@ -85,6 +85,7 @@ import { runSlices, seamsHeld, type SliceDeps, slicesDeadline, type SlicesFailur
 import { plainWords } from "./plain-words.js";
 import { type LeaseWindow, NeedsAnotherWindow } from "./another-window.js";
 import { paperwork } from "./paperwork.js";
+import { depthCounts } from "./structure-depth.js";
 
 /**
  * **The three values that moved to [`structure-prompt.ts`](structure-prompt.ts),
@@ -257,16 +258,53 @@ const TOC11_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "..."
              "start": <firstBlockNumber>, "children": [ ... ]}
           ]}}`;
 
+/* **`toc/14`, 2026-11-01: an optional fourth level, and which level a heading
+   starts.** Until now a section could not be divided, so a section the author
+   divides with sub-headings (the paper's "2.4 Other Theories", six h4s) was one
+   row, and with nowhere to put them the model also left same-level headings
+   inside a neighbour ("2.5" inside "2.4"). Only these two bullets move.
+   docs/plans/261029a-structure-one-level-deeper.md § Stage 2 as built. */
+const TOC13_DEPTH = `- Go 3 levels deep: root (depth 0), chapters (depth 1), sections (depth 2).
+- Do NOT emit leaf nodes for individual blocks. Stop at the section level.`;
+
+const TOC14_DEPTH = `- Go 3 levels deep: root (depth 0), chapters (depth 1), sections (depth 2).
+  A section may have ONE more level, sub-sections (depth 3), in two cases only:
+    - the author divides it with headings one level down. Each of those
+      headings starts a sub-section.
+    - it has at least 10 blocks and holds several clearly separate topics.
+      Then propose sub-sections where each one begins. Length alone is not
+      enough: the ~9-block rule above is for chapters and sections, not for
+      sub-sections.
+  A divided section has at least 2 sub-sections. Most sections have none.
+- Work out the author's levels from the headings' numbering and neighbours
+  as well as their <hN> tags, which are sometimes wrong. A heading at the
+  level of the headings that start the neighbouring sections starts a
+  section of its own, never a sub-section, and is never left inside another
+  section. A heading one level below starts a sub-section. Headings deeper
+  still stay inside their sub-section: the tree stops at depth 3, so this is
+  the one place a heading does not begin a node. The 5-9 target does not
+  apply to sub-sections: make as many as the headings or topics give.
+- Sub-sections cover their whole section, from its first block. Where a
+  section has prose of its own before its first sub-heading, that prose is
+  its own first sub-section: give it a new title for what it says and no
+  "sourceHeading". Do not repeat the section's heading.
+- Do NOT emit leaf nodes for individual blocks. Stop at the section level,
+  or at the sub-section level where there is one.`;
+
 function replacePromptBlock(prompt: string, before: string, after: string): string {
-  if (!prompt.includes(before)) throw new Error("The toc/11 prompt patch no longer matches toc/10.");
+  if (!prompt.includes(before)) throw new Error("A structure prompt patch no longer matches the prompt it patches.");
   return prompt.replace(before, after);
 }
 
 /** Every block outside STRUCTURE and OUTPUT is inherited byte-for-byte from toc/10. */
 export const SYSTEM = replacePromptBlock(
-  replacePromptBlock(STRUCTURE_BASE_SYSTEM, TOC10_STRUCTURE, TOC11_STRUCTURE),
-  TOC10_OUTPUT,
-  TOC11_OUTPUT,
+  replacePromptBlock(
+    replacePromptBlock(STRUCTURE_BASE_SYSTEM, TOC10_STRUCTURE, TOC11_STRUCTURE),
+    TOC10_OUTPUT,
+    TOC11_OUTPUT,
+  ),
+  TOC13_DEPTH,
+  TOC14_DEPTH,
 );
 
 const stringSchema = { type: "string" } as const;
@@ -280,12 +318,29 @@ const objectSchema = (
   required: readonly string[],
 ) => ({ type: "object", properties, required, additionalProperties: false }) as const;
 
+/* A sub-section, `toc/14`: a section's shape, and nothing under it. */
+const depth3Schema = objectSchema(
+  {
+    title: stringSchema,
+    gist: stringSchema,
+    start: blockNumberSchema,
+    sourceHeading: stringSchema,
+  },
+  ["title", "gist", "start"],
+);
+
 const depth2Schema = objectSchema(
   {
     title: stringSchema,
     gist: stringSchema,
     start: blockNumberSchema,
     sourceHeading: stringSchema,
+    /* Optional, as depth 1's are: most sections have none. Absent means "not
+       divided"; present is non-empty, which the provider's subset can say
+       (GPT Sol, plan review). "At least 2" is the prompt's, since the subset
+       has no `minItems: 2`; a lone sub-section covering its whole section is
+       spliced away by `collapseRestatedRungs`. */
+    children: nonEmptyArrayOf(depth3Schema),
   },
   ["title", "gist", "start"],
 );
@@ -307,7 +362,7 @@ const depth1Schema = objectSchema(
   ["title", "gist", "question", "start"],
 );
 
-/** Three levels, unrolled: root → depth 1 → depth 2, exactly as SYSTEM asks. */
+/** Four levels, unrolled: root → depth 1 → depth 2 → optional depth 3, exactly as SYSTEM asks. */
 export const STRUCTURE_OUTPUT_SCHEMA = objectSchema(
   {
     root: objectSchema(
@@ -2411,6 +2466,16 @@ export interface StructureRun {
    * distinction is arithmetic rather than tidiness.
    */
   collapsedRungs: number;
+  /**
+   * **How deep the tree went, and whether it kept the author's headings** —
+   * sub-sections (depth 3, `toc/14`), the sections holding them, and author
+   * headings left inside a node that begins with a heading as coarse as theirs.
+   * src/structure-depth.ts. Reported at 0 like the others: a prompt that stopped
+   * making the level, or went back to swallowing headings, shows here first.
+   */
+  subsections: number;
+  deepenedSections: number;
+  swallowedHeadings: number;
   /* **`labelled` was here and went with the label pass on 2026-09-06.** It
      counted the tree's nodes carrying a `navLabel`, and after the split that
      number is **always zero**: `buildTree` in this file sets `navLabel` from the
@@ -3562,6 +3627,7 @@ function finishStructureRun(
     startsDropped: built.unresolvedStarts.length,
     droppedHeadings: built.droppedHeadings.length,
     collapsedRungs: built.collapsedRungs.length,
+    ...depthCounts(parts.tree, parts.blocks.blocks),
     droppedQuestions: built.droppedQuestions.length,
     internal: Object.values(parts.tree.nodes).filter((n) => n.children.length > 0).length,
     wholeDocumentResumed,

@@ -36,7 +36,8 @@ const digest = (params: ReturnType<typeof wholeDocumentRequest>["params"]): stri
 
 describe("the structure request of an article that fits one answer", () => {
   it("is byte-identical to what it was before the slices path", () => {
-    expect(digest(wholeDocumentRequest(BLOCKS).params)).toBe("fcd8169041451397");
+    /* Re-pinned 2026-11-01 for toc/14 (plan 261029a § Stage 2): the prompt moved, the slices path did not. */
+    expect(digest(wholeDocumentRequest(BLOCKS).params)).toBe("42cea9ee0cfb4ab9");
   });
 
   it("and the note changes the request it is added to", () => {

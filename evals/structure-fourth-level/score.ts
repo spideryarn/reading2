@@ -4,8 +4,13 @@
  * test (tests/structure-fourth-level-eval.test.ts) can hold them to hand-made
  * trees before any paid run is read through them.
  *
- * The run-level counts (`subsections`, `deepenedSections`, `swallowedHeadings`)
- * are production's own, src/structure-depth.ts, not a copy.
+ * **Tag-based, so diagnostics, not gates** (GPT Sol, plan review, 3): the
+ * extractor's `<hN>` levels are sometimes wrong — the report's paper tags
+ * "2.4.5(a)" as h2 inside an h3 section — so a count over tags can be wrong in
+ * both directions on such an article. The one hand-annotated gate is the
+ * paper's, in report.ts. The run-level counts (`subsections`,
+ * `deepenedSections`, `swallowedHeadings`) are production's own,
+ * src/structure-depth.ts, not a copy.
  */
 import { headingLevel } from "../../src/section-ranges.js";
 import { depthCounts, SUBSECTION_DEPTH, type DepthCounts } from "../../src/structure-depth.js";
@@ -23,12 +28,24 @@ export interface TreeScore extends DepthCounts {
   inventedSplits: number;
   /** Invented splits inside a section of fewer than `SHORT_SECTION_BLOCKS` blocks. Target: 0. */
   shortInventedSplits: number;
-  /** Sections holding two or more author headings deeper than their own first heading, not divided. */
-  undividedHeadedSections: number;
-  /** Sections the author's sub-headings divide (two or more deeper headings inside). */
+  /**
+   * Sub-sections that start at a heading as coarse as the one their section
+   * starts with: a section-level heading pushed down a level.
+   */
+  demotedHeadings: number;
+  /**
+   * The author's next level down inside each section (the shallowest heading
+   * level deeper than the section's own): how many such headings there are, and
+   * how many start a sub-section.
+   */
+  subheadings: { expected: number; hit: number };
+  /**
+   * Sections the author's next level divides into at least two sub-sections:
+   * two such headings, or one with prose of the section's own before it.
+   */
   headedSections: number;
-  /** Deepened sections with only one sub-section. */
-  singleSubsection: number;
+  /** Of those, the ones left undivided. */
+  undividedHeadedSections: number;
   /**
    * How a deepened section's first sub-section treats the prose before the
    * author's first sub-heading: `own` — the opening is a sub-section of its own
@@ -45,15 +62,20 @@ function rangeOf(node: TreeNode, index: Map<string, number>): [number, number] {
   return [lo, hi];
 }
 
-/** Author headings strictly inside [lo, hi] that are deeper than the heading at lo (or any heading, if lo is none). */
-function deeperHeadingsInside(blocks: readonly Block[], lo: number, hi: number): number[] {
+/**
+ * The author's next level down strictly inside [lo, hi]: headings at the
+ * shallowest level deeper than the heading at lo (any level, if lo is none).
+ */
+function nextLevelInside(blocks: readonly Block[], lo: number, hi: number): number[] {
   const own = headingLevel(blocks[lo]!);
-  const out: number[] = [];
+  const deeper: { at: number; level: number }[] = [];
   for (let i = lo + 1; i <= hi; i++) {
     const level = headingLevel(blocks[i]!);
-    if (level !== null && (own === null || level > own)) out.push(i);
+    if (level !== null && (own === null || level > own)) deeper.push({ at: i, level });
   }
-  return out;
+  if (deeper.length === 0) return [];
+  const next = Math.min(...deeper.map((d) => d.level));
+  return deeper.filter((d) => d.level === next).map((d) => d.at);
 }
 
 export function scoreTree(tree: Tree, body: readonly Block[]): TreeScore {
@@ -69,9 +91,10 @@ export function scoreTree(tree: Tree, body: readonly Block[]): TreeScore {
     headingSplits: 0,
     inventedSplits: 0,
     shortInventedSplits: 0,
-    undividedHeadedSections: 0,
+    demotedHeadings: 0,
+    subheadings: { expected: 0, hit: 0 },
     headedSections: 0,
-    singleSubsection: 0,
+    undividedHeadedSections: 0,
     openings: { own: 0, folded: 0, none: 0 },
   };
 
@@ -80,32 +103,41 @@ export function scoreTree(tree: Tree, body: readonly Block[]): TreeScore {
 
   function scoreSection(section: TreeNode): void {
     const [lo, hi] = rangeOf(section, index);
-    const deeper = deeperHeadingsInside(body, lo, hi);
+    const own = headingLevel(body[lo]!);
+    const next = nextLevelInside(body, lo, hi);
     const subs = internalChildren(section);
-    if (deeper.length >= 2) {
+    const subStarts = new Set(subs.map((s) => rangeOf(s, index)[0]));
+    /* Prose before the first sub-heading: anything between the section's own
+       first block (its heading, when it has one) and that sub-heading. */
+    const openingStart = own !== null ? lo + 1 : lo;
+    const firstNext = next[0];
+    const opening = firstNext !== undefined && firstNext > openingStart;
+
+    score.subheadings.expected += next.length;
+    score.subheadings.hit += next.filter((at) => subStarts.has(at)).length;
+    if (next.length >= 2 || (next.length === 1 && opening)) {
       score.headedSections += 1;
       if (subs.length === 0) score.undividedHeadedSections += 1;
     }
     if (subs.length === 0) return;
-    if (subs.length === 1) score.singleSubsection += 1;
+
     const size = hi - lo + 1;
     subs.forEach((sub, k) => {
-      if (k === 0) return;
       const [start] = rangeOf(sub, index);
-      if (headingLevel(body[start]!) !== null) score.headingSplits += 1;
+      const level = headingLevel(body[start]!);
+      if (k > 0 && own !== null && level !== null && level <= own) score.demotedHeadings += 1;
+      if (k === 0) return;
+      if (level !== null) score.headingSplits += 1;
       else {
         score.inventedSplits += 1;
         if (size < SHORT_SECTION_BLOCKS) score.shortInventedSplits += 1;
       }
     });
-    const firstDeeper = deeper[0];
+
+    if (firstNext === undefined) return; // divided at invented joins only: no author opening to judge
     const [, firstHi] = rangeOf(subs[0]!, index);
-    /* Prose before the first sub-heading: anything between the section's own
-       first block (its heading, when it has one) and that sub-heading. */
-    const openingStart = headingLevel(body[lo]!) !== null ? lo + 1 : lo;
-    if (firstDeeper === undefined) return; // divided at invented joins only: no author opening to judge
-    if (firstDeeper <= openingStart) score.openings.none += 1;
-    else if (firstDeeper <= firstHi) score.openings.folded += 1;
+    if (!opening) score.openings.none += 1;
+    else if (firstNext <= firstHi) score.openings.folded += 1;
     else score.openings.own += 1;
   }
 }

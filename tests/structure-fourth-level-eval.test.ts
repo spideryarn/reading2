@@ -83,11 +83,22 @@ describe("the fourth level's measures", () => {
       headingSplits: 2,
       inventedSplits: 1,
       shortInventedSplits: 1,
+      demotedHeadings: 0,
+      subheadings: { expected: 4, hit: 2 },
       headedSections: 2,
       undividedHeadedSections: 1,
-      singleSubsection: 0,
       openings: { own: 1, folded: 0, none: 0 },
     });
+  });
+
+  it("finds a section-level heading pushed down to start a sub-section", () => {
+    const demoting = answer();
+    const c = demoting.children![1]!.children![0]!;
+    c.children = [node("C first", at("C"), at("D") - 1), node("D as a sub-section", at("D"), at("E") - 1)];
+    const tree = buildTree(demoting, {}, blocks, "t");
+    expect(scoreTree(tree, blocks).demotedHeadings).toBe(1);
+    /* And production's swallowed count does not see it: D starts a node. */
+    expect(depthCounts(tree, blocks).swallowedHeadings).toBe(0);
   });
 
   it("tells an opening folded into the first sub-section from one of its own", () => {
