@@ -5,6 +5,8 @@
  * `buildTree` from hand-written answers over headed blocks.
  */
 import { describe, expect, it } from "vitest";
+import { DOCS } from "../evals/structure-fourth-level/corpus.js";
+import { type RunFile, validateReportArm } from "../evals/structure-fourth-level/report.js";
 import { scoreTree } from "../evals/structure-fourth-level/score.js";
 import { buildTree, type ModelNode } from "../src/structure.js";
 import { depthCounts } from "../src/structure-depth.js";
@@ -105,5 +107,32 @@ describe("the fourth level's measures", () => {
     const s = scoreTree(buildTree(answer(true), {}, blocks, "t"), blocks);
     expect(s.openings).toEqual({ own: 0, folded: 1, none: 0 });
     expect(s.headingSplits).toBe(1);
+  });
+});
+
+describe("the fourth-level report's evidence", () => {
+  const run = (label: string, systemSha256 = "same"): RunFile => ({
+    label,
+    srcDirty: false,
+    promptVersion: "toc/test",
+    systemSha256,
+    results: DOCS.map(({ slug }) => ({
+      slug,
+      ok: true,
+      calls: [{ ms: 1, usd: 0.01, outputTokens: 1, outcome: "ok" }],
+    })),
+  });
+
+  it("refuses an arm that is not two complete runs of one prompt", () => {
+    expect(() => validateReportArm("after", [run("after-1")])).toThrow(/exactly two/);
+    expect(() => validateReportArm("after", [run("after-1"), run("after-2", "different")])).toThrow(/prompt/);
+
+    const incomplete = run("after-2");
+    incomplete.results.pop();
+    expect(() => validateReportArm("after", [run("after-1"), incomplete])).toThrow(/missing/);
+
+    const callless = run("after-2");
+    callless.results[0]!.calls = [];
+    expect(() => validateReportArm("after", [run("after-1"), callless])).toThrow(/no calls/);
   });
 });

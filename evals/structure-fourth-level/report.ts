@@ -24,6 +24,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { isMain } from "../../src/is-main.js";
 import { buildTree, parseWholeDocumentAnswer } from "../../src/structure.js";
 import { splitBlocks } from "../../src/supplement.js";
 import type { Block, Tree, TreeNode } from "../../src/types.js";
@@ -38,8 +39,8 @@ const PAPER = "arxiv-2308-08708-spya-xax6v4";
 const BOOK = "rovelli-order-of-time-7098a4fca8e95ec987b96f1c97-spya-r26sug";
 const SUBHEADED = new Set(DOCS.slice(2, 8).map((d) => d.slug));
 
-interface Call { ms: number; usd: number; outputTokens: number | null; outcome: string }
-interface Result {
+export interface Call { ms: number; usd: number; outputTokens: number | null; outcome: string }
+export interface Result {
   slug: string;
   ok: boolean;
   calls: Call[];
@@ -47,14 +48,56 @@ interface Result {
   droppedChildren?: number;
   collapsedRungs?: number;
 }
-interface RunFile { label: string; promptVersion: string; systemSha256: string; results: Result[] }
+export interface RunFile {
+  label: string;
+  srcDirty: boolean;
+  promptVersion: string;
+  systemSha256: string;
+  results: Result[];
+}
+
+/** Refuse an incomplete or mixed arm before its absences can become zeroes. */
+export function validateReportArm(name: string, runs: RunFile[]): void {
+  if (runs.length !== 2) throw new Error(`${name} must contain exactly two runs; got ${runs.length}`);
+  if (new Set(runs.map((r) => r.label)).size !== runs.length) throw new Error(`${name} repeats a run label`);
+  if (runs.some((r) => r.srcDirty)) throw new Error(`${name} contains a run made with dirty src`);
+
+  const prompts = new Set(runs.map((r) => `${r.promptVersion}\0${r.systemSha256}`));
+  if (prompts.size !== 1) throw new Error(`${name} mixes prompt versions or system hashes`);
+
+  const expected = new Set(DOCS.map((d) => d.slug));
+  for (const run of runs) validateRunCorpus(run, expected);
+}
+
+function validateRunCorpus(run: RunFile, expected: ReadonlySet<string>): void {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  const unexpected = new Set<string>();
+  const callless = new Set<string>();
+  for (const result of run.results) {
+    if (seen.has(result.slug)) duplicates.add(result.slug);
+    seen.add(result.slug);
+    if (!expected.has(result.slug)) unexpected.add(result.slug);
+    if (result.ok && result.calls.length === 0) callless.add(result.slug);
+  }
+  const missing = [...expected].filter((slug) => !seen.has(slug));
+  const faults = [
+    ...(missing.length ? [`missing ${missing.join(", ")}`] : []),
+    ...(duplicates.size ? [`duplicates ${[...duplicates].join(", ")}`] : []),
+    ...(unexpected.size ? [`unexpected ${[...unexpected].join(", ")}`] : []),
+    ...(callless.size ? [`successful results with no calls ${[...callless].join(", ")}`] : []),
+  ];
+  if (faults.length) throw new Error(`${run.label} has the wrong corpus: ${faults.join("; ")}`);
+}
 
 /** A run's results, re-scored from its rebuilt trees by today's scorer, so both arms are counted alike. */
 function load(label: string): RunFile {
   const run = JSON.parse(readFileSync(path.join(RESULTS, `${label}.json`), "utf8")) as RunFile;
+  if (run.label !== label) throw new Error(`${label}.json says it is ${run.label}`);
   for (const r of run.results) {
     const built = r.ok ? treeOf(label, r.slug) : null;
     if (built) r.score = scoreTree(built.tree, built.body) as unknown as NonNullable<Result["score"]>;
+    else if (r.ok) throw new Error(`${label}/${r.slug} says ok but has no saved raw answer`);
     else delete r.score;
   }
   return run;
@@ -121,6 +164,8 @@ function main(): void {
   const [beforeArg, afterArg] = process.argv.slice(2);
   if (!beforeArg || !afterArg) throw new Error("usage: report.ts before-1,before-2 after-1,after-2");
   const arms = { before: beforeArg.split(",").map(load), after: afterArg.split(",").map(load) };
+  validateReportArm("before", arms.before);
+  validateReportArm("after", arms.after);
   for (const [arm, runs] of Object.entries(arms)) {
     console.log(`${arm}: ${runs.map((r) => `${r.label} ${r.promptVersion} ${r.systemSha256}`).join(" · ")}`);
   }
@@ -235,4 +280,4 @@ function main(): void {
   console.log(`\nverdict: ${verdict.length === 0 ? "SHIP" : `DO NOT SHIP — ${verdict.join("; ")}`}`);
 }
 
-main();
+if (isMain(import.meta.url)) main();

@@ -19,13 +19,13 @@ Details
 
 What you asked (29 Oct, from Structure on the consciousness paper): for Structure to go one level deeper, e.g. each theory in "2.4 Other Theories" as its own row. You chose "automatically" and the layout where column B opens the section you are in. The reading-view half of that is built and live. It draws sub-sections whenever an article's outline has them, but no article's outline has them yet. You also said yes to re-running your paper once the prompt changed. That re-run waits on this.
 
-What I did today. The AI key had reset. I built a test that runs the real structure step on 14 of your own articles: your paper, a book (Rovelli), six papers whose sections the author divides with sub-headings, and six without. Each version ran twice, $10 in all. The test checks quality before cost. Your paper must come out right: 2.4.1 to 2.4.6 under 2.4, 2.5 beside 2.4, and the mis-tagged 2.4.5(a)-(c) not promoted. No short section may be split at a made-up join. No article may lose its sections.
+What I did today. The AI key had reset. I built a test that runs the real structure step on 14 of your own articles: your paper, a book (Rovelli), six papers whose sections the author divides with sub-headings, and six without. Each version ran twice, $10 in all. The test checks quality before cost. Your paper must come out right: 2.4.1 to 2.4.6 under 2.4, 2.5 beside 2.4, and the mis-tagged 2.4.5(a)-(c) not promoted. No short section may be split at a made-up join. No article may be left with fewer than half as many sections in both runs.
 
 What came back.
 - Cost and time are fine: the median article changed by about +3% in cost and +1% in time.
 - On your paper the second wording got everything right, twice. That is what you would see.
 - But wording 1 turned one paper's outline into ten bare parts with no sections, in both runs. Wording 2 fixed that paper and did the same to another one, whose minor headings are unnumbered. A few articles with only top-level headings also came out with noticeably fewer sections.
-- Only about a quarter to a fifth of the authors' sub-headings became sub-sections overall.
+- About one in six of the authors' sub-headings became sub-sections overall: 43 of 340 with wording 1, and 61 of 266 with wording 2.
 
 Your paper, today and with wording 2:
 
