@@ -1,0 +1,2103 @@
+{
+ "label": "staged-1c",
+ "at": "2026-11-01T16:09:16.989Z",
+ "commit": "553803531",
+ "srcDirty": false,
+ "promptVersion": "toc/13",
+ "systemSha256": "634fd08ec3e5f967",
+ "subsectionsPromptVersion": "subs/1",
+ "subsectionsSha256": "6db29bb3af38d295",
+ "spentUsd": 0.8217,
+ "results": [
+  {
+   "slug": "arxiv-2308-08708-spya-w598t3",
+   "blocks": 667,
+   "body": 667,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:30:55.031Z",
+      "endedAt": "2026-11-01T15:31:14.394Z",
+      "ms": 19363,
+      "networkAttempts": 1,
+      "inputTokens": 97867,
+      "outputTokens": 2864,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.224374,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 19363,
+    "usd": 0.224374
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 3,
+    "sections": 27,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 24,
+     "hit": 0
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 7,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 9,
+   "stage2": {
+    "ms": 10229,
+    "usd": 0.132548,
+    "calls": 3,
+    "stats": {
+     "eligible": 7,
+     "made": 7,
+     "failedSections": 0,
+     "added": 26,
+     "calls": 3,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 52974,
+      "outputTokens": 2660,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 26,
+    "deepenedSections": 7,
+    "swallowedHeadings": 3,
+    "sections": 27,
+    "headingSplits": 19,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 24,
+     "hit": 19
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 2,
+     "folded": 0,
+     "none": 5
+    }
+   },
+   "stagedLabelBatches": 9,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "arxiv-2602-11988-spya-fupe7p",
+   "blocks": 241,
+   "body": 241,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:30:55.071Z",
+      "endedAt": "2026-11-01T15:31:17.693Z",
+      "ms": 22622,
+      "networkAttempts": 1,
+      "inputTokens": 30913,
+      "outputTokens": 3057,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.092396,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 22622,
+    "usd": 0.092396
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 1,
+    "sections": 27,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 29,
+     "hit": 0
+    },
+    "headedSections": 13,
+    "undividedHeadedSections": 13,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 4,
+   "stage2": {
+    "ms": 15186,
+    "usd": 0.058074,
+    "calls": 2,
+    "stats": {
+     "eligible": 7,
+     "made": 7,
+     "failedSections": 0,
+     "added": 30,
+     "calls": 2,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 15697,
+      "outputTokens": 2668,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 4,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 1,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 30,
+    "deepenedSections": 7,
+    "swallowedHeadings": 1,
+    "sections": 27,
+    "headingSplits": 23,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 29,
+     "hit": 18
+    },
+    "headedSections": 13,
+    "undividedHeadedSections": 6,
+    "openings": {
+     "own": 4,
+     "folded": 3,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 4,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+   "blocks": 244,
+   "body": 244,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:30:55.074Z",
+      "endedAt": "2026-11-01T15:31:04.854Z",
+      "ms": 9780,
+      "networkAttempts": 1,
+      "inputTokens": 23607,
+      "outputTokens": 1105,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.058264,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 9780,
+    "usd": 0.058264
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 0,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 4,
+   "stage2": {
+    "ms": 43,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 0,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 4,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "noema-mythology-of-conscious-ai",
+   "blocks": 141,
+   "body": 141,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:30:55.076Z",
+      "endedAt": "2026-11-01T15:31:12.472Z",
+      "ms": 17396,
+      "networkAttempts": 1,
+      "inputTokens": 22958,
+      "outputTokens": 2246,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.068376,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 17396,
+    "usd": 0.068376
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 18,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 2,
+   "stage2": {
+    "ms": 50,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 18,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 2,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+   "blocks": 172,
+   "body": 172,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:31:04.871Z",
+      "endedAt": "2026-11-01T15:31:29.632Z",
+      "ms": 24761,
+      "networkAttempts": 1,
+      "inputTokens": 30652,
+      "outputTokens": 3343,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.094734,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 24761,
+    "usd": 0.094734
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 31,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 3,
+   "stage2": {
+    "ms": 25,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 1,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 31,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 3,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "arxiv-2307-09288v2-spya-smdqsk",
+   "blocks": 749,
+   "body": 749,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:31:12.496Z",
+      "endedAt": "2026-11-01T15:31:35.603Z",
+      "ms": 23107,
+      "networkAttempts": 1,
+      "inputTokens": 118459,
+      "outputTokens": 3209,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.269008,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 23107,
+    "usd": 0.269008
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 30,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 44,
+     "hit": 0
+    },
+    "headedSections": 16,
+    "undividedHeadedSections": 16,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 12,
+   "stage2": {
+    "ms": 14797,
+    "usd": 0.234412,
+    "calls": 4,
+    "stats": {
+     "eligible": 16,
+     "made": 16,
+     "failedSections": 0,
+     "added": 62,
+     "calls": 4,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 86351,
+      "outputTokens": 6171,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 62,
+    "deepenedSections": 16,
+    "swallowedHeadings": 0,
+    "sections": 30,
+    "headingSplits": 46,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 44,
+     "hit": 32
+    },
+    "headedSections": 16,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 6,
+     "folded": 3,
+     "none": 7
+    }
+   },
+   "stagedLabelBatches": 11,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "replication-crisis-spya-hrjamq",
+   "blocks": 551,
+   "body": 274,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:31:24.718Z",
+      "endedAt": "2026-11-01T15:31:41.352Z",
+      "ms": 16634,
+      "networkAttempts": 1,
+      "inputTokens": 36453,
+      "outputTokens": 1894,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.091846,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 16634,
+    "usd": 0.091846
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 4,
+    "sections": 18,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 18,
+     "hit": 0
+    },
+    "headedSections": 6,
+    "undividedHeadedSections": 6,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 6,
+   "stage2": {
+    "ms": 19207,
+    "usd": 0.042426,
+    "calls": 1,
+    "stats": {
+     "eligible": 4,
+     "made": 4,
+     "failedSections": 0,
+     "added": 20,
+     "calls": 1,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 12448,
+      "outputTokens": 1753,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 1,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 3,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 20,
+    "deepenedSections": 4,
+    "swallowedHeadings": 4,
+    "sections": 18,
+    "headingSplits": 16,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 18,
+     "hit": 16
+    },
+    "headedSections": 6,
+    "undividedHeadedSections": 2,
+    "openings": {
+     "own": 4,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 6,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "race-human-categorization-spya-rpwc59",
+   "blocks": 663,
+   "body": 435,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:31:29.649Z",
+      "endedAt": "2026-11-01T15:31:51.778Z",
+      "ms": 22129,
+      "networkAttempts": 1,
+      "inputTokens": 52716,
+      "outputTokens": 2857,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.134002,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 22129,
+    "usd": 0.134002
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 3,
+    "sections": 22,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 6,
+     "hit": 0
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 6,
+   "stage2": {
+    "ms": 6049,
+    "usd": 0.024554,
+    "calls": 1,
+    "stats": {
+     "eligible": 2,
+     "made": 2,
+     "failedSections": 0,
+     "added": 6,
+     "calls": 1,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 9602,
+      "outputTokens": 535,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 6,
+    "deepenedSections": 2,
+    "swallowedHeadings": 3,
+    "sections": 22,
+    "headingSplits": 4,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 6,
+     "hit": 3
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 2,
+    "openings": {
+     "own": 1,
+     "folded": 1,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 6,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "synesthesia-spya-xkeccf",
+   "blocks": 320,
+   "body": 168,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:31:31.583Z",
+      "endedAt": "2026-11-01T15:31:45.085Z",
+      "ms": 13502,
+      "networkAttempts": 1,
+      "inputTokens": 23497,
+      "outputTokens": 1826,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.065254,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 13502,
+    "usd": 0.065254
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 11,
+    "sections": 13,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 6,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 3,
+   "stage2": {
+    "ms": 5368,
+    "usd": 0.01561,
+    "calls": 1,
+    "stats": {
+     "eligible": 1,
+     "made": 1,
+     "failedSections": 0,
+     "added": 6,
+     "calls": 1,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 5010,
+      "outputTokens": 559,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 3,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 6,
+    "deepenedSections": 1,
+    "swallowedHeadings": 11,
+    "sections": 13,
+    "headingSplits": 5,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 6,
+     "hit": 5
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 1,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 3,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "spider-silk-spya-ge30uz",
+   "blocks": 263,
+   "body": 131,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:31:50.718Z",
+      "endedAt": "2026-11-01T15:32:10.745Z",
+      "ms": 20027,
+      "networkAttempts": 1,
+      "inputTokens": 18967,
+      "outputTokens": 2472,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.062654,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 20027,
+    "usd": 0.062654
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 20,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 17,
+     "hit": 0
+    },
+    "headedSections": 3,
+    "undividedHeadedSections": 3,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 2,
+   "stage2": {
+    "ms": 14651,
+    "usd": 0.02805,
+    "calls": 1,
+    "stats": {
+     "eligible": 3,
+     "made": 3,
+     "failedSections": 0,
+     "added": 19,
+     "calls": 1,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 6340,
+      "outputTokens": 1537,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 19,
+    "deepenedSections": 3,
+    "swallowedHeadings": 0,
+    "sections": 20,
+    "headingSplits": 16,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 17,
+     "hit": 16
+    },
+    "headedSections": 3,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 3,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 2,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "arxiv-1810-spya-e24vmj",
+   "blocks": 229,
+   "body": 229,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:31:52.284Z",
+      "endedAt": "2026-11-01T15:32:11.277Z",
+      "ms": 18993,
+      "networkAttempts": 1,
+      "inputTokens": 32663,
+      "outputTokens": 2827,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.093596,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 18993,
+    "usd": 0.093596
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 20,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 14,
+     "hit": 0
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 7,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 4,
+   "stage2": {
+    "ms": 8158,
+    "usd": 0.027634,
+    "calls": 1,
+    "stats": {
+     "eligible": 3,
+     "made": 3,
+     "failedSections": 0,
+     "added": 10,
+     "calls": 1,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 8807,
+      "outputTokens": 1002,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 1
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 10,
+    "deepenedSections": 3,
+    "swallowedHeadings": 0,
+    "sections": 20,
+    "headingSplits": 7,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 14,
+     "hit": 7
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 1,
+     "folded": 1,
+     "none": 1
+    }
+   },
+   "stagedLabelBatches": 4,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "gestalt-psychology-spya-wgsm0y",
+   "blocks": 182,
+   "body": 122,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:31:54.856Z",
+      "endedAt": "2026-11-01T15:32:14.536Z",
+      "ms": 19680,
+      "networkAttempts": 1,
+      "inputTokens": 16662,
+      "outputTokens": 2872,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.062044,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 19680,
+    "usd": 0.062044
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 7,
+    "sections": 27,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 2,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 2,
+   "stage2": {
+    "ms": 1,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 2,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 4,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 7,
+    "sections": 27,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 2,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 2,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+   "blocks": 159,
+   "body": 159,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:31:55.682Z",
+      "endedAt": "2026-11-01T15:32:15.252Z",
+      "ms": 19570,
+      "networkAttempts": 1,
+      "inputTokens": 21921,
+      "outputTokens": 2820,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.072042,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 19570,
+    "usd": 0.072042
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 23,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 8,
+     "hit": 0
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 3,
+   "stage2": {
+    "ms": 6430,
+    "usd": 0.02004,
+    "calls": 1,
+    "stats": {
+     "eligible": 3,
+     "made": 3,
+     "failedSections": 0,
+     "added": 10,
+     "calls": 1,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 5845,
+      "outputTokens": 835,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 10,
+    "deepenedSections": 3,
+    "swallowedHeadings": 0,
+    "sections": 23,
+    "headingSplits": 7,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 8,
+     "hit": 5
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 2,
+     "folded": 1,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 3,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "haslemere-spya-a8he7z",
+   "blocks": 580,
+   "body": 264,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:32:14.549Z",
+      "endedAt": "2026-11-01T15:32:49.644Z",
+      "ms": 35095,
+      "networkAttempts": 1,
+      "inputTokens": 29775,
+      "outputTokens": 5413,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.11368,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 35095,
+    "usd": 0.11368
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 9,
+    "sections": 53,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 11,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 4,
+   "stage2": {
+    "ms": 1,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 9,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 9,
+    "sections": 53,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 11,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 4,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "dodo-spya-nyc4ud",
+   "blocks": 427,
+   "body": 251,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:32:17.002Z",
+      "endedAt": "2026-11-01T15:32:38.245Z",
+      "ms": 21243,
+      "networkAttempts": 1,
+      "inputTokens": 35262,
+      "outputTokens": 2703,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.097554,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 21243,
+    "usd": 0.097554
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 18,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 3,
+   "stage2": {
+    "ms": 0,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 18,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 3,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "simulators-spya-q2xbny",
+   "blocks": 333,
+   "body": 333,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:32:21.938Z",
+      "endedAt": "2026-11-01T15:32:47.672Z",
+      "ms": 25734,
+      "networkAttempts": 1,
+      "inputTokens": 35363,
+      "outputTokens": 3288,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.103606,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 25734,
+    "usd": 0.103606
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 26,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 6,
+   "stage2": {
+    "ms": 0,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 26,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 6,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "nber-w31161-spya-dkgc83",
+   "blocks": 237,
+   "body": 220,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:32:22.337Z",
+      "endedAt": "2026-11-01T15:32:31.980Z",
+      "ms": 9643,
+      "networkAttempts": 1,
+      "inputTokens": 39496,
+      "outputTokens": 794,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.086932,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 9643,
+    "usd": 0.086932
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 9,
+    "sections": 5,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 2,
+   "stage2": {
+    "ms": 0,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 1,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 9,
+    "sections": 5,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 2,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "paul-graham-spya-wnuyuz",
+   "blocks": 135,
+   "body": 135,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:32:31.988Z",
+      "endedAt": "2026-11-01T15:32:50.000Z",
+      "ms": 18012,
+      "networkAttempts": 1,
+      "inputTokens": 15517,
+      "outputTokens": 2445,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.055484,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 18012,
+    "usd": 0.055484
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 23,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 2,
+   "stage2": {
+    "ms": 0,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 0,
+      "runIn": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 23,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 2,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  },
+  {
+   "slug": "s3-gdl-45mb-spya-cc9kr8",
+   "blocks": 1025,
+   "body": 970,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:32:38.274Z",
+      "endedAt": "2026-11-01T15:33:13.206Z",
+      "ms": 34932,
+      "networkAttempts": 1,
+      "inputTokens": 137859,
+      "outputTokens": 4974,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.325458,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 34932,
+    "usd": 0.325458
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 59,
+    "sections": 43,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 19,
+     "hit": 0
+    },
+    "headedSections": 11,
+    "undividedHeadedSections": 11,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 18,
+   "stage2": {
+    "ms": 15177,
+    "usd": 0.238366,
+    "calls": 3,
+    "stats": {
+     "eligible": 15,
+     "made": 15,
+     "failedSections": 0,
+     "added": 63,
+     "calls": 3,
+     "failedCalls": 0,
+     "usage": {
+      "inputTokens": 90233,
+      "outputTokens": 5790,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+     },
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 9,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "ignoredHeadings": {
+      "repeated": 6,
+      "runIn": 4
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 63,
+    "deepenedSections": 15,
+    "swallowedHeadings": 29,
+    "sections": 43,
+    "headingSplits": 48,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 30,
+    "subheadings": {
+     "expected": 19,
+     "hit": 18
+    },
+    "headedSections": 11,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 10,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 18,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true,
+    "rangesAsPlanned": true,
+    "statsMatchTree": true
+   }
+  }
+ ]
+}

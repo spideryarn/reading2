@@ -21,10 +21,14 @@ copies include the report's paper): five from 261101b's set and fourteen fresh, 
 1,025-block book on the whole-document path. **Paired**: each run makes stage 1 once per document
 (production's request, parser, builder and re-ask), scores it as the control, then runs
 production's own stage 2 on that very tree. Two runs (`staged-1`, `staged-2`), separated in time.
-The planner was then corrected (below) and stage 2 re-run on the same two sets of stage-1 trees
-(`staged-1b`, `staged-2b`), which is what the numbers below are. **$11.10 in all**, smoke runs, the
-September wave's trial and the labels comparison ($2.26) included; about $0.80 more re-ran the
-local paper for the browser check.
+The planner was then corrected twice — by me after the first runs, and by GPT Sol's code review —
+and stage 2 re-run each time on the same two sets of stage-1 trees; the numbers below are the last,
+`staged-1c` and `staged-2c`, on the code that ships. **$12.80 in all**, smoke runs, the September
+wave's trial and the labels comparison ($2.26) included; about $0.80 more re-ran the local paper for
+the browser check. `npx tsx evals/structure-fourth-level/staged-report.ts staged-1c,staged-2c
+--annotation staged-1c=evals/results/structure-fourth-level/staged-1-annotation.json --annotation
+staged-2c=evals/results/structure-fourth-level/staged-2-annotation.json --labels
+evals/results/structure-fourth-level/staged-1b-labels.json` reproduces the verdict, free.
 
 ## What came back
 
@@ -33,10 +37,10 @@ local paper for the browser check.
 | 1. the paper: 2.4.1–2.4.6 under 2.4, nothing else in 2.4 but the opening; 2.5 left beside it | pass, both runs |
 | 2. every new node depth 3 under a section, only leaves under it, starting where planned | pass, every article |
 | 3. every stage-1 node kept with every field; the same leaves | pass, every article |
-| 4. sections lost to a bad answer ≤ 1 in 20; no call failing whole | 0 of 128; 0 |
-| 5. boundary recall ≥ 90% against an independent annotation | **98%** (199/204) on held-out trees; precision 98% (199/203) |
-| 6. gists fit and are faithful, ≤ 1 in 20 flagged, blind reader | 40/40 fit; 38/40 faithful |
-| 7. cost and time on articles stage 2 touches | median **+37%** structure cost, **+9 s**; worst +87%; book 52 s of a 700 s step |
+| 4. sections lost to a bad answer ≤ 1 in 20; no call failing whole | 0 of 126; 0 |
+| 5. boundary recall ≥ 90% and precision 100% against an independent annotation | **98%** (199/204) on held-out trees, 99% (191/193) on the tuning set; precision **100%** on both |
+| 6. gists fit, are faithful and one sentence, ≤ 1 in 20 flagged, blind reader | final run: 40/40 fit, 0 clearly unfaithful (2 borderline), 40/40 one sentence; first run 40/40, 38/40 |
+| 7. cost and time on articles stage 2 touches | median **+37%** structure cost, **+9 s**; worst +87%; book 50 s of a 700 s step |
 | 7. labels step on both trees, four articles | +1% to +6% cost, same batches, 0 dropped |
 
 - **12 of 19 documents got sub-sections**; the other seven have no author sub-headings below their
@@ -46,11 +50,18 @@ local paper for the browser check.
   and stage 2 leaves every one exactly as stage 1 made it, never demoting the sibling.
 - **Cost**: the paper $0.13 on top of stage 1's $0.22 (+59%), and $0.13 against structure and
   labels together ($0.64), about +21%. Llama 2 is the worst case (+87%, $0.23), the GDL book +77%.
-- **The gate-6 sample was drawn from `staged-1`'s first planner**; the call and prompt did not change
-  after it, only which sections are chosen. Of the two unfaithful gists, one (a clause about pointer
-  networks) may be my sampler's doing: it cut that item's prose at 12,000 characters.
-- **The four extra boundaries are all the book's PDF artefacts**: a bold definition and two repeated
-  running headings tagged as headings, which the annotator folded away.
+- **Two blind reads of 40 random sub-sections each** (Sonnet, prose only): the first from
+  `staged-1`, where one of two flagged gists was probably my sampler cutting the prose at 12,000
+  characters; the second from `staged-2c`, cut at 20,000. Borderline cases were a causal "so" and an
+  author's open question stated as fact.
+- **Precision reached 100% only after Sol's review**: before it, four boundaries per run were the
+  book's PDF artefacts — a bold definition run into its paragraph, and running headings repeated
+  around a page break. Both are now ignored and counted (`ignoredHeadings`).
+- **One rule is a judgement, named**: inside a numbered section an unnumbered heading counts as below
+  it, whatever its tag. It is what recovers the book's mis-tagged sub-headings; its risk is an
+  unnumbered sibling stage 1 swallowed ("Conclusion" inside "5 Discussion") shown one level too deep.
+  It produced no false boundary on either annotated set, and that failure would leave the passage
+  navigable and gisted, so it stands.
 
 ## What was decided along the way, and ruled out
 

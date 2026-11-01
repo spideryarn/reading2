@@ -205,6 +205,27 @@ gets its own plan.
 whose outline fits one answer get the level, and so does any article re-run through Metadata ›
 Structure.
 
+## Sol's code review
+
+[261101d-code-review-sol.md](261101d-code-review-sol.md), workspace-write. Sol fixed: false
+boundaries from PDF artefacts (a run-in definition, a heading repeated across a page break) and a
+part's first numbered section mistaken for the part's heading — precision rose from 98% to 100% on
+both annotated sets; a reader's Stop returning while peer calls still spent (`allOrStop`, an
+article-free 429 that narrows the shared gate); attachment that disagreed with the plan reporting
+success; stage 2's tokens missing from the run's totals; and an eval report that could pass
+vacuously. What it left for me, and what was done:
+
+- **"Greg must decide" the numbered/unnumbered rule** (finding 2). Decided here instead, as an
+  unambiguous call by the house rule: the rule recovers the book's mis-tagged sub-headings, produced
+  no false boundary on either annotated set, and its failure (a swallowed unnumbered sibling shown a
+  level too deep) leaves the passage navigable and gisted. Named to Greg in q-k25zfg.
+- **A fresh paid run on the corrected planner** (findings 1, 7): `staged-1c`, `staged-2c`, and a
+  second blind gist read; every gate passed ([261101c](../investigations/261101c-structure-fourth-level-staged-measured.md)).
+- **Not measured: High-powered AI's cost and six jobs at once** (finding 7). Opus costs more per
+  token, so stage 2 costs proportionally more there, as stage 1 does; the 429 path is covered by a
+  test, not by a load run. Named, not done.
+- **A multi-sentence gist is not refused in code** (finding 8); the blind read found none in 40.
+
 ## Simpler options passed over
 
 - **Switch on the September wave as it is.** Measured above: the right shape on the paper at

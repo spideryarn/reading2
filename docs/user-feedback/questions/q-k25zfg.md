@@ -1,19 +1,29 @@
 ---
 id: q-k25zfg
 report: spya-pn7gvw
-status: open
+status: answered
 asked: 2026-11-01
 title: Structure one level deeper failed its tests: retry with the AI thinking, a new wording, or stop at three levels?
-refs: qi-negzd289 · docs/plans/261029a-structure-one-level-deeper.md · docs/investigations/261101b-structure-fourth-level-two-wordings-measured.md · docs/user-feedback/261029_0300-structure-one-level-deeper.md · q-vrnbyj · spya-pn7gvw
+refs: qi-negzd289 · qi-p6s6g6vw · docs/plans/261101d-structure-fourth-level-staged-second-call.md · docs/investigations/261101c-structure-fourth-level-staged-measured.md · docs/plans/261029a-structure-one-level-deeper.md · docs/investigations/261101b-structure-fourth-level-two-wordings-measured.md · docs/user-feedback/261029_0300-structure-one-level-deeper.md · q-vrnbyj · spya-pn7gvw
+acted: spya-xb2rrn
 ---
-I tried two wordings of the Structure prompt that add sub-sections. Both made the extra level on your consciousness paper, but each also left one other article with no sections at all, in both test runs. So I have not shipped it, and your paper has not been re-run. How should I go on?
+Done your way: in stages. Structure now goes one level deeper wherever the author's own sub-headings divide a section, and it passed every test. It is on `dev`; once the Overseer deploys it, it re-runs your consciousness paper's structure in production, as you said yes to.
 
-A. Try again with the structure AI allowed to think before it answers. Today it never does: 0 thinking tokens on every call, old prompt included. My guess is that this is why it follows the more complex instructions unreliably. It will be slower and somewhat dearer for every new article, by an amount I would measure first; the rule stays under about a fifth more. About one session and $10 of tests.
-B. A third wording, still not thinking, tested on articles it was not tuned on. Cheaper per article if it works, but two wordings have already failed in different places. About one session and $8.
-C. Both A and B side by side on the same fresh articles, and ship whichever passes every check (or neither). About one session and $12.
-D. Stop at three levels for now. Nothing changes for readers. The test kit and both wordings are kept for later.
+How it works. The first call is exactly today's, so nothing it makes can be lost. A second, small step then looks at each section: if the author's own headings one level down divide it, code cuts it at those headings, and one AI call writes a one-line summary for each piece. On your paper, 2.4's six theories each get their own row, 2.5 stays beside 2.4, and the (a)-(c) inside 2.4.5 stay inside it.
 
-Recommendation: C. It costs little more than A or B alone and answers both at once. If neither passes, D.
+What it costs. Nothing on an article without sub-headings. On one with them, about a third more for the structure step (median +37%, 9 seconds more); your paper +13 cents. The paragraph labels cost the same as before.
+
+Two things I decided without asking:
+- A section the first call merged with its neighbour (it swallowed the next heading) is left exactly as it is, never given sub-sections that would put the neighbour inside it. That is common: about a third of the sections with headings inside.
+- In a numbered paper, an unnumbered heading inside a numbered section is treated as a sub-heading. That is what makes it work on PDFs whose heading tags are wrong. The risk is a stray "Conclusion" shown one level too deep; it never happened in the tests.
+
+Not done: a long section with no sub-headings is still not divided. That would be the next step, measured on its own, if you want it.
+
+Your reply, 1 Nov (spya-xb2rrn): "I mean, this feels like a technical problem that you should be able to solve if you try a few different ways. I will say that one of the hunches I always had was that we should do this in multiple stages, perhaps hierarchically. So we might do the top level first, then the next level of granularity, and then perhaps an optional thing that would add yet a further level of granularity. So I don't know if that would help. Or alternatively, stick with what we have right now that works robustly for, you know, for the current approach, and a button that says add an extra level of granularity so the user can request it. That would work fine."
+
+What was done with it: the staged approach was built and measured on 19 articles (five from before, fourteen fresh, one book). Every test passed: your paper right in both runs; 98% of the author's sub-headings found, none wrongly; no section lost; a blind reader found the new summaries faithful. September's version of the staged idea was tried first, but on articles it cost nearly three times as much and could misplace headings. The button was not needed. Plan 261101d; results 261101c.
+
+The question first asked offered A (let the call think), B (a third wording), C (both) or D (stop at three levels); the staged route replaced all four.
 
 Details
 
