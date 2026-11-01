@@ -1,0 +1,796 @@
+{
+ "slug": "fd-src-s41598-023-33209-9-spya-hxekgz-spya-pwtq9e",
+ "style": "numbered, superscripts flattened to glued digits",
+ "n": 70,
+ "notes": "No reference list in the blocks, so surname/year are null and there is no refBlock. Numbers adjudicated by reading every glued-digit hit: decimals, cm2, S1–S4, eNpHR3.0, CA1, statistics and the author-affiliation line are not citations.",
+ "works": [
+  {
+   "key": "#1",
+   "number": 1,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "nized to be essential for spatial memory1–7"
+  },
+  {
+   "key": "#2",
+   "number": 2,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "nized to be essential for spatial memory1–7"
+  },
+  {
+   "key": "#3",
+   "number": 3,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "nized to be essential for spatial memory1–7"
+  },
+  {
+   "key": "#4",
+   "number": 4,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "nized to be essential for spatial memory1–7"
+  },
+  {
+   "key": "#5",
+   "number": 5,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg",
+    "spya-uyy3vb"
+   ],
+   "citingWords": "nized to be essential for spatial memory1–7"
+  },
+  {
+   "key": "#6",
+   "number": 6,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "nized to be essential for spatial memory1–7"
+  },
+  {
+   "key": "#7",
+   "number": 7,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "nized to be essential for spatial memory1–7"
+  },
+  {
+   "key": "#8",
+   "number": 8,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "ampal processing supports spatial memory8–13"
+  },
+  {
+   "key": "#9",
+   "number": 9,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "ampal processing supports spatial memory8–13"
+  },
+  {
+   "key": "#10",
+   "number": 10,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "ampal processing supports spatial memory8–13"
+  },
+  {
+   "key": "#11",
+   "number": 11,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "ampal processing supports spatial memory8–13"
+  },
+  {
+   "key": "#12",
+   "number": 12,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "ampal processing supports spatial memory8–13"
+  },
+  {
+   "key": "#13",
+   "number": 13,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "ampal processing supports spatial memory8–13"
+  },
+  {
+   "key": "#14",
+   "number": 14,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hfvapg"
+   ],
+   "citingWords": "ively sample the surrounding environment14"
+  },
+  {
+   "key": "#15",
+   "number": 15,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-g8r6ea",
+    "spya-j5quzc",
+    "spya-awwkgx",
+    "spya-uyy3vb",
+    "spya-hf95nb",
+    "spya-uz939k",
+    "spya-aa46x4"
+   ],
+   "citingWords": "n appear as rearing onto their hind legs15"
+  },
+  {
+   "key": "#16",
+   "number": 16,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-j5quzc"
+   ],
+   "citingWords": "ses in response to environmental novelty15–19"
+  },
+  {
+   "key": "#17",
+   "number": 17,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-j5quzc"
+   ],
+   "citingWords": "ses in response to environmental novelty15–19"
+  },
+  {
+   "key": "#18",
+   "number": 18,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-j5quzc",
+    "spya-t3p24n"
+   ],
+   "citingWords": "ses in response to environmental novelty15–19"
+  },
+  {
+   "key": "#19",
+   "number": 19,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-j5quzc",
+    "spya-t3p24n",
+    "spya-axcedc"
+   ],
+   "citingWords": "ses in response to environmental novelty15–19"
+  },
+  {
+   "key": "#20",
+   "number": 20,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": "f 7–12 Hz ’high theta’ rhythmic activity20–24"
+  },
+  {
+   "key": "#21",
+   "number": 21,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": "f 7–12 Hz ’high theta’ rhythmic activity20–24"
+  },
+  {
+   "key": "#22",
+   "number": 22,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": "f 7–12 Hz ’high theta’ rhythmic activity20–24"
+  },
+  {
+   "key": "#23",
+   "number": 23,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": "f 7–12 Hz ’high theta’ rhythmic activity20–24"
+  },
+  {
+   "key": "#24",
+   "number": 24,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx",
+    "spya-hf95nb",
+    "spya-f9tc32",
+    "spya-axcedc"
+   ],
+   "citingWords": "f 7–12 Hz ’high theta’ rhythmic activity20–24"
+  },
+  {
+   "key": "#25",
+   "number": 25,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#26",
+   "number": 26,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#27",
+   "number": 27,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#28",
+   "number": 28,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#29",
+   "number": 29,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#30",
+   "number": 30,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#31",
+   "number": 31,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#32",
+   "number": 32,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#33",
+   "number": 33,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#34",
+   "number": 34,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " with hippocampal encoding and retrieval25–34"
+  },
+  {
+   "key": "#35",
+   "number": 35,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": "rferes with hippocampal dependent memory35–38"
+  },
+  {
+   "key": "#36",
+   "number": 36,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": "rferes with hippocampal dependent memory35–38"
+  },
+  {
+   "key": "#37",
+   "number": 37,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": "rferes with hippocampal dependent memory35–38"
+  },
+  {
+   "key": "#38",
+   "number": 38,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": "rferes with hippocampal dependent memory35–38"
+  },
+  {
+   "key": "#39",
+   "number": 39,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " hippocampal dependent learning deficits39,40"
+  },
+  {
+   "key": "#40",
+   "number": 40,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-yaf2qx"
+   ],
+   "citingWords": " hippocampal dependent learning deficits39,40"
+  },
+  {
+   "key": "#41",
+   "number": 41,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-u9fpwu",
+    "spya-v2fwns",
+    "spya-w3u6mu"
+   ],
+   "citingWords": " of an 8-arm maze delayed-win-shift task41,42"
+  },
+  {
+   "key": "#42",
+   "number": 42,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-u9fpwu",
+    "spya-v2fwns",
+    "spya-w3u6mu"
+   ],
+   "citingWords": " of an 8-arm maze delayed-win-shift task41,42"
+  },
+  {
+   "key": "#43",
+   "number": 43,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-w3u6mu"
+   ],
+   "citingWords": "d arms in the first four choices at test41–43"
+  },
+  {
+   "key": "#44",
+   "number": 44,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-cfqun4"
+   ],
+   "citingWords": "ts neural activity with photostimulation44"
+  },
+  {
+   "key": "#45",
+   "number": 45,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-rzczau"
+   ],
+   "citingWords": "ession in the rat hippocampus previously45"
+  },
+  {
+   "key": "#46",
+   "number": 46,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-rzczau"
+   ],
+   "citingWords": "urane exposure can impair spatial memory46–48"
+  },
+  {
+   "key": "#47",
+   "number": 47,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-rzczau"
+   ],
+   "citingWords": "urane exposure can impair spatial memory46–48"
+  },
+  {
+   "key": "#48",
+   "number": 48,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-rzczau"
+   ],
+   "citingWords": "urane exposure can impair spatial memory46–48"
+  },
+  {
+   "key": "#49",
+   "number": 49,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-uyy3vb"
+   ],
+   "citingWords": "nconsistent effects on rearing frequency49,50"
+  },
+  {
+   "key": "#50",
+   "number": 50,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-uyy3vb"
+   ],
+   "citingWords": "nconsistent effects on rearing frequency49,50"
+  },
+  {
+   "key": "#51",
+   "number": 51,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-uyy3vb"
+   ],
+   "citingWords": "hippocampal lesions disrupt this pattern5,51"
+  },
+  {
+   "key": "#52",
+   "number": 52,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-t3p24n"
+   ],
+   "citingWords": "pocampal integrity except at long delays52,53"
+  },
+  {
+   "key": "#53",
+   "number": 53,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-t3p24n"
+   ],
+   "citingWords": "pocampal integrity except at long delays52,53"
+  },
+  {
+   "key": "#54",
+   "number": 54,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-hf95nb"
+   ],
+   "citingWords": "hanges that elicit hippocampal remapping54"
+  },
+  {
+   "key": "#55",
+   "number": 55,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-uz939k"
+   ],
+   "citingWords": " that characterizes hippocampal function55"
+  },
+  {
+   "key": "#56",
+   "number": 56,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-f9tc32"
+   ],
+   "citingWords": "gests the dentate gyrus may be important24,56,57"
+  },
+  {
+   "key": "#57",
+   "number": 57,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-f9tc32",
+    "spya-aa46x4"
+   ],
+   "citingWords": "gests the dentate gyrus may be important24,56,57"
+  },
+  {
+   "key": "#58",
+   "number": 58,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-f9tc32"
+   ],
+   "citingWords": "ng after stimuli or environmental change58"
+  },
+  {
+   "key": "#59",
+   "number": 59,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-f9tc32"
+   ],
+   "citingWords": " synaptic plasticity, and spatial memory59"
+  },
+  {
+   "key": "#60",
+   "number": 60,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": "s such as stress or motivation to escape60,61"
+  },
+  {
+   "key": "#61",
+   "number": 61,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": "s such as stress or motivation to escape60,61"
+  },
+  {
+   "key": "#62",
+   "number": 62,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": " females tending to rear more than males62–69"
+  },
+  {
+   "key": "#63",
+   "number": 63,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": " females tending to rear more than males62–69"
+  },
+  {
+   "key": "#64",
+   "number": 64,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": " females tending to rear more than males62–69"
+  },
+  {
+   "key": "#65",
+   "number": 65,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": " females tending to rear more than males62–69"
+  },
+  {
+   "key": "#66",
+   "number": 66,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": " females tending to rear more than males62–69"
+  },
+  {
+   "key": "#67",
+   "number": 67,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": " females tending to rear more than males62–69"
+  },
+  {
+   "key": "#68",
+   "number": 68,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": " females tending to rear more than males62–69"
+  },
+  {
+   "key": "#69",
+   "number": 69,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-aa46x4"
+   ],
+   "citingWords": " females tending to rear more than males62–69"
+  },
+  {
+   "key": "#70",
+   "number": 70,
+   "surname": null,
+   "year": null,
+   "inList": false,
+   "citedIn": [
+    "spya-axcedc"
+   ],
+   "citingWords": " place fields in hippocampal CA1 neurons70"
+  }
+ ]
+}

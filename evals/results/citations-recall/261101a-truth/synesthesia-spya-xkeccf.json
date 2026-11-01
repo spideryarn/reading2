@@ -1,0 +1,1881 @@
+{
+ "slug": "synesthesia-spya-xkeccf",
+ "style": "numbered Wikipedia footnotes [n]",
+ "n": 148,
+ "notes": "Body = blocks before 'See also'; See also, Further reading and External links are excluded, as in the hand count. Footnote n is the n-th role=footnote block (checked: first appearances run 1..152 in order, and each footnote's backlink count equals its uses in the body). Footnotes that are the same source (same DOI/PMID/ISBN or title) are one work with aliases.",
+ "works": [
+  {
+   "key": "#1",
+   "number": 1,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-u8nv7f",
+   "citedIn": [
+    "spya-xvxrn5"
+   ],
+   "citingWords": "ence, neurology, psychology Frequency 4%[1]"
+  },
+  {
+   "key": "#2",
+   "number": 2,
+   "surname": "Cytowic",
+   "year": "2002",
+   "inList": true,
+   "refBlock": "spya-a8qt8k",
+   "citedIn": [
+    "spya-adpz5b",
+    "spya-z6kqqy",
+    "spya-pkx4xb",
+    "spya-ep7pdh"
+   ],
+   "citingWords": " in other sensory or cognitive pathways.[2]"
+  },
+  {
+   "key": "#3",
+   "number": 3,
+   "surname": "Cytowic",
+   "year": "2003",
+   "inList": true,
+   "refBlock": "spya-zxtgah",
+   "citedIn": [
+    "spya-adpz5b",
+    "spya-pkx4xb"
+   ],
+   "citingWords": " other sensory or cognitive pathways.[2][3]"
+  },
+  {
+   "key": "#4",
+   "number": 4,
+   "surname": "Cytowic",
+   "year": "2009",
+   "inList": true,
+   "refBlock": "spya-nuxm7t",
+   "citedIn": [
+    "spya-adpz5b",
+    "spya-bkabs9",
+    "spya-yb6zd8",
+    "spya-deh7vs",
+    "spya-pkx4xb",
+    "spya-achk2g",
+    "spya-ep7pdh",
+    "spya-ssae2z",
+    "spya-g4snty"
+   ],
+   "citingWords": "her sensory or cognitive pathways.[2][3][4]"
+  },
+  {
+   "key": "#5",
+   "number": 5,
+   "surname": "Harrison",
+   "year": "1996",
+   "inList": true,
+   "refBlock": "spya-vkkmy6",
+   "citedIn": [
+    "spya-adpz5b",
+    "spya-wk243x"
+   ],
+   "citingWords": " sensory or cognitive pathways.[2][3][4][5]"
+  },
+  {
+   "key": "#6",
+   "number": 6,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-qmubeg",
+   "citedIn": [
+    "spya-adpz5b"
+   ],
+   "citingWords": "nsory or cognitive pathways.[2][3][4][5][6]"
+  },
+  {
+   "key": "#7",
+   "number": 7,
+   "surname": "Safran",
+   "year": "2014",
+   "inList": true,
+   "refBlock": "spya-ex0wug",
+   "citedIn": [
+    "spya-adpz5b",
+    "spya-wc25w3",
+    "spya-pxa63e"
+   ],
+   "citingWords": "ption, chronoception, and interoception.[7]"
+  },
+  {
+   "key": "#8",
+   "number": 8,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-e5kzxj",
+   "citedIn": [
+    "spya-adpz5b"
+   ],
+   "citingWords": "esthesia are referred to as synesthetes.[8]"
+  },
+  {
+   "key": "#9",
+   "number": 9,
+   "surname": "Henry",
+   "year": "2003",
+   "inList": true,
+   "refBlock": "spya-t0s388",
+   "citedIn": [
+    "spya-zrk2q4"
+   ],
+   "citingWords": "ific type of synesthesia that they have.[9]"
+  },
+  {
+   "key": "#10",
+   "number": 10,
+   "surname": "van Campen",
+   "year": "2009b",
+   "inList": true,
+   "refBlock": "spya-znycdd",
+   "citedIn": [
+    "spya-zrk2q4",
+    "spya-u5ys88"
+   ],
+   "citingWords": "c type of synesthesia that they have.[9][10]",
+   "ambiguous": true
+  },
+  {
+   "key": "#11",
+   "number": 11,
+   "surname": "Rich",
+   "year": "2002",
+   "inList": true,
+   "refBlock": "spya-wcahn8",
+   "citedIn": [
+    "spya-zrk2q4"
+   ],
+   "citingWords": "ers are perceived as inherently colored.[11]"
+  },
+  {
+   "key": "#12",
+   "number": 12,
+   "surname": "Hubbard",
+   "year": "2005",
+   "inList": true,
+   "refBlock": "spya-ta6gam",
+   "citedIn": [
+    "spya-zrk2q4",
+    "spya-ryrx4c"
+   ],
+   "citingWords": "are perceived as inherently colored.[11][12]"
+  },
+  {
+   "key": "#13",
+   "number": 13,
+   "surname": "Galton",
+   "year": "1880",
+   "inList": true,
+   "refBlock": "spya-cyfzcu",
+   "citedIn": [
+    "spya-zrk2q4",
+    "spya-a28djs",
+    "spya-w699xx"
+   ],
+   "citingWords": "nal map (clockwise or counterclockwise).[13]",
+   "ambiguous": true
+  },
+  {
+   "key": "#14",
+   "number": 14,
+   "surname": "Seron",
+   "year": "1992",
+   "inList": true,
+   "refBlock": "spya-e98g3d",
+   "citedIn": [
+    "spya-zrk2q4"
+   ],
+   "citingWords": "map (clockwise or counterclockwise).[13][14]"
+  },
+  {
+   "key": "#15",
+   "number": 15,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-rquav5",
+   "citedIn": [
+    "spya-zrk2q4"
+   ],
+   "citingWords": " number of senses or cognitive pathways.[15]"
+  },
+  {
+   "key": "#16",
+   "number": 16,
+   "surname": "Mroczko-Wąsowicz",
+   "year": "2014",
+   "inList": true,
+   "refBlock": "spya-p7haty",
+   "citedIn": [
+    "spya-w2772s",
+    "spya-wk243x"
+   ],
+   "citingWords": "th abstract concepts for the first time.[16]"
+  },
+  {
+   "key": "#17",
+   "number": 17,
+   "surname": "Ward",
+   "year": "2006",
+   "inList": true,
+   "refBlock": "spya-hw762e",
+   "citedIn": [
+    "spya-af7gu5"
+   ],
+   "citingWords": "et when he heard the sound of a trumpet.[17]"
+  },
+  {
+   "key": "#18",
+   "number": 18,
+   "surname": "Jewanski",
+   "year": "2009",
+   "inList": true,
+   "refBlock": "spya-wb58yv",
+   "citedIn": [
+    "spya-af7gu5",
+    "spya-w699xx"
+   ],
+   "citingWords": " of synesthesia or was using a metaphor.[18]"
+  },
+  {
+   "key": "#19",
+   "number": 19,
+   "surname": "Herman",
+   "year": "2018",
+   "inList": true,
+   "refBlock": "spya-tapgjp",
+   "citedIn": [
+    "spya-af7gu5",
+    "spya-w699xx"
+   ],
+   "citingWords": "n Georg Tobias Ludwig Sachs in 1812.[18][19]"
+  },
+  {
+   "key": "#20",
+   "number": 20,
+   "surname": "Konnikova",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-kbgtgw",
+   "citedIn": [
+    "spya-af7gu5"
+   ],
+   "citingWords": "org Tobias Ludwig Sachs in 1812.[18][19][20]"
+  },
+  {
+   "key": "#21",
+   "number": 21,
+   "surname": "Dixon",
+   "year": "2004",
+   "inList": true,
+   "refBlock": "spya-qd84c4",
+   "citedIn": [
+    "spya-g5dh6m"
+   ],
+   "citingWords": "k very strongly that it sounds \"orange\".[21]"
+  },
+  {
+   "key": "#22",
+   "number": 22,
+   "surname": "Schacter",
+   "year": "1996",
+   "inList": true,
+   "refBlock": "spya-q3a47x",
+   "citedIn": [
+    "spya-fq3acq",
+    "spya-retx44"
+   ],
+   "citingWords": "synesthesia that linked all five senses.[22]"
+  },
+  {
+   "key": "#23",
+   "number": 23,
+   "surname": "Naumer",
+   "year": "2009",
+   "inList": true,
+   "refBlock": "spya-mh655a",
+   "citedIn": [
+    "spya-ae8zpn"
+   ],
+   "citingWords": "f the least common forms of synesthesia,[23]"
+  },
+  {
+   "key": "#24",
+   "number": 24,
+   "surname": "Simner",
+   "year": "2006",
+   "inList": true,
+   "refBlock": "spya-gv0087",
+   "citedIn": [
+    "spya-ae8zpn",
+    "spya-dwz43z",
+    "spya-pxa63e"
+   ],
+   "citingWords": " be evoked in many people known as ASMR.[24]",
+   "aliases": [
+    {
+     "number": 24,
+     "refBlock": "spya-gv0087"
+    },
+    {
+     "number": 66,
+     "refBlock": "spya-u0u0pe"
+    }
+   ],
+   "ambiguous": true
+  },
+  {
+   "key": "#25",
+   "number": 25,
+   "surname": "Banissy",
+   "year": "2014",
+   "inList": true,
+   "refBlock": "spya-ztkdnr",
+   "citedIn": [
+    "spya-ae8zpn"
+   ],
+   "citingWords": "evoked in many people known as ASMR.[24][25]"
+  },
+  {
+   "key": "#26",
+   "number": 26,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-rbemjy",
+   "citedIn": [
+    "spya-bbpuk6"
+   ],
+   "citingWords": " aids them in identifying notes or keys.[26]"
+  },
+  {
+   "key": "#27",
+   "number": 27,
+   "surname": "Jacome",
+   "year": "2011",
+   "inList": true,
+   "refBlock": "spya-ajwz2b",
+   "citedIn": [
+    "spya-he8nty"
+   ],
+   "citingWords": "xperiences, are referred to as photisms.[27]"
+  },
+  {
+   "key": "#28",
+   "number": 28,
+   "surname": "Schweizer",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-g2bq94",
+   "citedIn": [
+    "spya-peb7x3",
+    "spya-prphtv"
+   ],
+   "citingWords": "p about 1% of the synesthete population.[28]"
+  },
+  {
+   "key": "#29",
+   "number": 29,
+   "surname": "Sagiv",
+   "year": "2005",
+   "inList": true,
+   "refBlock": "spya-gvcfaa",
+   "citedIn": [
+    "spya-sf200r",
+    "spya-kx5bk6",
+    "spya-g9aq2t",
+    "spya-vzccrx",
+    "spya-h37vza",
+    "spya-qh926j"
+   ],
+   "citingWords": "s letters (e.g., A is likely to be red).[29]"
+  },
+  {
+   "key": "#30",
+   "number": 30,
+   "surname": "Nikolić",
+   "year": "2009",
+   "inList": true,
+   "refBlock": "spya-bk2rv2",
+   "citedIn": [
+    "spya-h7febp",
+    "spya-wk243x"
+   ],
+   "citingWords": "sthesia' is a more accurate description.[30]"
+  },
+  {
+   "key": "#31",
+   "number": 31,
+   "surname": "Simner",
+   "year": "2012",
+   "inList": true,
+   "refBlock": "spya-bz6bfg",
+   "citedIn": [
+    "spya-h7febp"
+   ],
+   "citingWords": "sia' is a more accurate description.[30][31]"
+  },
+  {
+   "key": "#32",
+   "number": 32,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-sryb20",
+   "citedIn": [
+    "spya-zdt4ne",
+    "spya-wer3qy"
+   ],
+   "citingWords": " rarest documented forms of synesthesia.[32]"
+  },
+  {
+   "key": "#33",
+   "number": 33,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-d486u2",
+   "citedIn": [
+    "spya-f83nda"
+   ],
+   "citingWords": "ation whenever he hears the name spoken.[33]"
+  },
+  {
+   "key": "#34",
+   "number": 34,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-f45uxh",
+   "citedIn": [
+    "spya-f83nda"
+   ],
+   "citingWords": "n whenever he hears the name spoken.[33][34]"
+  },
+  {
+   "key": "#35",
+   "number": 35,
+   "surname": "Simner",
+   "year": "2009",
+   "inList": true,
+   "refBlock": "spya-yvbr7s",
+   "citedIn": [
+    "spya-f83nda"
+   ],
+   "citingWords": "esia, making it one of the rarest forms.[35]"
+  },
+  {
+   "key": "#36",
+   "number": 36,
+   "surname": "Banissy",
+   "year": "2007",
+   "inList": true,
+   "refBlock": "spya-gq9zu8",
+   "citedIn": [
+    "spya-zgt7zu"
+   ],
+   "citingWords": "vels compared to the general population.[36]"
+  },
+  {
+   "key": "#37",
+   "number": 37,
+   "surname": "Heyes",
+   "year": "2010",
+   "inList": true,
+   "refBlock": "spya-rqahr4",
+   "citedIn": [
+    "spya-zgt7zu"
+   ],
+   "citingWords": "n, which some research links to empathy.[37]"
+  },
+  {
+   "key": "#38",
+   "number": 38,
+   "surname": "Baron-Cohen",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-z7ty2f",
+   "citedIn": [
+    "spya-zgt7zu"
+   ],
+   "citingWords": "en mirror-touch synesthesia and empathy.[38]"
+  },
+  {
+   "key": "#39",
+   "number": 39,
+   "surname": "Seaton",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-juwvre",
+   "citedIn": [
+    "spya-vue8gj"
+   ],
+   "citingWords": "Galton in \"The Visions of Sane Persons\".[39]"
+  },
+  {
+   "key": "#40",
+   "number": 40,
+   "surname": "Simner",
+   "year": "2006",
+   "inList": true,
+   "refBlock": "spya-gdzeup",
+   "citedIn": [
+    "spya-f6bv2z"
+   ],
+   "citingWords": "ssociated with personalities or genders.[40]",
+   "aliases": [
+    {
+     "number": 40,
+     "refBlock": "spya-gdzeup"
+    },
+    {
+     "number": 43,
+     "refBlock": "spya-d8tw0k"
+    }
+   ],
+   "ambiguous": true
+  },
+  {
+   "key": "#41",
+   "number": 41,
+   "surname": "Flournoy",
+   "year": "2001",
+   "inList": true,
+   "refBlock": "spya-zy84my",
+   "citedIn": [
+    "spya-f6bv2z",
+    "spya-g9aq2t"
+   ],
+   "citingWords": "ia was documented as early as the 1890s,[41]",
+   "aliases": [
+    {
+     "number": 41,
+     "refBlock": "spya-zy84my"
+    },
+    {
+     "number": 53,
+     "refBlock": "spya-xt24yn"
+    }
+   ]
+  },
+  {
+   "key": "#42",
+   "number": 42,
+   "surname": "Calkins",
+   "year": "1893",
+   "inList": true,
+   "refBlock": "spya-wv3qag",
+   "citedIn": [
+    "spya-f6bv2z"
+   ],
+   "citingWords": "as documented as early as the 1890s,[41][42]"
+  },
+  {
+   "key": "#44",
+   "number": 44,
+   "surname": "Reeves",
+   "year": "2024",
+   "inList": true,
+   "refBlock": "spya-x4998v",
+   "citedIn": [
+    "spya-tzh2js"
+   ],
+   "citingWords": "le triggers (usually) consistent colors.[44]"
+  },
+  {
+   "key": "#45",
+   "number": 45,
+   "surname": "Jonas",
+   "year": "2014",
+   "inList": true,
+   "refBlock": "spya-b027px",
+   "citedIn": [
+    "spya-z0tbkd"
+   ],
+   "citingWords": "cupying space in front and through them.[45]"
+  },
+  {
+   "key": "#46",
+   "number": 46,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-dkyk9p",
+   "citedIn": [
+    "spya-z0tbkd"
+   ],
+   "citingWords": "ing space in front and through them.[45][46]"
+  },
+  {
+   "key": "#47",
+   "number": 47,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-g52ru8",
+   "citedIn": [
+    "spya-z0tbkd"
+   ],
+   "citingWords": "space in front and through them.[45][46][47]"
+  },
+  {
+   "key": "#48",
+   "number": 48,
+   "surname": "Hauw",
+   "year": "2023",
+   "inList": true,
+   "refBlock": "spya-r00j3k",
+   "citedIn": [
+    "spya-md3f5f"
+   ],
+   "citingWords": " sometimes on imaginary strips of paper.[48]",
+   "ambiguous": true
+  },
+  {
+   "key": "#49",
+   "number": 49,
+   "surname": "Hauw",
+   "year": "2023",
+   "inList": true,
+   "refBlock": "spya-edprqw",
+   "citedIn": [
+    "spya-md3f5f"
+   ],
+   "citingWords": "a\" would better describe the phenomenon.[49]",
+   "ambiguous": true
+  },
+  {
+   "key": "#50",
+   "number": 50,
+   "surname": "Makowski",
+   "year": "2024",
+   "inList": true,
+   "refBlock": "spya-j6fbtg",
+   "citedIn": [
+    "spya-md3f5f"
+   ],
+   "citingWords": "e synesthesia may help explain dyslexia.[50]"
+  },
+  {
+   "key": "#51",
+   "number": 51,
+   "surname": "Smith",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-f3gh8s",
+   "citedIn": [
+    "spya-kkbnsb"
+   ],
+   "citingWords": "ia, or if a new type will be considered.[51]"
+  },
+  {
+   "key": "#52",
+   "number": 52,
+   "surname": "van Campen",
+   "year": "2007",
+   "inList": true,
+   "refBlock": "spya-xpa994",
+   "citedIn": [
+    "spya-kx5bk6",
+    "spya-wc25w3",
+    "spya-g9aq2t",
+    "spya-gxvhdt",
+    "spya-ssae2z",
+    "spya-gm7wxu"
+   ],
+   "citingWords": "een keeping a secret their entire lives.[52]"
+  },
+  {
+   "key": "#54",
+   "number": 54,
+   "surname": "Dittmar",
+   "year": "2007",
+   "inList": true,
+   "refBlock": "spya-kgu9d0",
+   "citedIn": [
+    "spya-g9aq2t",
+    "spya-u5ys88"
+   ],
+   "citingWords": " creative processes, and daily life.[52][54]"
+  },
+  {
+   "key": "#55",
+   "number": 55,
+   "surname": "Dailey",
+   "year": "1997",
+   "inList": true,
+   "refBlock": "spya-jr6e5h",
+   "citedIn": [
+    "spya-u5ys88"
+   ],
+   "citingWords": "y to participate in creative activities.[55]"
+  },
+  {
+   "key": "#56",
+   "number": 56,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-a8ddt8",
+   "citedIn": [
+    "spya-u5ys88"
+   ],
+   "citingWords": " reference their spatial visualizations.[56]"
+  },
+  {
+   "key": "#57",
+   "number": 57,
+   "surname": "Ramachandran",
+   "year": "2001",
+   "inList": true,
+   "refBlock": "spya-n4xd7d",
+   "citedIn": [
+    "spya-yv5q77",
+    "spya-n888dv",
+    "spya-c30qw8"
+   ],
+   "citingWords": "me recognition area, red=V4 color area).[57]"
+  },
+  {
+   "key": "#58",
+   "number": 58,
+   "surname": "Hupé",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-h25k8h",
+   "citedIn": [
+    "spya-ndrus3"
+   ],
+   "citingWords": "of synesthesia had not been established.[58]"
+  },
+  {
+   "key": "#59",
+   "number": 59,
+   "surname": "Grossenbacher",
+   "year": "2001",
+   "inList": true,
+   "refBlock": "spya-ta2vk3",
+   "citedIn": [
+    "spya-yb6zd8"
+   ],
+   "citingWords": "ong normally existing feedback pathways.[59]"
+  },
+  {
+   "key": "#60",
+   "number": 60,
+   "surname": "Neckar",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-u8hry0",
+   "citedIn": [
+    "spya-yb6zd8"
+   ],
+   "citingWords": "tain conditions: temporal lobe epilepsy,[60]"
+  },
+  {
+   "key": "#61",
+   "number": 61,
+   "surname": "Gray",
+   "year": "2006",
+   "inList": true,
+   "refBlock": "spya-y3p4g0",
+   "citedIn": [
+    "spya-tg4nax"
+   ],
+   "citingWords": " and the problem of the explanatory gap.[61]"
+  },
+  {
+   "key": "#62",
+   "number": 62,
+   "surname": "Baron-Cohen",
+   "year": "1996",
+   "inList": true,
+   "refBlock": "spya-rb0630",
+   "citedIn": [
+    "spya-ryrx4c",
+    "spya-ssrh29"
+   ],
+   "citingWords": "rst-degree relatives of people affected,[62]",
+   "aliases": [
+    {
+     "number": 62,
+     "refBlock": "spya-rb0630"
+    },
+    {
+     "number": 69,
+     "refBlock": "spya-wb9e3d"
+    }
+   ]
+  },
+  {
+   "key": "#63",
+   "number": 63,
+   "surname": "Brang",
+   "year": "2011",
+   "inList": true,
+   "refBlock": "spya-zb8vsx",
+   "citedIn": [
+    "spya-ryrx4c"
+   ],
+   "citingWords": "uct of some other useful selected trait.[63]"
+  },
+  {
+   "key": "#64",
+   "number": 64,
+   "surname": "Hubbard",
+   "year": "2007",
+   "inList": true,
+   "refBlock": "spya-m8q832",
+   "citedIn": [
+    "spya-vzccrx"
+   ],
+   "citingWords": "interfere with normal daily functioning.[64]"
+  },
+  {
+   "key": "#65",
+   "number": 65,
+   "surname": "Simner",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-xzpr6u",
+   "citedIn": [
+    "spya-dwz43z"
+   ],
+   "citingWords": "mselves, introducing self-referral bias.[65]"
+  },
+  {
+   "key": "#67",
+   "number": 67,
+   "surname": "Carmichael",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-sy8054",
+   "citedIn": [
+    "spya-dwz43z"
+   ],
+   "citingWords": "0 people in the University of Edinburgh.[67]"
+  },
+  {
+   "key": "#68",
+   "number": 68,
+   "surname": "Niccolai",
+   "year": "2012",
+   "inList": true,
+   "refBlock": "spya-kpp3f6",
+   "citedIn": [
+    "spya-pxa63e"
+   ],
+   "citingWords": "ic–color is also prevalent at 18[7]–41%.[68]"
+  },
+  {
+   "key": "#70",
+   "number": 70,
+   "surname": "Simner",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-hdxdg4",
+   "citedIn": [
+    "spya-ssrh29"
+   ],
+   "citingWords": " forward to report atypical experiences.[70]"
+  },
+  {
+   "key": "#71",
+   "number": 71,
+   "surname": "Baron-Cohen",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-j8kuxt",
+   "citedIn": [
+    "spya-cw8fv5"
+   ],
+   "citingWords": "having synesthesia is greater in autism.[71]"
+  },
+  {
+   "key": "#72",
+   "number": 72,
+   "surname": "Neufeld",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-cpcegz",
+   "citedIn": [
+    "spya-cw8fv5"
+   ],
+   "citingWords": "ng synesthesia is greater in autism.[71][72]"
+  },
+  {
+   "key": "#73",
+   "number": 73,
+   "surname": "Hughes",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-rwg9cz",
+   "citedIn": [
+    "spya-cw8fv5"
+   ],
+   "citingWords": "rs describe in terms of savant syndrome.[73]"
+  },
+  {
+   "key": "#74",
+   "number": 74,
+   "surname": "Taylor",
+   "year": "2023",
+   "inList": true,
+   "refBlock": "spya-epa23n",
+   "citedIn": [
+    "spya-cw8fv5"
+   ],
+   "citingWords": " driven by shared genetic underpinnings.[74]"
+  },
+  {
+   "key": "#75",
+   "number": 75,
+   "surname": "Ward",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-aertkx",
+   "citedIn": [
+    "spya-nx89ky"
+   ],
+   "citingWords": "eports that sensory hyperresponsiveness,[75]"
+  },
+  {
+   "key": "#76",
+   "number": 76,
+   "surname": "van Leeuwen",
+   "year": "2021",
+   "inList": true,
+   "refBlock": "spya-wpk32a",
+   "citedIn": [
+    "spya-nx89ky"
+   ],
+   "citingWords": "ts that sensory hyperresponsiveness,[75][76]"
+  },
+  {
+   "key": "#77",
+   "number": 77,
+   "surname": "Edelstein",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-khfzvs",
+   "citedIn": [
+    "spya-nx89ky"
+   ],
+   "citingWords": "n evoke distressing emotional responses.[77]"
+  },
+  {
+   "key": "#78",
+   "number": 78,
+   "surname": "Rouw",
+   "year": "2018",
+   "inList": true,
+   "refBlock": "spya-yr7c5m",
+   "citedIn": [
+    "spya-nx89ky"
+   ],
+   "citingWords": "viously found in the general population.[78]"
+  },
+  {
+   "key": "#79",
+   "number": 79,
+   "surname": "Gage",
+   "year": "1993",
+   "inList": true,
+   "refBlock": "spya-vyktt8",
+   "citedIn": [
+    "spya-f0sbfq",
+    "spya-gxvhdt"
+   ],
+   "citingWords": "o the vocabulary of color in visual art.[79]"
+  },
+  {
+   "key": "#80",
+   "number": 80,
+   "surname": "Goethe",
+   "year": "1840",
+   "inList": true,
+   "refBlock": "spya-dhpjmv",
+   "citedIn": [
+    "spya-f0sbfq"
+   ],
+   "citingWords": "id Goethe in his book Theory of Colours.[80]"
+  },
+  {
+   "key": "#81",
+   "number": 81,
+   "surname": "Peacock",
+   "year": "1988",
+   "inList": true,
+   "refBlock": "spya-zpufkf",
+   "citedIn": [
+    "spya-f0sbfq"
+   ],
+   "citingWords": " perform colored music in concert halls.[81]"
+  },
+  {
+   "key": "#82",
+   "number": 82,
+   "surname": "Jewanski",
+   "year": "2006",
+   "inList": true,
+   "refBlock": "spya-skamfc",
+   "citedIn": [
+    "spya-f0sbfq"
+   ],
+   "citingWords": "form colored music in concert halls.[81][82]"
+  },
+  {
+   "key": "#83",
+   "number": 83,
+   "surname": "Mahling",
+   "year": "1926",
+   "inList": true,
+   "refBlock": "spya-qd70dw",
+   "citedIn": [
+    "spya-w699xx"
+   ],
+   "citingWords": "man physician Georg Tobias Ludwig Sachs.[83]"
+  },
+  {
+   "key": "#84",
+   "number": 84,
+   "surname": "Fechner",
+   "year": "1876",
+   "inList": true,
+   "refBlock": "spya-trc7au",
+   "citedIn": [
+    "spya-w699xx"
+   ],
+   "citingWords": "r photisms among 73 synesthetes in 1876,[84]"
+  },
+  {
+   "key": "#85",
+   "number": 85,
+   "surname": "von Campen",
+   "year": "1996",
+   "inList": true,
+   "refBlock": "spya-v53nag",
+   "citedIn": [
+    "spya-w699xx"
+   ],
+   "citingWords": "otisms among 73 synesthetes in 1876,[84][85]"
+  },
+  {
+   "key": "#86",
+   "number": 86,
+   "surname": "Galton",
+   "year": "1880a",
+   "inList": true,
+   "refBlock": "spya-f5badw",
+   "citedIn": [
+    "spya-w699xx"
+   ],
+   "citingWords": "owed in the 1880s by Francis Galton.[13][86]",
+   "ambiguous": true
+  },
+  {
+   "key": "#87",
+   "number": 87,
+   "surname": "Galton",
+   "year": "1883",
+   "inList": true,
+   "refBlock": "spya-nq7ayh",
+   "citedIn": [
+    "spya-w699xx"
+   ],
+   "citingWords": " in the 1880s by Francis Galton.[13][86][87]"
+  },
+  {
+   "key": "#88",
+   "number": 88,
+   "surname": "Jung",
+   "year": "1956",
+   "inList": true,
+   "refBlock": "spya-j33ta7",
+   "citedIn": [
+    "spya-w699xx"
+   ],
+   "citingWords": "n his Symbols of Transformation in 1912.[88]"
+  },
+  {
+   "key": "#89",
+   "number": 89,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-w4j2rq",
+   "citedIn": [
+    "spya-uepc65"
+   ],
+   "citingWords": "n composer Arnold Schönberg (1874–1951).[89]"
+  },
+  {
+   "key": "#90",
+   "number": 90,
+   "surname": null,
+   "year": "1930",
+   "inList": true,
+   "refBlock": "spya-fpmfwp",
+   "citedIn": [
+    "spya-uepc65"
+   ],
+   "citingWords": "mburg in the late 1920s and early 1930s.[90]"
+  },
+  {
+   "key": "#91",
+   "number": 91,
+   "surname": "Carroll",
+   "year": "2007",
+   "inList": true,
+   "refBlock": "spya-zvyvy2",
+   "citedIn": [
+    "spya-mep8nh"
+   ],
+   "citingWords": "colors, he called them \"Martian colors\".[91]"
+  },
+  {
+   "key": "#92",
+   "number": 92,
+   "surname": "Campen",
+   "year": "1999",
+   "inList": true,
+   "refBlock": "spya-e0kx5t",
+   "citedIn": [
+    "spya-gxvhdt"
+   ],
+   "citingWords": " art, abstract film, and intermedia.[52][92]"
+  },
+  {
+   "key": "#93",
+   "number": 93,
+   "surname": "Berman",
+   "year": "1999",
+   "inList": true,
+   "refBlock": "spya-xgq9z3",
+   "citedIn": [
+    "spya-gxvhdt",
+    "spya-ssae2z",
+    "spya-g73pm0"
+   ],
+   "citingWords": ", abstract film, and intermedia.[52][92][93]"
+  },
+  {
+   "key": "#94",
+   "number": 94,
+   "surname": "von Maur",
+   "year": "1999",
+   "inList": true,
+   "refBlock": "spya-v9gegz",
+   "citedIn": [
+    "spya-gxvhdt"
+   ],
+   "citingWords": "stract film, and intermedia.[52][92][93][94]"
+  },
+  {
+   "key": "#95",
+   "number": 95,
+   "surname": "Gage",
+   "year": "1999",
+   "inList": true,
+   "refBlock": "spya-qx7r5t",
+   "citedIn": [
+    "spya-gxvhdt"
+   ],
+   "citingWords": "ilm, and intermedia.[52][92][93][94][79][95]"
+  },
+  {
+   "key": "#96",
+   "number": 96,
+   "surname": "van Campen",
+   "year": "2009",
+   "inList": true,
+   "refBlock": "spya-yred7j",
+   "citedIn": [
+    "spya-gxvhdt"
+   ],
+   "citingWords": "tiple stimuli in one gestalt experience.[96]",
+   "ambiguous": true
+  },
+  {
+   "key": "#97",
+   "number": 97,
+   "surname": "Bouchet",
+   "year": "2020",
+   "inList": true,
+   "refBlock": "spya-cn9k5x",
+   "citedIn": [
+    "spya-usrc0y"
+   ],
+   "citingWords": " at length in his memoir, Speak, Memory:[97]"
+  },
+  {
+   "key": "#98",
+   "number": 98,
+   "surname": "Tammet",
+   "year": "2007",
+   "inList": true,
+   "refBlock": "spya-zc0cqe",
+   "citedIn": [
+    "spya-zmq9s9"
+   ],
+   "citingWords": "h synesthesia called Born on a Blue Day.[98]"
+  },
+  {
+   "key": "#99",
+   "number": 99,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-kk9nyk",
+   "citedIn": [
+    "spya-zmq9s9"
+   ],
+   "citingWords": "o says she experiences colors as scents.[99]"
+  },
+  {
+   "key": "#100",
+   "number": 100,
+   "surname": "Cytowic",
+   "year": "2018",
+   "inList": true,
+   "refBlock": "spya-mtu6y6",
+   "citedIn": [
+    "spya-ep7pdh"
+   ],
+   "citingWords": "9–1921), using music–color associations.[100]"
+  },
+  {
+   "key": "#101",
+   "number": 101,
+   "surname": "Steen",
+   "year": "2001",
+   "inList": true,
+   "refBlock": "spya-v7j46q",
+   "citedIn": [
+    "spya-ep7pdh"
+   ],
+   "citingWords": "ts with synesthesia, such as Carol Steen[101]"
+  },
+  {
+   "key": "#102",
+   "number": 102,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-atc98b",
+   "citedIn": [
+    "spya-ep7pdh"
+   ],
+   "citingWords": "eriences during severe migraine attacks.[102]"
+  },
+  {
+   "key": "#103",
+   "number": 103,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-c4cy0p",
+   "citedIn": [
+    "spya-ep7pdh"
+   ],
+   "citingWords": "ces during severe migraine attacks.[102][103]"
+  },
+  {
+   "key": "#104",
+   "number": 104,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-f4zzrp",
+   "citedIn": [
+    "spya-ep7pdh"
+   ],
+   "citingWords": "and transmit these personal experiences.[104]"
+  },
+  {
+   "key": "#105",
+   "number": 105,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-s29gnx",
+   "citedIn": [
+    "spya-ep7pdh"
+   ],
+   "citingWords": "ransmit these personal experiences.[104][105]"
+  },
+  {
+   "key": "#106",
+   "number": 106,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-ey9pmt",
+   "citedIn": [
+    "spya-ep7pdh"
+   ],
+   "citingWords": "it these personal experiences.[104][105][106]"
+  },
+  {
+   "key": "#107",
+   "number": 107,
+   "surname": "Samuel",
+   "year": "1994",
+   "inList": true,
+   "refBlock": "spya-kd2e0k",
+   "citedIn": [
+    "spya-ssae2z"
+   ],
+   "citingWords": "-directional sound–color synesthesia.[4][107]"
+  },
+  {
+   "key": "#108",
+   "number": 108,
+   "surname": null,
+   "year": "1981",
+   "inList": true,
+   "refBlock": "spya-cnkzyh",
+   "citedIn": [
+    "spya-ssae2z"
+   ],
+   "citingWords": "rted synesthesia include Duke Ellington,[108]"
+  },
+  {
+   "key": "#109",
+   "number": 109,
+   "surname": "Yastrebtsev",
+   "year": "1908",
+   "inList": true,
+   "refBlock": "spya-fgjfhs",
+   "citedIn": [
+    "spya-ssae2z",
+    "spya-g4snty"
+   ],
+   "citingWords": "Ellington,[108] Nikolai Rimsky-Korsakov,[109]"
+  },
+  {
+   "key": "#110",
+   "number": 110,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-b5uhhz",
+   "citedIn": [
+    "spya-g73pm0"
+   ],
+   "citingWords": "olors with music, or music with colors\".[110]"
+  },
+  {
+   "key": "#111",
+   "number": 111,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-uhh4h9",
+   "citedIn": [
+    "spya-fgf6gr"
+   ],
+   "citingWords": "esent the eleven main tube line colours.[111]"
+  },
+  {
+   "key": "#112",
+   "number": 112,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-cvtwv7",
+   "citedIn": [
+    "spya-fgf6gr"
+   ],
+   "citingWords": " the colour of the tube line on the map.[112]"
+  },
+  {
+   "key": "#113",
+   "number": 113,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-ug2yjm",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "ything he sonically makes is a painting.[113]"
+  },
+  {
+   "key": "#114",
+   "number": 114,
+   "surname": "Seaberg",
+   "year": "2011",
+   "inList": true,
+   "refBlock": "spya-vevmfp",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "nclude musicians Thom Yorke, Billy Joel,[114]"
+  },
+  {
+   "key": "#115",
+   "number": 115,
+   "surname": "Enos",
+   "year": "2020",
+   "inList": true,
+   "refBlock": "spya-ypqk50",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "Billy Joel,[114]: 89, 91 Andy Partridge,[115]"
+  },
+  {
+   "key": "#116",
+   "number": 116,
+   "surname": "Trendell",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-jpb8z8",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "ge,[115] Itzhak Perlman,[114]: 53 Lorde,[116]"
+  },
+  {
+   "key": "#117",
+   "number": 117,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-kn7kce",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "man,[114]: 53 Lorde,[116] Billie Eilish,[117]"
+  },
+  {
+   "key": "#118",
+   "number": 118,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-pc09kg",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "de,[116] Billie Eilish,[117] Charli xcx,[118]"
+  },
+  {
+   "key": "#119",
+   "number": 119,
+   "surname": "Spanos",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-m68e9d",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "ish,[117] Charli xcx,[118] Brendon Urie,[119]"
+  },
+  {
+   "key": "#120",
+   "number": 120,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-zzmb0n",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "117] Charli xcx,[118] Brendon Urie,[119][120]"
+  },
+  {
+   "key": "#121",
+   "number": 121,
+   "surname": "Cairns",
+   "year": "2008",
+   "inList": true,
+   "refBlock": "spya-wh8p0r",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "[118] Brendon Urie,[119][120] Ida Maria,[121]"
+  },
+  {
+   "key": "#122",
+   "number": 122,
+   "surname": "Forrest",
+   "year": "2009",
+   "inList": true,
+   "refBlock": "spya-r5g6e4",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": ",[119][120] Ida Maria,[121] Brian Chase,[122]"
+  },
+  {
+   "key": "#123",
+   "number": 123,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-xkaqxu",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "][120] Ida Maria,[121] Brian Chase,[122][123]"
+  },
+  {
+   "key": "#124",
+   "number": 124,
+   "surname": "Seaman",
+   "year": "2021",
+   "inList": true,
+   "refBlock": "spya-qcxthy",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "cian Kristin Hersh sees music in colors.[124]"
+  },
+  {
+   "key": "#125",
+   "number": 125,
+   "surname": "Hart",
+   "year": "1990",
+   "inList": true,
+   "refBlock": "spya-cd9st7",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "biography Drumming at the Edge of Magic.[125]"
+  },
+  {
+   "key": "#126",
+   "number": 126,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-x2ffe3",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "ynesthesia in a podcast with Rick Rubin.[126]"
+  },
+  {
+   "key": "#127",
+   "number": 127,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-dhsuq8",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "d N.E.R.D., also experiences synesthesia[127]"
+  },
+  {
+   "key": "#128",
+   "number": 128,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-qv9uym",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": ".R.D., also experiences synesthesia[127][128]"
+  },
+  {
+   "key": "#129",
+   "number": 129,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-rsgecy",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "ia and reports colored days of the week.[129]"
+  },
+  {
+   "key": "#130",
+   "number": 130,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-ndaa78",
+   "citedIn": [
+    "spya-ha3fm5"
+   ],
+   "citingWords": "ces many of the band's artistic choices.[130]"
+  },
+  {
+   "key": "#131",
+   "number": 131,
+   "surname": "Dann",
+   "year": "1998",
+   "inList": true,
+   "refBlock": "spya-q6mcp4",
+   "citedIn": [
+    "spya-g4snty"
+   ],
+   "citingWords": "ave been taken from Madame Blavatsky.[4][131]"
+  },
+  {
+   "key": "#132",
+   "number": 132,
+   "surname": "Barth",
+   "year": "2012",
+   "inList": true,
+   "refBlock": "spya-kg27b9",
+   "citedIn": [
+    "spya-gm7wxu"
+   ],
+   "citingWords": " (I invented the colors of the vowels!).[132]"
+  },
+  {
+   "key": "#133",
+   "number": 133,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-kandvq",
+   "citedIn": [
+    "spya-njt934"
+   ],
+   "citingWords": "chnologists, like inventor Nikola Tesla,[133]"
+  },
+  {
+   "key": "#134",
+   "number": 134,
+   "surname": "Feynman",
+   "year": "1988",
+   "inList": true,
+   "refBlock": "spya-qxvszj",
+   "citedIn": [
+    "spya-njt934"
+   ],
+   "citingWords": "at Do You Care What Other People Think?:[134]"
+  },
+  {
+   "key": "#135",
+   "number": 135,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-gpydbv",
+   "citedIn": [
+    "spya-njt934"
+   ],
+   "citingWords": " n's, and dark brown x's flying around.\"[135]"
+  },
+  {
+   "key": "#136",
+   "number": 136,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-dwzut4",
+   "citedIn": [
+    "spya-crgtw9"
+   ],
+   "citingWords": " is a 13-year-old girl with synesthesia.[136]"
+  },
+  {
+   "key": "#137",
+   "number": 137,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-v0s660",
+   "citedIn": [
+    "spya-kn5v9c"
+   ],
+   "citingWords": "l student with person-color synesthesia.[137]"
+  },
+  {
+   "key": "#138",
+   "number": 138,
+   "surname": "Duffy",
+   "year": "2006",
+   "inList": true,
+   "refBlock": "spya-fat7uk",
+   "citedIn": [
+    "spya-p5qf7k"
+   ],
+   "citingWords": "acters have been used in modern fiction.[138]"
+  },
+  {
+   "key": "#139",
+   "number": 139,
+   "surname": "Duffy",
+   "year": "2010",
+   "inList": true,
+   "refBlock": "spya-t9knpv",
+   "citedIn": [
+    "spya-p5qf7k"
+   ],
+   "citingWords": "s have been used in modern fiction.[138][139]"
+  },
+  {
+   "key": "#140",
+   "number": 140,
+   "surname": "Chen",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-u2ytwn",
+   "citedIn": [
+    "spya-kmnphg"
+   ],
+   "citingWords": "Kiki\" while the right is called \"Bouba\".[140]"
+  },
+  {
+   "key": "#141",
+   "number": 141,
+   "surname": "van Leeuwen",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-nkgzfx",
+   "citedIn": [
+    "spya-kuc05p"
+   ],
+   "citingWords": " perception or multisensory integration.[141]"
+  },
+  {
+   "key": "#142",
+   "number": 142,
+   "surname": "Harvey",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-t8ttug",
+   "citedIn": [
+    "spya-kuc05p"
+   ],
+   "citingWords": "eption or multisensory integration.[141][142]"
+  },
+  {
+   "key": "#143",
+   "number": 143,
+   "surname": "Maurer",
+   "year": "2006",
+   "inList": true,
+   "refBlock": "spya-bwp3my",
+   "citedIn": [
+    "spya-g86z7b"
+   ],
+   "citingWords": "n (too young to speak) show this effect.[143]"
+  },
+  {
+   "key": "#144",
+   "number": 144,
+   "surname": "Milan",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-ka37gw",
+   "citedIn": [
+    "spya-g86z7b"
+   ],
+   "citingWords": "ffect may operate a form of ideasthesia.[144]"
+  },
+  {
+   "key": "#145",
+   "number": 145,
+   "surname": "Gray",
+   "year": "2002",
+   "inList": true,
+   "refBlock": "spya-ym47kd",
+   "citedIn": [
+    "spya-wk243x"
+   ],
+   "citingWords": " the philosophical problem of qualia,[5][145]"
+  },
+  {
+   "key": "#146",
+   "number": 146,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-ekkg77",
+   "citedIn": [
+    "spya-wk243x"
+   ],
+   "citingWords": "lead to different conscious experiences.[146]"
+  },
+  {
+   "key": "#147",
+   "number": 147,
+   "surname": "Suslick",
+   "year": "2012",
+   "inList": true,
+   "refBlock": "spya-bw4efn",
+   "citedIn": [
+    "spya-sbajxd"
+   ],
+   "citingWords": "'intentional synesthesia' in technology,[147]"
+  },
+  {
+   "key": "#148",
+   "number": 148,
+   "surname": "Scheff",
+   "year": "1986",
+   "inList": true,
+   "refBlock": "spya-xtpmrw",
+   "citedIn": [
+    "spya-sbajxd"
+   ],
+   "citingWords": "echnology,[147] and sensory prosthetics.[148]"
+  },
+  {
+   "key": "#149",
+   "number": 149,
+   "surname": null,
+   "year": null,
+   "inList": true,
+   "refBlock": "spya-da4gjh",
+   "citedIn": [
+    "spya-b7f5fq"
+   ],
+   "citingWords": "emented using low-cost hardware in 1991.[149]"
+  },
+  {
+   "key": "#150",
+   "number": 150,
+   "surname": "Striem-Amit",
+   "year": "2012",
+   "inList": true,
+   "refBlock": "spya-qf9vpg",
+   "citedIn": [
+    "spya-b7f5fq"
+   ],
+   "citingWords": "t high resolution (up to 25,344 pixels).[150]"
+  },
+  {
+   "key": "#151",
+   "number": 151,
+   "surname": "Carmichael",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-xsvmjd",
+   "citedIn": [
+    "spya-b7f5fq"
+   ],
+   "citingWords": "ed by pitch, and brightness by loudness.[151]"
+  },
+  {
+   "key": "#152",
+   "number": 152,
+   "surname": "Haigh",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-ub5usy",
+   "citedIn": [
+    "spya-b7f5fq"
+   ],
+   "citingWords": "ty into stimuli in a remaining modality.[152]"
+  }
+ ],
+ "citationNumbers": 152,
+ "canonicalWorks": 148
+}

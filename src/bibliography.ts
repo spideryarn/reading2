@@ -744,14 +744,14 @@ export function toDrafts(
  * them is gone, and the foot says "these are the 80" over one row. GPT Sol F13,
  * 2026-09-12.
  */
-function keepLeanedOnMost<T extends { draft: Draft }>(items: T[], drops: CitationDrops): T[] {
-  if (items.length <= MAX_CITATIONS) return items;
-  drops.overCap += items.length - MAX_CITATIONS;
+function keepLeanedOnMost<T extends { draft: Draft }>(items: T[], drops: CitationDrops, cap: number = MAX_CITATIONS): T[] {
+  if (items.length <= cap) return items;
+  drops.overCap += items.length - cap;
   const kept = new Set(
     items
       .map((w, i) => ({ r: w.draft.relevance ?? -1, i }))
       .sort((a, b) => b.r - a.r || a.i - b.i)
-      .slice(0, MAX_CITATIONS)
+      .slice(0, cap)
       .map((x) => x.i),
   );
   return items.filter((_, i) => kept.has(i));
@@ -1864,6 +1864,12 @@ export function buildBibliography(
     scores: CitationScoreDrops;
     /** A PDF's numbered reference list, or `null` — `generateBibliography`'s `referenceList`. */
     referenceList?: NumberedReferenceList | null;
+    /**
+     * **Only for an eval**: where `keepLeanedOnMost` cuts, in place of
+     * `MAX_CITATIONS` — evals/citations-recall/score.ts scores the folded list
+     * uncapped as well as capped (plan 261101a). No production caller passes it.
+     */
+    cap?: number;
   },
 ): Bibliography {
   /* `{}` is a failed answer, not an article that cites nothing — the timeline's
@@ -1955,7 +1961,7 @@ export function buildBibliography(
   );
 
   /* 3½ — the cap, on works rather than rows, now that both folds are done. */
-  const works = keepLeanedOnMost(folded, drops);
+  const works = keepLeanedOnMost(folded, drops, opts.cap);
 
   if (works.length === 0 && parsed.works.length > 0) {
     const d = drops;
