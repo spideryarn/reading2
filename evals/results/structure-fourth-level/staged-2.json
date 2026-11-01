@@ -1,0 +1,1875 @@
+{
+ "label": "staged-2",
+ "at": "2026-11-01T15:36:05.730Z",
+ "commit": "45fc89c87",
+ "srcDirty": true,
+ "promptVersion": "toc/13",
+ "systemSha256": "634fd08ec3e5f967",
+ "subsectionsPromptVersion": "subs/1",
+ "subsectionsSha256": "6db29bb3af38d295",
+ "spentUsd": 2.8233,
+ "results": [
+  {
+   "slug": "arxiv-2308-08708-spya-w598t3",
+   "blocks": 667,
+   "body": 667,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:33:37.983Z",
+      "endedAt": "2026-11-01T15:33:55.324Z",
+      "ms": 17341,
+      "networkAttempts": 1,
+      "inputTokens": 97867,
+      "outputTokens": 2419,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.219924,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 17341,
+    "usd": 0.219924
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 3,
+    "sections": 24,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 24,
+     "hit": 0
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 7,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 9,
+   "stage2": {
+    "ms": 9334,
+    "usd": 0.13241,
+    "calls": 3,
+    "stats": {
+     "eligible": 7,
+     "made": 7,
+     "failedSections": 0,
+     "added": 26,
+     "calls": 3,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 26,
+    "deepenedSections": 7,
+    "swallowedHeadings": 3,
+    "sections": 24,
+    "headingSplits": 19,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 24,
+     "hit": 19
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 2,
+     "folded": 0,
+     "none": 5
+    }
+   },
+   "stagedLabelBatches": 9,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "arxiv-2602-11988-spya-fupe7p",
+   "blocks": 241,
+   "body": 241,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:33:38.039Z",
+      "endedAt": "2026-11-01T15:33:58.443Z",
+      "ms": 20404,
+      "networkAttempts": 1,
+      "inputTokens": 30913,
+      "outputTokens": 2772,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.089546,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 20404,
+    "usd": 0.089546
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 4,
+    "sections": 24,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 28,
+     "hit": 0
+    },
+    "headedSections": 11,
+    "undividedHeadedSections": 11,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 5,
+   "stage2": {
+    "ms": 12828,
+    "usd": 0.049716,
+    "calls": 2,
+    "stats": {
+     "eligible": 7,
+     "made": 7,
+     "failedSections": 0,
+     "added": 25,
+     "calls": 2,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 1,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 2,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 25,
+    "deepenedSections": 7,
+    "swallowedHeadings": 4,
+    "sections": 24,
+    "headingSplits": 18,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 28,
+     "hit": 13
+    },
+    "headedSections": 11,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 3,
+     "folded": 3,
+     "none": 1
+    }
+   },
+   "stagedLabelBatches": 4,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+   "blocks": 244,
+   "body": 244,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:33:38.044Z",
+      "endedAt": "2026-11-01T15:34:09.625Z",
+      "ms": 31581,
+      "networkAttempts": 1,
+      "inputTokens": 23607,
+      "outputTokens": 4322,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.090434,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 31581,
+    "usd": 0.090434
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 33,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 3,
+   "stage2": {
+    "ms": 0,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 1,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 33,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 3,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "noema-mythology-of-conscious-ai",
+   "blocks": 141,
+   "body": 141,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:33:38.047Z",
+      "endedAt": "2026-11-01T15:33:55.584Z",
+      "ms": 17537,
+      "networkAttempts": 1,
+      "inputTokens": 22958,
+      "outputTokens": 2331,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.069226,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 17537,
+    "usd": 0.069226
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 19,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 2,
+   "stage2": {
+    "ms": 0,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 19,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 2,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+   "blocks": 172,
+   "body": 172,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:33:55.599Z",
+      "endedAt": "2026-11-01T15:34:21.907Z",
+      "ms": 26308,
+      "networkAttempts": 1,
+      "inputTokens": 30652,
+      "outputTokens": 3541,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.096714,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 26308,
+    "usd": 0.096714
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 32,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 3,
+   "stage2": {
+    "ms": 1,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 1,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 32,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 3,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "arxiv-2307-09288v2-spya-smdqsk",
+   "blocks": 749,
+   "body": 749,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:34:04.702Z",
+      "endedAt": "2026-11-01T15:34:27.480Z",
+      "ms": 22778,
+      "networkAttempts": 1,
+      "inputTokens": 118459,
+      "outputTokens": 3237,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.269288,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 22778,
+    "usd": 0.269288
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 1,
+    "sections": 31,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 50,
+     "hit": 0
+    },
+    "headedSections": 15,
+    "undividedHeadedSections": 15,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 12,
+   "stage2": {
+    "ms": 16576,
+    "usd": 0.232748,
+    "calls": 4,
+    "stats": {
+     "eligible": 16,
+     "made": 16,
+     "failedSections": 0,
+     "added": 61,
+     "calls": 4,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 1,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 61,
+    "deepenedSections": 16,
+    "swallowedHeadings": 1,
+    "sections": 31,
+    "headingSplits": 45,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 50,
+     "hit": 40
+    },
+    "headedSections": 15,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 7,
+     "folded": 2,
+     "none": 7
+    }
+   },
+   "stagedLabelBatches": 11,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "replication-crisis-spya-hrjamq",
+   "blocks": 551,
+   "body": 274,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:34:09.647Z",
+      "endedAt": "2026-11-01T15:34:26.650Z",
+      "ms": 17003,
+      "networkAttempts": 1,
+      "inputTokens": 36453,
+      "outputTokens": 2134,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.094246,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 17003,
+    "usd": 0.094246
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 4,
+    "sections": 21,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 18,
+     "hit": 0
+    },
+    "headedSections": 6,
+    "undividedHeadedSections": 6,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 5,
+   "stage2": {
+    "ms": 14533,
+    "usd": 0.041976,
+    "calls": 1,
+    "stats": {
+     "eligible": 4,
+     "made": 4,
+     "failedSections": 0,
+     "added": 20,
+     "calls": 1,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 3,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 2,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 20,
+    "deepenedSections": 4,
+    "swallowedHeadings": 4,
+    "sections": 21,
+    "headingSplits": 16,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 18,
+     "hit": 16
+    },
+    "headedSections": 6,
+    "undividedHeadedSections": 2,
+    "openings": {
+     "own": 4,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 5,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "race-human-categorization-spya-rpwc59",
+   "blocks": 663,
+   "body": 435,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:34:11.291Z",
+      "endedAt": "2026-11-01T15:34:30.475Z",
+      "ms": 19184,
+      "networkAttempts": 1,
+      "inputTokens": 52716,
+      "outputTokens": 2511,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.130542,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 19184,
+    "usd": 0.130542
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 25,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 6,
+     "hit": 0
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 6,
+   "stage2": {
+    "ms": 0,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 2,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 25,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 6,
+     "hit": 0
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 6,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "synesthesia-spya-xkeccf",
+   "blocks": 320,
+   "body": 168,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:34:21.922Z",
+      "endedAt": "2026-11-01T15:34:42.353Z",
+      "ms": 20431,
+      "networkAttempts": 1,
+      "inputTokens": 23497,
+      "outputTokens": 2753,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.074524,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 20431,
+    "usd": 0.074524
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 12,
+    "sections": 26,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 7,
+     "hit": 0
+    },
+    "headedSections": 2,
+    "undividedHeadedSections": 2,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 3,
+   "stage2": {
+    "ms": 7853,
+    "usd": 0.018996,
+    "calls": 1,
+    "stats": {
+     "eligible": 2,
+     "made": 2,
+     "failedSections": 0,
+     "added": 8,
+     "calls": 1,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 5,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 8,
+    "deepenedSections": 2,
+    "swallowedHeadings": 12,
+    "sections": 26,
+    "headingSplits": 6,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 7,
+     "hit": 6
+    },
+    "headedSections": 2,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 2,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 3,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "spider-silk-spya-ge30uz",
+   "blocks": 263,
+   "body": 131,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:34:30.487Z",
+      "endedAt": "2026-11-01T15:34:48.657Z",
+      "ms": 18170,
+      "networkAttempts": 1,
+      "inputTokens": 18967,
+      "outputTokens": 2136,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.059294,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 18170,
+    "usd": 0.059294
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 20,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 18,
+     "hit": 0
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 2,
+   "stage2": {
+    "ms": 11841,
+    "usd": 0.028522,
+    "calls": 1,
+    "stats": {
+     "eligible": 3,
+     "made": 3,
+     "failedSections": 0,
+     "added": 19,
+     "calls": 1,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 19,
+    "deepenedSections": 3,
+    "swallowedHeadings": 0,
+    "sections": 20,
+    "headingSplits": 16,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 18,
+     "hit": 16
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 3,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 2,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "arxiv-1810-spya-e24vmj",
+   "blocks": 229,
+   "body": 229,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:34:41.195Z",
+      "endedAt": "2026-11-01T15:35:01.486Z",
+      "ms": 20291,
+      "networkAttempts": 1,
+      "inputTokens": 32663,
+      "outputTokens": 3241,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.097736,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 20291,
+    "usd": 0.097736
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 21,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 14,
+     "hit": 0
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 7,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 4,
+   "stage2": {
+    "ms": 6012,
+    "usd": 0.021158,
+    "calls": 1,
+    "stats": {
+     "eligible": 2,
+     "made": 2,
+     "failedSections": 0,
+     "added": 7,
+     "calls": 1,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 1,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 1
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 7,
+    "deepenedSections": 2,
+    "swallowedHeadings": 0,
+    "sections": 21,
+    "headingSplits": 5,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 14,
+     "hit": 5
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 5,
+    "openings": {
+     "own": 0,
+     "folded": 1,
+     "none": 1
+    }
+   },
+   "stagedLabelBatches": 4,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "gestalt-psychology-spya-wgsm0y",
+   "blocks": 182,
+   "body": 122,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:34:44.086Z",
+      "endedAt": "2026-11-01T15:35:03.708Z",
+      "ms": 19622,
+      "networkAttempts": 1,
+      "inputTokens": 16662,
+      "outputTokens": 2873,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.062054,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 19622,
+    "usd": 0.062054
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 5,
+    "sections": 26,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 2,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 2,
+   "stage2": {
+    "ms": 0,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 2,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 3,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 5,
+    "sections": 26,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 2,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 2,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+   "blocks": 159,
+   "body": 159,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:34:50.221Z",
+      "endedAt": "2026-11-01T15:35:09.076Z",
+      "ms": 18855,
+      "networkAttempts": 1,
+      "inputTokens": 21921,
+      "outputTokens": 2250,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.066342,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 18855,
+    "usd": 0.066342
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 1,
+    "sections": 15,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 9,
+     "hit": 0
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 3,
+   "stage2": {
+    "ms": 5923,
+    "usd": 0.018276,
+    "calls": 1,
+    "stats": {
+     "eligible": 3,
+     "made": 3,
+     "failedSections": 0,
+     "added": 9,
+     "calls": 1,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 9,
+    "deepenedSections": 3,
+    "swallowedHeadings": 1,
+    "sections": 15,
+    "headingSplits": 6,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 9,
+     "hit": 6
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 2,
+     "folded": 0,
+     "none": 1
+    }
+   },
+   "stagedLabelBatches": 3,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "haslemere-spya-a8he7z",
+   "blocks": 580,
+   "body": 264,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:35:00.518Z",
+      "endedAt": "2026-11-01T15:35:33.778Z",
+      "ms": 33260,
+      "networkAttempts": 1,
+      "inputTokens": 29775,
+      "outputTokens": 4923,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.10878,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 33260,
+    "usd": 0.10878
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 7,
+    "sections": 51,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 11,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 4,
+   "stage2": {
+    "ms": 1,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 8,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 7,
+    "sections": 51,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 11,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 4,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "dodo-spya-nyc4ud",
+   "blocks": 427,
+   "body": 251,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:35:03.721Z",
+      "endedAt": "2026-11-01T15:35:22.712Z",
+      "ms": 18991,
+      "networkAttempts": 1,
+      "inputTokens": 35262,
+      "outputTokens": 2366,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.094184,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 18991,
+    "usd": 0.094184
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 18,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 3,
+   "stage2": {
+    "ms": 1,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 18,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 3,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "simulators-spya-q2xbny",
+   "blocks": 333,
+   "body": 333,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:35:07.512Z",
+      "endedAt": "2026-11-01T15:35:22.313Z",
+      "ms": 14801,
+      "networkAttempts": 1,
+      "inputTokens": 35363,
+      "outputTokens": 1630,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.087026,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 14801,
+    "usd": 0.087026
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 3,
+    "sections": 6,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 6,
+     "hit": 0
+    },
+    "headedSections": 2,
+    "undividedHeadedSections": 2,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 6,
+   "stage2": {
+    "ms": 4164,
+    "usd": 0.01649,
+    "calls": 1,
+    "stats": {
+     "eligible": 1,
+     "made": 1,
+     "failedSections": 0,
+     "added": 4,
+     "calls": 1,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 1,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 4,
+    "deepenedSections": 1,
+    "swallowedHeadings": 3,
+    "sections": 6,
+    "headingSplits": 3,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 6,
+     "hit": 3
+    },
+    "headedSections": 2,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 1,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 6,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "nber-w31161-spya-dkgc83",
+   "blocks": 237,
+   "body": 220,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:35:15.013Z",
+      "endedAt": "2026-11-01T15:35:36.017Z",
+      "ms": 21004,
+      "networkAttempts": 1,
+      "inputTokens": 39496,
+      "outputTokens": 2850,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.107492,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 21004,
+    "usd": 0.107492
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 27,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 7,
+     "hit": 0
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 4,
+   "stage2": {
+    "ms": 3852,
+    "usd": 0.010882,
+    "calls": 1,
+    "stats": {
+     "eligible": 1,
+     "made": 1,
+     "failedSections": 0,
+     "added": 3,
+     "calls": 1,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 1,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 3,
+    "deepenedSections": 1,
+    "swallowedHeadings": 1,
+    "sections": 27,
+    "headingSplits": 2,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 1,
+    "subheadings": {
+     "expected": 7,
+     "hit": 1
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 3,
+    "openings": {
+     "own": 1,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 4,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "paul-graham-spya-wnuyuz",
+   "blocks": 135,
+   "body": 135,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:35:22.721Z",
+      "endedAt": "2026-11-01T15:35:39.107Z",
+      "ms": 16386,
+      "networkAttempts": 1,
+      "inputTokens": 15517,
+      "outputTokens": 2045,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.051484,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 16386,
+    "usd": 0.051484
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 21,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 2,
+   "stage2": {
+    "ms": 1,
+    "usd": 0,
+    "calls": 0,
+    "stats": {
+     "eligible": 0,
+     "made": 0,
+     "failedSections": 0,
+     "added": 0,
+     "calls": 0,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 21,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 2,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  },
+  {
+   "slug": "s3-gdl-45mb-spya-cc9kr8",
+   "blocks": 1025,
+   "body": 970,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:35:26.503Z",
+      "endedAt": "2026-11-01T15:35:53.295Z",
+      "ms": 26792,
+      "networkAttempts": 1,
+      "inputTokens": 137859,
+      "outputTokens": 4024,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.315958,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 26792,
+    "usd": 0.315958
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 59,
+    "sections": 41,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 19,
+     "hit": 0
+    },
+    "headedSections": 11,
+    "undividedHeadedSections": 11,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 18,
+   "stage2": {
+    "ms": 12405,
+    "usd": 0.067324,
+    "calls": 1,
+    "stats": {
+     "eligible": 5,
+     "made": 4,
+     "failedSections": 1,
+     "added": 14,
+     "calls": 1,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 21,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 14,
+    "deepenedSections": 4,
+    "swallowedHeadings": 59,
+    "sections": 41,
+    "headingSplits": 10,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 19,
+     "hit": 10
+    },
+    "headedSections": 11,
+    "undividedHeadedSections": 7,
+    "openings": {
+     "own": 4,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "stagedLabelBatches": 18,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  }
+ ]
+}

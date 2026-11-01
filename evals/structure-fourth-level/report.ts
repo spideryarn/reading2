@@ -124,7 +124,7 @@ function treeOf(label: string, slug: string): { tree: Tree; body: Block[] } | nu
 }
 
 /** Gate 1, by the author's heading text — the paper's own, public. */
-function paperGate(tree: Tree, body: Block[]): string[] {
+export function paperGate(tree: Tree, body: Block[]): string[] {
   const start = (n: TreeNode) => body.findIndex((b) => b.id === n.range[0]);
   const startsAt = (text: string): TreeNode[] => {
     const i = body.findIndex((b) => b.kind === "heading" && b.text.startsWith(text));

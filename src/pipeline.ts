@@ -4093,6 +4093,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              docs/reusable/silent-success.md. */
           deepen: run.deepen,
           deepenFailed: run.deepenFailed,
+          /* **Stage 2, the sub-section pass** (src/structure-subsections.ts):
+             how many sections were eligible, how many came back, and why the
+             rest were skipped. Logged at every value, `null` where it did not
+             run. Plan 261101d. */
+          subsectionPass: run.subsectionPass,
+          subsectionPassFailed: run.subsectionPassFailed,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,
@@ -4179,6 +4185,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           : run.deepen && run.deepen.targets > 0
             ? `, ${run.deepen.expanded} of ${run.deepen.targets} sections deepened`
             : "";
+      /* Stage 2 on the card: silent when it found nothing to divide, said when it
+         divided something or failed, as the deepening clause above is. */
+      const divided = run.subsectionPassFailed
+        ? ", sub-sections failed (tree kept)"
+        : run.subsectionPass && run.subsectionPass.made > 0
+          ? `, ${run.subsectionPass.made} divided into sub-sections`
+          : "";
       /* **The "N paragraphs unlabelled" clause left with the labels**
          (2026-09-06). It is on `STEPS.labels`'s `detail` now, which is the card
          the reader is watching while a label run is going; saying it here would
@@ -4189,7 +4202,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
-        detail: `${run.internal} sections over ${run.blocks} blocks${fromHeadings}${deepened}`,
+        detail: `${run.internal} sections over ${run.blocks} blocks${fromHeadings}${deepened}${divided}`,
       };
     },
   },

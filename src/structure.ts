@@ -84,6 +84,13 @@ import { log } from "./log.js";
 import { runSlices, seamsHeld, type SliceDeps, slicesDeadline, type SlicesFailure } from "./structure-slices.js";
 import { plainWords } from "./plain-words.js";
 import { type LeaseWindow, NeedsAnotherWindow } from "./another-window.js";
+import {
+  addSubsections,
+  liveSubsectionsExecutor,
+  subsectionsEnabled,
+  type SubsectionStats,
+  type SubsectionsExecutor,
+} from "./structure-subsections.js";
 import { paperwork } from "./paperwork.js";
 import { depthCounts } from "./structure-depth.js";
 
@@ -2476,6 +2483,18 @@ export interface StructureRun {
    * has no symptom at all. docs/reusable/silent-success.md.
    */
   deepenFailed: boolean;
+  /**
+   * **What stage 2 did** — sub-sections where the author's sub-headings divide
+   * a section (src/structure-subsections.ts) — or `null` where it was not run:
+   * switched off, the deepening wave on instead, the slices path, or a tree no
+   * model wrote. Zeros and `null` are different facts, as for `deepen`.
+   *
+   * Its calls' tokens are **not** in `inputTokens`/`outputTokens` below; the
+   * AI-spend ledger, task `structure`, has them, like every other call's.
+   */
+  subsectionPass: SubsectionStats | null;
+  /** Stage 2 threw, so this tree is stage 1's. The article is correct either way, which is why it needs a flag. */
+  subsectionPassFailed: boolean;
   /* **`labelsDropped` was here and is `LabelRun.dropped` alone now.** A
      paragraph the model would not label is invisible in the product — the leaf
      simply has no row — so the count still has to be reported somewhere a
@@ -2591,6 +2610,14 @@ export async function generateStructure(opts: {
    */
   expansionExecutor?: ExpansionExecutor;
   /**
+   * **Whether to run stage 2, the sub-section pass.** Defaults to
+   * `subsectionsEnabled()`, which is on unless `SPIDERYARN_SUBSECTIONS=0`.
+   * A test passes it; production passes nothing.
+   */
+  subsections?: boolean;
+  /** The seam stage 2 talks to a model through. Defaults to the live, streaming one. */
+  subsectionsExecutor?: SubsectionsExecutor;
+  /**
    * **The wall clock this step has to be finished by** — `claimedMs + leaseMs -
    * DEADLINE_MARGIN_MS`, which the queue already computes (src/jobs.ts).
    *
@@ -2673,6 +2700,8 @@ export async function generateStructure(opts: {
         wholeDocumentUsage: { input_tokens: 0, output_tokens: 0 },
         deepen: null,
         deepenFailed: false,
+        subsectionPass: null,
+        subsectionPassFailed: false,
       },
       { ...buildBoundedHeadingTree(blocks, slug, opts.articleTitle).tree, provisional: "awaiting-structure" },
     );
@@ -2708,13 +2737,16 @@ export async function generateStructure(opts: {
       ...(opts.signal ? { signal: opts.signal } : {}),
       ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
     });
-    /* The deepening wave is not run on this path. It is off for every reader. */
+    /* Neither the deepening wave nor the sub-section pass runs on this path:
+       a document too long for one answer is a book, and both are untested there. */
     const spent: StructureSpend = {
       wholeDocumentResumed: sliced.ok && sliced.spend.calls === 0 && sliced.spend.resumed > 0,
       wholeDocumentCalls: sliced.spend.calls,
       wholeDocumentUsage: sliced.spend.usage,
       deepen: null,
       deepenFailed: false,
+      subsectionPass: null,
+      subsectionPassFailed: false,
     };
     const giveUp = (slicesFailed: SlicesFailure, err?: unknown): StructureRun => {
       log("pipeline").warn(
@@ -3292,7 +3324,65 @@ export async function generateStructure(opts: {
     }
   }
 
-  const spent: StructureSpend = { wholeDocumentResumed, wholeDocumentCalls, wholeDocumentUsage, deepen, deepenFailed };
+  /**
+   * **Stage 2: sub-sections where the author's own sub-headings divide a
+   * section** (src/structure-subsections.ts, plan 261101d). On by default;
+   * `SPIDERYARN_SUBSECTIONS=0` turns it off. Never alongside the deepening
+   * wave, which would divide the same sections its own way.
+   *
+   * Placed like the wave and for its reasons: after stage 1's checkpoint write,
+   * so a failure here cannot cost the tree just paid for; before the labels,
+   * which are cut along the finished tree; on the body tree, rebuilt from
+   * scratch by `buildTree` so every check runs once over the finished tree.
+   *
+   * **A failure is not a failed article**: a throw is a `warn` and stage 1's
+   * tree, with `subsectionPassFailed` on the run. The two exceptions are a
+   * reader's Stop and `NeedsAnotherWindow`, which hands the job back to the
+   * queue before stage 2 buys anything, and both go up.
+   */
+  let subsectionPass: SubsectionStats | null = null;
+  let subsectionPassFailed = false;
+  if (!deepening && (opts.subsections ?? subsectionsEnabled())) {
+    try {
+      const added = await addSubsections({
+        tree: wave1.bodyTree,
+        body,
+        slug,
+        execute: opts.subsectionsExecutor ?? liveSubsectionsExecutor(opts.power, opts.signal),
+        ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}),
+        ...(opts.window ? { window: opts.window } : {}),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+      subsectionPass = added.stats;
+      if (added.root !== null) {
+        const rebuilt = emptyBuildReport();
+        const deeper = appendSupplement(buildTree(added.root, {}, body, slug, rebuilt), groups);
+        assertTreeSound(blocks, deeper);
+        structure = deeper;
+        built.repairs.push(...rebuilt.repairs);
+        built.droppedChildren.push(...rebuilt.droppedChildren);
+        built.unresolvedStarts.push(...rebuilt.unresolvedStarts);
+        built.rangelessChildren.push(...rebuilt.rangelessChildren);
+        built.droppedHeadings.push(...rebuilt.droppedHeadings);
+        built.collapsedRungs.push(...rebuilt.collapsedRungs);
+        built.droppedQuestions.push(...rebuilt.droppedQuestions);
+      }
+    } catch (err) {
+      if (err instanceof NeedsAnotherWindow || opts.signal?.aborted) throw err;
+      subsectionPassFailed = true;
+      log("pipeline").warn({ slug, err }, "the sub-section pass failed; keeping the table of contents stage 1 made");
+    }
+  }
+
+  const spent: StructureSpend = {
+    wholeDocumentResumed,
+    wholeDocumentCalls,
+    wholeDocumentUsage,
+    deepen,
+    deepenFailed,
+    subsectionPass,
+    subsectionPassFailed,
+  };
 
   return finishStructureRun({
     blocks,
@@ -3337,6 +3427,8 @@ interface StructureSpend {
   wholeDocumentUsage: { input_tokens: number; output_tokens: number };
   deepen: DeepenStats | null;
   deepenFailed: boolean;
+  subsectionPass: SubsectionStats | null;
+  subsectionPassFailed: boolean;
 }
 
 /**
@@ -3361,7 +3453,7 @@ function finishStructureRun(
   },
 ): StructureRun {
   const { blocks, slug, started, structure, built, source } = made;
-  const { wholeDocumentResumed, wholeDocumentCalls, wholeDocumentUsage, deepen, deepenFailed } = made;
+  const { wholeDocumentResumed, wholeDocumentCalls, wholeDocumentUsage, deepen, deepenFailed, subsectionPass, subsectionPassFailed } = made;
   const { body, groups, stranded } = made.split;
   const structural = blocks.filter((b) => isStructural(b)).length;
 
@@ -3582,6 +3674,8 @@ function finishStructureRun(
     wholeDocumentCalls,
     deepen,
     deepenFailed,
+    subsectionPass,
+    subsectionPassFailed,
     /* **Both remaining passes, and the label pass is no longer one of them.**
        What this number answers is "what did a tree cost", and until 2026-09-06
        the label term was most of the bill. It is the `labels` step's now, and

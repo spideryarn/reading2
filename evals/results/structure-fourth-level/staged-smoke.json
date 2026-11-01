@@ -1,0 +1,134 @@
+{
+ "label": "staged-smoke",
+ "at": "2026-11-01T14:58:11.160Z",
+ "commit": "45fc89c87",
+ "srcDirty": false,
+ "promptVersion": "toc/13",
+ "systemSha256": "634fd08ec3e5f967",
+ "expandPromptVersion": "expand/8",
+ "expandSha256": "e464b9f088fc291b",
+ "spentUsd": 0.6256,
+ "results": [
+  {
+   "slug": "arxiv-2308-08708-spya-w598t3",
+   "blocks": 667,
+   "body": 667,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T14:57:33.673Z",
+      "endedAt": "2026-11-01T14:57:51.938Z",
+      "ms": 18265,
+      "networkAttempts": 1,
+      "inputTokens": 97867,
+      "outputTokens": 2524,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.220974,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 18265,
+    "usd": 0.220974
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 3,
+    "sections": 22,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 22,
+     "hit": 0
+    },
+    "headedSections": 8,
+    "undividedHeadedSections": 8,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 9,
+   "deepen": {
+    "ms": 19183,
+    "usd": 0.4046592,
+    "calls": 6,
+    "stats": {
+     "targets": 9,
+     "expanded": 6,
+     "added": 24,
+     "withheld": 0,
+     "uncheckpointed": 0,
+     "calls": 2,
+     "resumed": 0,
+     "oversized": 0,
+     "refusedTargets": 3,
+     "outOfTime": 0,
+     "rateLimited": 0,
+     "verdicts": {
+      "candidates": 46,
+      "rawYes": 2,
+      "rawNo": 22,
+      "unassessed": 22,
+      "effectiveYes": 15,
+      "overrides": {
+       "authored-heading": 3,
+       "depth-cap": 0,
+       "divisibility-floor": 0,
+       "forced-open": 1
+      }
+     },
+     "missingQuestions": [],
+     "usage": {
+      "inputTokens": 63177,
+      "outputTokens": 4351,
+      "cacheReadTokens": 3834,
+      "cacheWriteTokens": 7668
+     }
+    },
+    "because": {
+     "divisibility-floor": 24,
+     "no-verdict": 2,
+     "authored-heading": 13,
+     "unassessed-ceiling": 1,
+     "verdict": 5,
+     "forced-open": 1
+    }
+   },
+   "staged": {
+    "subsections": 24,
+    "deepenedSections": 6,
+    "swallowedHeadings": 3,
+    "sections": 22,
+    "headingSplits": 16,
+    "inventedSplits": 2,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 22,
+     "hit": 16
+    },
+    "headedSections": 8,
+    "undividedHeadedSections": 2,
+    "openings": {
+     "own": 3,
+     "folded": 0,
+     "none": 3
+    }
+   },
+   "stagedLabelBatches": 9,
+   "preserved": {
+    "leaves": true,
+    "nodes": true
+   }
+  }
+ ]
+}
