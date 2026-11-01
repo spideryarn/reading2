@@ -2489,8 +2489,9 @@ export interface StructureRun {
    * switched off, the deepening wave on instead, the slices path, or a tree no
    * model wrote. Zeros and `null` are different facts, as for `deepen`.
    *
-   * Its calls' tokens are **not** in `inputTokens`/`outputTokens` below; the
-   * AI-spend ledger, task `structure`, has them, like every other call's.
+   * Its successful calls' tokens are included in `inputTokens`/`outputTokens`
+   * below; the AI-spend ledger, task `structure`, remains authoritative for
+   * money and for a call that failed before it could return usage.
    */
   subsectionPass: SubsectionStats | null;
   /** Stage 2 threw, so this tree is stage 1's. The article is correct either way, which is why it needs a flag. */
@@ -2621,10 +2622,10 @@ export async function generateStructure(opts: {
    * **The wall clock this step has to be finished by** — `claimedMs + leaseMs -
    * DEADLINE_MARGIN_MS`, which the queue already computes (src/jobs.ts).
    *
-   * Only the deepening reads it, and only to decide whether to *start* another
-   * call: a wave that cannot finish stops between calls with everything it has
-   * bought written down, rather than being killed in the middle of one. Omitted,
-   * the wave runs to completion, which is what a command line and a test want.
+   * Deepening reads it before starting another call. Stage 2 reads it once,
+   * before admitting its bounded wave, and hands the job back when another
+   * lease window is available. Omitted, either pass runs to completion, which
+   * is what a command line and a test want.
    */
   deadlineAt?: number;
   /**
@@ -2635,9 +2636,9 @@ export async function generateStructure(opts: {
   stepBudgetMs?: number;
   /**
    * Which lease window of the job this is, and whether the queue would grant
-   * one more (src/another-window.ts). Only the slices path reads it: out of
-   * time with a window left, it throws `NeedsAnotherWindow` and returns no
-   * tree. Absent from direct calls without a queue, it never throws that.
+   * one more (src/another-window.ts). The slices path and stage 2 use it: out
+   * of time with a window left, either throws `NeedsAnotherWindow` and returns
+   * no tree. Absent from direct calls without a queue, it never throws that.
    * The stage CLI uses the queue and receives a window (scripts/stage.ts).
    */
   window?: LeaseWindow;
@@ -3688,10 +3689,10 @@ function finishStructureRun(
        cannot recover is a wave that *threw*: `deepenTree` returns nothing to add
        up, and `deepenFailed` beside these says the AI-spend ledger under task
        `structure` is where that attempt's money is. */
-    inputTokens: wholeDocumentUsage.input_tokens + (deepen?.usage.inputTokens ?? 0),
-    outputTokens: wholeDocumentUsage.output_tokens + (deepen?.usage.outputTokens ?? 0),
-    cacheReadTokens: deepen?.usage.cacheReadTokens ?? 0,
-    cacheWriteTokens: deepen?.usage.cacheWriteTokens ?? 0,
+    inputTokens: wholeDocumentUsage.input_tokens + (deepen?.usage.inputTokens ?? 0) + (subsectionPass?.usage.inputTokens ?? 0),
+    outputTokens: wholeDocumentUsage.output_tokens + (deepen?.usage.outputTokens ?? 0) + (subsectionPass?.usage.outputTokens ?? 0),
+    cacheReadTokens: (deepen?.usage.cacheReadTokens ?? 0) + (subsectionPass?.usage.cacheReadTokens ?? 0),
+    cacheWriteTokens: (deepen?.usage.cacheWriteTokens ?? 0) + (subsectionPass?.usage.cacheWriteTokens ?? 0),
     elapsedMs: Date.now() - started,
   };
 }

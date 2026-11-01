@@ -7,7 +7,7 @@
  * is stubbed, and stage 2's executor is passed in.
  */
 import { describe, expect, it, vi } from "vitest";
-import type { SubsectionsRequest } from "../src/structure-subsections.js";
+import { freeSubsectionsAnswer, type SubsectionsRequest } from "../src/structure-subsections.js";
 import type { Block, Tree } from "../src/types.js";
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
@@ -95,10 +95,16 @@ const depth3 = (t: Tree) => Object.values(t.nodes).filter((n) => n.depth === 3 &
 describe("stage 2 in the structure step", () => {
   it("runs by default and adds the sub-sections under the section", async () => {
     let calls = 0;
-    const result = await run({ subsectionsExecutor: async (r) => (calls++, answer(r)) });
+    const result = await run({
+      subsectionsExecutor: async (r) => {
+        calls++;
+        return { text: answer(r), usage: { inputTokens: 10, outputTokens: 20, cacheReadTokens: 3, cacheWriteTokens: 4 } };
+      },
+    });
     expect(calls).toBe(1);
     expect(result.subsectionPass).toMatchObject({ eligible: 1, made: 1, added: 3 });
     expect(result.subsectionPassFailed).toBe(false);
+    expect(result).toMatchObject({ inputTokens: 11, outputTokens: 21, cacheReadTokens: 3, cacheWriteTokens: 4 });
     expect(depth3(result.parts.tree).map((n) => n.title)).toEqual(["Opening", "Sub a", "Sub b"]);
   });
 
@@ -115,7 +121,10 @@ describe("stage 2 in the structure step", () => {
       expansionExecutor: async () => {
         throw new Error("no wave answer in this test");
       },
-      subsectionsExecutor: async (r) => ((called = true), answer(r)),
+      subsectionsExecutor: async (r) => {
+        called = true;
+        return freeSubsectionsAnswer(answer(r));
+      },
     });
     expect(called).toBe(false);
     expect(result.subsectionPass).toBeNull();

@@ -72,6 +72,10 @@ export interface Checks {
   newNodesShaped: boolean;
   /** Every new node starts where the planner said a child starts. */
   startsAsPlanned: boolean;
+  /** Every new node also ends where the planner fixed its child range. */
+  rangesAsPlanned: boolean;
+  /** The counters describe the nodes that were actually rebuilt. */
+  statsMatchTree: boolean;
 }
 
 function arg(name: string): string | undefined {
@@ -88,22 +92,35 @@ function pathOf(tree: Tree, n: TreeNode): string {
   return out.reverse().join(" > ");
 }
 
-export function check(control: Tree, staged: Tree, plannedStarts: ReadonlySet<string>): Checks {
+export function check(
+  control: Tree,
+  staged: Tree,
+  plannedRanges: ReadonlySet<string>,
+  stats: SubsectionStats | undefined,
+): Checks {
   const internal = (t: Tree) => Object.values(t.nodes).filter((n) => n.children.length > 0);
   const fields = (_t: Tree, n: TreeNode) => JSON.stringify([n.depth, n.title, n.gist, n.question, n.sourceHeading, n.treatment]);
-  const after = new Map(internal(staged).map((n) => [n.range.join("–") + "@" + n.depth, n]));
+  const after = new Map(internal(staged).map((n) => [`${n.range.join("–")}@${n.depth}`, n]));
   const stage1Kept = internal(control).every((n) => {
-    const m = after.get(n.range.join("–") + "@" + n.depth);
+    const m = after.get(`${n.range.join("–")}@${n.depth}`);
     return m !== undefined && fields(control, n) === fields(staged, m) && pathOf(control, n) === pathOf(staged, m);
   });
   const leaves = (t: Tree) => Object.values(t.nodes).filter((n) => n.children.length === 0).map((n) => n.range.join("–")).sort().join(",");
-  const old = new Set(internal(control).map((n) => n.range.join("–") + "@" + n.depth));
-  const added = internal(staged).filter((n) => !old.has(n.range.join("–") + "@" + n.depth));
+  const old = new Set(internal(control).map((n) => `${n.range.join("–")}@${n.depth}`));
+  const added = internal(staged).filter((n) => !old.has(`${n.range.join("–")}@${n.depth}`));
   const newNodesShaped = added.every(
     (n) => n.depth === 3 && n.parent != null && staged.nodes[n.parent]!.depth === 2 && n.children.every((c) => staged.nodes[c]!.children.length === 0),
   );
+  const plannedStarts = new Set([...plannedRanges].map((range) => range.split("–", 1)[0]!));
   const startsAsPlanned = added.every((n) => plannedStarts.has(n.range[0]));
-  return { stage1Kept, leavesKept: leaves(control) === leaves(staged), newNodesShaped, startsAsPlanned };
+  const rangesAsPlanned = added.every((n) => plannedRanges.has(n.range.join("–")));
+  const madeParents = new Set(added.map((n) => n.parent));
+  const statsMatchTree =
+    stats !== undefined &&
+    stats.added === added.length &&
+    stats.made === madeParents.size &&
+    stats.made + stats.failedSections === stats.eligible;
+  return { stage1Kept, leavesKept: leaves(control) === leaves(staged), newNodesShaped, startsAsPlanned, rangesAsPlanned, statsMatchTree };
 }
 
 async function main(): Promise<void> {
@@ -171,7 +188,7 @@ async function main(): Promise<void> {
   async function stage2(slug: string, body: Block[], base: { slug: string; blocks: number; body: number }, control: Tree, wave1: () => StagedResult["wave1"]): Promise<StagedResult> {
       writeFileSync(path.join(raw, `${slug}.control.json`), JSON.stringify(control));
       const { plans } = planSubsections(control, body);
-      const plannedStarts = new Set(plans.flatMap((p) => p.children.map((c) => body[c.lo]!.id)));
+      const plannedRanges = new Set(plans.flatMap((p) => p.children.map((c) => `${body[c.lo]!.id}–${body[c.hi]!.id}`)));
 
       /* Stage 2, as generateStructure runs it: on the body tree, then rebuilt
          from scratch with buildTree and checked. */
@@ -205,7 +222,7 @@ async function main(): Promise<void> {
         stage2: { ms, usd, calls: rows.length, ...(failed ? { failed } : {}), ...(stats ? { stats } : {}) },
         staged: scoreTree(staged, body),
         stagedLabelBatches: planBatches(staged, body).length,
-        checks: check(control, staged, plannedStarts),
+        checks: check(control, staged, plannedRanges, stats),
       };
       console.log(
         `${label} ${slug}: stage1 ${(result.wave1.ms / 1000).toFixed(0)}s $${result.wave1.usd.toFixed(3)} · ` +

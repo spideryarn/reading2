@@ -3,7 +3,13 @@
 Started 2026-10-29, for feedback `spya-pn7gvw` (Greg, admin, suggestion). Worktree
 `fbpn7gvw-structure-one-level-deeper`. Up: [structure.md](../project/structure.md).
 
-**Status: stages 1 and 1b (the reading view) are on `dev` and in production. Stage 2 (the prompt)
+**Status, later on 2026-11-01: the level ships, staged, by
+[261101d](261101d-structure-fourth-level-staged-second-call.md)** — the whole-document call left as
+it is, then a second pass for sections the author's sub-headings divide; every gate passed
+([261101c](../investigations/261101c-structure-fourth-level-staged-measured.md)). Greg's paper's
+re-run waits on the deploy, which is the Overseer's. What follows is the one-call attempt.
+
+**Status before that: stages 1 and 1b (the reading view) are on `dev` and in production. Stage 2 (the prompt)
 was measured on 2026-11-01 and not shipped: two wordings, each left one article with no sections at
 all in both runs, though cost and time passed and the second got the report's paper right. The live
 prompt is `toc/13`; the run now logs sub-sections and swallowed headings. Next step is Greg's,

@@ -2,7 +2,8 @@
  * The verdict on stage 2 from two paired runs of staged-run.ts. Free: it reads
  * the results files and the saved trees. Plan 261101d § The measurement.
  *
- *   npx tsx evals/structure-fourth-level/staged-report.ts staged-1,staged-2 [--annotation <file>]
+ *   npx tsx evals/structure-fourth-level/staged-report.ts staged-1,staged-2 \
+ *     --annotation staged-1=<file> --annotation staged-2=<file> --labels <file>
  *
  * Gates, quality before money:
  * 1. the paper: 2.4.1–2.4.6 under 2.4, nothing else in 2.4 — in every run where
@@ -11,7 +12,7 @@
  *    starting where the planner said;
  * 3. every stage-1 node kept with every field, the same leaves;
  * 4. sections lost to a bad answer at most 1 in 20 asked, and no call failed whole;
- * 5. recall against an independent annotation, boundary by boundary (when given);
+ * 5. recall against an independent annotation, boundary by boundary, for both runs;
  * 7. cost and time on the articles stage 2 touched: median structure-step cost
  *    under +40%, median added wall-clock under 20 s, the book under half its lease.
  * (6, the blind read of the gists, is a separate subagent pass.)
@@ -36,6 +37,12 @@ const median = (xs: number[]) => {
   return s.length === 0 ? NaN : s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 };
 const pct = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(0)}%`;
+
+function args(name: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < process.argv.length; i++) if (process.argv[i] === name && process.argv[i + 1]) out.push(process.argv[i + 1]!);
+  return out;
+}
 
 function bodyOf(slug: string): Block[] {
   const { blocks } = JSON.parse(readFileSync(path.join(CORPUS, `${slug}.json`), "utf8")) as { blocks: Block[] };
@@ -66,9 +73,33 @@ function main(): void {
   const labels = process.argv[2]?.split(",") ?? [];
   if (labels.length !== 2) throw new Error("give two run labels: staged-1,staged-2");
   const runs = labels.map((l) => JSON.parse(readFileSync(path.join(RESULTS, `${l}.json`), "utf8")) as { label: string; srcDirty: boolean; subsectionsSha256: string; results: StagedResult[] });
+  const corpus = new Set(STAGED_DOCS.map((doc) => doc.slug));
+  for (const [i, run] of runs.entries()) {
+    if (run.label !== labels[i]) throw new Error(`${labels[i]}.json says it is ${run.label}`);
+    const slugs = run.results.map((result) => result.slug);
+    const seen = new Set(slugs);
+    const missing = [...corpus].filter((slug) => !seen.has(slug));
+    const unexpected = [...seen].filter((slug) => !corpus.has(slug));
+    if (seen.size !== slugs.length || missing.length || unexpected.length) {
+      throw new Error(`${run.label} has the wrong corpus: ${missing.length} missing, ${unexpected.length} unexpected, ${slugs.length - seen.size} repeated`);
+    }
+  }
   if (runs.some((r) => r.srcDirty)) console.log("WARNING: a run was made with dirty src");
   if (new Set(runs.map((r) => r.subsectionsSha256)).size !== 1) throw new Error("the runs used different stage-2 prompts");
   const verdict: string[] = [];
+  const annotationFiles = new Map<string, string>();
+  for (const spec of args("--annotation")) {
+    const at = spec.indexOf("=");
+    if (at < 1 || at === spec.length - 1) throw new Error(`--annotation must be <run-label>=<file>, got ${spec}`);
+    const runLabel = spec.slice(0, at);
+    if (!labels.includes(runLabel)) throw new Error(`annotation label ${runLabel} is not one of the two reported runs`);
+    if (annotationFiles.has(runLabel)) throw new Error(`two annotations were given for ${runLabel}`);
+    annotationFiles.set(runLabel, spec.slice(at + 1));
+  }
+  const missingAnnotations = labels.filter((label) => !annotationFiles.has(label));
+  if (missingAnnotations.length) throw new Error(`an independent annotation is required for each run; missing ${missingAnnotations.join(", ")}`);
+  const labelFiles = args("--labels");
+  if (labelFiles.length !== 1) throw new Error("give exactly one --labels <comparison.json> file");
 
   /* Gate 1. */
   const body = bodyOf(PAPER);
@@ -102,7 +133,7 @@ function main(): void {
         continue;
       }
       const c = r.checks!;
-      if (!c.stage1Kept || !c.leavesKept || !c.newNodesShaped || !c.startsAsPlanned) {
+      if (!c.stage1Kept || !c.leavesKept || !c.newNodesShaped || !c.startsAsPlanned || !c.rangesAsPlanned || !c.statsMatchTree) {
         verdict.push(`gate 2/3 ${run.label} ${r.slug}: ${JSON.stringify(c)}`);
       }
       if (r.stage2?.failed) verdict.push(`stage 2 threw on ${run.label} ${r.slug}: ${r.stage2.failed}`);
@@ -147,43 +178,62 @@ function main(): void {
     }
   }
 
-  /* Gate 5, against an independent annotation: { "<slug>": { "<sectionStartIndex>": [childStartIndex, ...] } }. */
-  const ai = process.argv.indexOf("--annotation");
-  if (ai > 0) {
-    /* `--annotation staged-1=<file>`: an annotation is of one run's stage-1 trees, so it is read against that run only. */
-    const [forLabel, file] = process.argv[ai + 1]!.split("=") as [string, string];
-    const want = JSON.parse(readFileSync(file, "utf8")) as Record<string, Record<string, number[]>>;
-    for (const run of runs.filter((r) => r.label === forLabel)) {
-      let expected = 0;
-      let hit = 0;
-      let made = 0;
-      let right = 0;
-      for (const [slug, sections] of Object.entries(want)) {
-        const b = bodyOf(slug);
-        const added = addedStarts(treeOf(run.label, slug, "control"), treeOf(run.label, slug, "staged"));
-        const got = new Map([...added].map(([k, v]) => [b.findIndex((x) => x.id === k), new Set(v.map((id) => b.findIndex((x) => x.id === id)))]));
-        for (const [lo, starts] of Object.entries(sections)) {
-          const boundaries = starts.filter((s) => s !== Number(lo));
-          expected += boundaries.length;
-          const g = got.get(Number(lo));
-          hit += boundaries.filter((s) => g?.has(s)).length;
-        }
-        for (const [lo, g] of got) {
-          for (const s of g) {
-            if (s === lo) continue;
-            made += 1;
-            if (sections[String(lo)]?.includes(s)) right += 1;
-            else console.log(`  ${run.label} ${slug}: a boundary at [${s}] in section [${lo}] the annotation does not have`);
-          }
+  /* The labels comparison is a gate, not a side file somebody has to remember
+     to inspect. Four touched articles were promised; an empty or unrelated
+     file must not turn into a green report. */
+  type LabelArm = { usd: number; ms: number; calls: number; batches: number; dropped: number };
+  const labelRows = JSON.parse(readFileSync(labelFiles[0]!, "utf8")) as { slug: string; control: LabelArm; staged: LabelArm }[];
+  if (labelRows.length < 4) throw new Error(`the labels gate needs four touched articles, got ${labelRows.length}`);
+  if (new Set(labelRows.map((row) => row.slug)).size !== labelRows.length) throw new Error("the labels comparison repeats an article");
+  for (const row of labelRows) {
+    const touchedInRun = runs.some((run) => (run.results.find((result) => result.slug === row.slug)?.stage2?.stats?.made ?? 0) > 0);
+    if (!touchedInRun) throw new Error(`the labels comparison includes ${row.slug}, which neither reported run touched`);
+    const increase = row.control.usd === 0 ? Infinity : row.staged.usd / row.control.usd - 1;
+    console.log(`  labels ${row.slug.slice(0, 42).padEnd(42)} ${pct(increase)} cost, dropped ${row.control.dropped} → ${row.staged.dropped}`);
+    if (!(increase <= 0.1)) verdict.push(`labels cost rose ${pct(increase)} for ${row.slug}`);
+    if (row.control.dropped !== 0 || row.staged.dropped !== 0) verdict.push(`labels were dropped for ${row.slug}`);
+  }
+
+  /* Gate 5, against independent annotations: { "<slug>": { "<sectionStartIndex>": [childStartIndex, ...] } }. */
+  for (const run of runs) {
+    const want = JSON.parse(readFileSync(annotationFiles.get(run.label)!, "utf8")) as Record<string, Record<string, number[]>>;
+    const annotated = new Set(Object.keys(want));
+    const missing = [...corpus].filter((slug) => !annotated.has(slug));
+    const unexpected = [...annotated].filter((slug) => !corpus.has(slug));
+    if (missing.length || unexpected.length) {
+      throw new Error(`${run.label}'s annotation has the wrong corpus: ${missing.length} missing, ${unexpected.length} unexpected`);
+    }
+    let expected = 0;
+    let hit = 0;
+    let made = 0;
+    let right = 0;
+    for (const [slug, sections] of Object.entries(want)) {
+      const b = bodyOf(slug);
+      const added = addedStarts(treeOf(run.label, slug, "control"), treeOf(run.label, slug, "staged"));
+      const got = new Map([...added].map(([k, v]) => [b.findIndex((x) => x.id === k), new Set(v.map((id) => b.findIndex((x) => x.id === id)))]));
+      for (const [lo, starts] of Object.entries(sections)) {
+        const boundaries = starts.filter((s) => s !== Number(lo));
+        expected += boundaries.length;
+        const g = got.get(Number(lo));
+        hit += boundaries.filter((s) => g?.has(s)).length;
+      }
+      for (const [lo, g] of got) {
+        for (const s of g) {
+          if (s === lo) continue;
+          made += 1;
+          if (sections[String(lo)]?.includes(s)) right += 1;
+          else console.log(`  ${run.label} ${slug}: a boundary at [${s}] in section [${lo}] the annotation does not have`);
         }
       }
-      console.log(`gate 5, ${run.label}: recall ${hit}/${expected} = ${pct(hit / expected - 0).replace("+", "")}, precision ${right}/${made}`);
-      if (hit < 0.9 * expected) verdict.push(`recall under 90% in ${run.label}`);
-      if (right < made) verdict.push(`precision under 100% in ${run.label}`);
     }
+    console.log(`gate 5, ${run.label}: recall ${hit}/${expected} = ${pct(hit / expected - 0).replace("+", "")}, precision ${right}/${made}`);
+    if (expected === 0 || made === 0) verdict.push(`recall gate had no boundaries to measure in ${run.label}`);
+    if (hit < 0.9 * expected) verdict.push(`recall under 90% in ${run.label}`);
+    if (right < made) verdict.push(`precision under 100% in ${run.label}`);
   }
 
   console.log(verdict.length ? `\nVERDICT: FAIL\n- ${verdict.join("\n- ")}` : "\nVERDICT: every gate here passes");
+  if (verdict.length) process.exitCode = 1;
 }
 
 main();

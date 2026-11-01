@@ -7,7 +7,11 @@ Started 2026-11-01, queue item `qi-p6s6g6vw`, Greg's answer `spya-xb2rrn` to
 [261101b](../investigations/261101b-structure-fourth-level-two-wordings-measured.md). Up:
 [structure.md](../project/structure.md).
 
-**Status: plan, revised after Sol's first review and a one-article smoke run; before the build.**
+**Status: built, measured, every gate passed; on by default** (`SPIDERYARN_SUBSECTIONS=0` turns it
+off). Results: [261101c](../investigations/261101c-structure-fourth-level-staged-measured.md) —
+recall 98% and precision 98% of the author's sub-section boundaries on held-out trees, 0 of 128
+sections lost to a bad answer, median +37% structure cost and +9 s on the articles it touches,
+labels unchanged. Sol's code review and the deploy are recorded below.
 
 ## What Greg said
 

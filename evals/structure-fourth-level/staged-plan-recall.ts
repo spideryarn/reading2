@@ -20,6 +20,13 @@ import { STAGED_DOCS } from "./staged-corpus.js";
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const [label, file] = process.argv.slice(2) as [string, string];
 const want = JSON.parse(readFileSync(file, "utf8")) as Record<string, Record<string, number[]>>;
+const corpus = new Set(STAGED_DOCS.map(({ slug }) => slug));
+const annotated = new Set(Object.keys(want));
+const missing = [...corpus].filter((slug) => !annotated.has(slug));
+const unexpected = [...annotated].filter((slug) => !corpus.has(slug));
+if (missing.length || unexpected.length) {
+  throw new Error(`the annotation has the wrong corpus: ${missing.length} missing, ${unexpected.length} unexpected`);
+}
 let expected = 0;
 let hit = 0;
 let made = 0;
@@ -31,7 +38,7 @@ for (const { slug } of STAGED_DOCS) {
   try {
     tree = JSON.parse(readFileSync(path.join(ROOT, "data/structure-fourth-level/staged", label, `${slug}.control.json`), "utf8")) as Tree;
   } catch {
-    continue;
+    throw new Error(`${label} has no saved control tree for ${slug}; recall cannot silently omit it`);
   }
   const sections = want[slug] ?? {};
   const got = new Map(planSubsections(tree, body).plans.map((p) => [p.lo, new Set(p.children.map((c) => c.lo).filter((s) => s !== p.lo))]));
@@ -51,4 +58,9 @@ for (const { slug } of STAGED_DOCS) {
     }
   }
 }
-console.log(`${label}: recall ${hit}/${expected} = ${((100 * hit) / expected).toFixed(0)}%, precision ${right}/${made} = ${((100 * right) / made).toFixed(0)}%`);
+if (expected === 0) throw new Error(`${label}: the annotation contains no expected boundaries`);
+if (made === 0) throw new Error(`${label}: the planner made no boundaries, so precision is undefined`);
+const recall = hit / expected;
+const precision = right / made;
+console.log(`${label}: recall ${hit}/${expected} = ${(100 * recall).toFixed(0)}%, precision ${right}/${made} = ${(100 * precision).toFixed(0)}%`);
+if (recall < 0.9 || precision < 1) process.exitCode = 1;

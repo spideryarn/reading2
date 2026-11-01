@@ -3,11 +3,14 @@
  * starts, and what a wrong answer costs. Plan
  * docs/plans/261101d-structure-fourth-level-staged-second-call.md.
  */
+import { APIError } from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { NeedsAnotherWindow } from "../src/another-window.js";
+import { WidthGate } from "../src/concurrency.js";
 import { buildTree, type ModelNode } from "../src/structure.js";
 import {
   addSubsections,
+  freeSubsectionsAnswer,
   levelsBelow,
   planSubsections,
   readSubsectionsAnswer,
@@ -153,6 +156,19 @@ describe("planSubsections", () => {
     expect(skipped["holds-sibling-heading"]).toBe(0);
   });
 
+  it("does not turn a run-in heading fragment or a repeated heading into another sub-section", () => {
+    const body = blocks([
+      "h2:3.1 Symmetries", "p",
+      "h3:Groups", "p",
+      "h2:A group action", "of G on a set is a mapping.",
+      "h2:Invariant functions", "p",
+      "h2:Invariant functions", "more",
+      "h2:3.2 Next", "p",
+    ]);
+    const t = tree(body, [part(body, "3.1", 0, 9, "3.1 Symmetries")]);
+    expect(starts(t, body)).toEqual([[[0, null], [2, "Groups"], [6, "Invariant functions"]]]);
+  });
+
   it("skips a section that starts mid-run at a paragraph: it has no heading to measure from", () => {
     const body = blocks(["h3:Methods", "p", "p", "h4:A", "p", "h4:B", "p", "h3:Next", "p"]);
     const t = tree(body, [node("Part", 0, 8, [node("Methods", 0, 1), node("Methods, later", 2, 6), node("Next", 7, 8)])]);
@@ -252,7 +268,7 @@ describe("addSubsections", () => {
     JSON.stringify({ sections: r.plans.map((p, i) => ({ section: i + 1, subsections: p.children.map((c) => ({ title: c.heading?.text ?? "Scope", gist: GIST })) })) });
 
   it("adds depth-3 sub-sections under the section, keeps everything stage 1 made, and passes the invariants", async () => {
-    const { root, stats } = await addSubsections({ tree: t, body, slug: "t", execute: async (r) => answer(r) });
+    const { root, stats } = await addSubsections({ tree: t, body, slug: "t", execute: async (r) => freeSubsectionsAnswer(answer(r)) });
     expect(stats).toMatchObject({ eligible: 1, made: 1, added: 7, calls: 1, failedSections: 0 });
     const deeper = buildTree(root!, {}, body, "t");
     assertTreeSound(body, deeper);
@@ -277,14 +293,34 @@ describe("addSubsections", () => {
     expect(stats).toMatchObject({ failedCalls: 1, failedSections: 1, made: 0 });
   });
 
+  it("narrows the shared-style width gate on a 429 and redraws the call", async () => {
+    const gate = new WidthGate(2);
+    let calls = 0;
+    const { stats } = await addSubsections({
+      tree: t,
+      body,
+      slug: "t",
+      gate,
+      execute: async (request) => {
+        calls++;
+        if (calls === 1) {
+          throw APIError.generate(429, { error: { message: "slow down" } }, undefined, new Headers({ "retry-after": "0" }));
+        }
+        return freeSubsectionsAnswer(answer(request));
+      },
+    });
+    expect(stats).toMatchObject({ calls: 2, made: 1, failedCalls: 0 });
+    expect(gate.report()).toMatchObject({ narrowest: 1, refusals: 1 });
+  });
+
   it("hands the job back when the deadline is close and the queue has another window", async () => {
     await expect(
-      addSubsections({ tree: t, body, slug: "t", deadlineAt: Date.now() + 5_000, window: { number: 1, anotherAvailable: true }, execute: async (r) => answer(r) }),
+      addSubsections({ tree: t, body, slug: "t", deadlineAt: Date.now() + 5_000, window: { number: 1, anotherAvailable: true }, execute: async (r) => freeSubsectionsAnswer(answer(r)) }),
     ).rejects.toBeInstanceOf(NeedsAnotherWindow);
   });
 
   it("on the last window, keeps stage 1's tree and says it ran out of time", async () => {
-    const { root, stats } = await addSubsections({ tree: t, body, slug: "t", deadlineAt: Date.now() + 5_000, window: { number: 3, anotherAvailable: false }, execute: async (r) => answer(r) });
+    const { root, stats } = await addSubsections({ tree: t, body, slug: "t", deadlineAt: Date.now() + 5_000, window: { number: 3, anotherAvailable: false }, execute: async (r) => freeSubsectionsAnswer(answer(r)) });
     expect(root).toBeNull();
     expect(stats.outOfTime).toBe(true);
   });

@@ -24,9 +24,10 @@
  * report's paper. The plan says so in full.
  */
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicCallFailed } from "./anthropic-call.js";
 import { type LeaseWindow, NeedsAnotherWindow } from "./another-window.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
-import { WidthGate } from "./concurrency.js";
+import { WidthGate, allOrStop } from "./concurrency.js";
 import { parseRetryAfter } from "./retry-after.js";
 import { log } from "./log.js";
 import { finishedText, streamMessage, type MessagesBody } from "./messages-stream.js";
@@ -39,6 +40,7 @@ import { proposalFromTree } from "./structure-cascade.js";
 import { PRODUCTION_EFFORT, renderBlocks } from "./structure-prompt.js";
 import { isSupplementNode } from "./supplement.js";
 import { THINKING_HEADROOM } from "./token-budget.js";
+import { addUsage, NO_EXPANSION_USAGE, usageOf, type ExpansionUsage } from "./structure-deepen.js";
 /* Types only: src/structure.ts imports this file, so a value import from there
    would close a cycle. */
 import type { ModelNode } from "./structure.js";
@@ -139,6 +141,8 @@ export type SkipReason =
 export interface SubsectionPlanning {
   plans: SubsectionPlan[];
   skipped: Record<SkipReason, number>;
+  /** Extracted heading blocks that are not author sub-section boundaries. */
+  ignoredHeadings: { repeated: number; runIn: number };
 }
 
 /**
@@ -176,6 +180,7 @@ export function planSubsections(tree: Tree, body: readonly Block[]): SubsectionP
     "incompatible-numbering": 0,
     "one-child": 0,
   };
+  const ignoredHeadings = { repeated: 0, runIn: 0 };
   const plans: SubsectionPlan[] = [];
   const at = (id: string): number => {
     const i = index.get(id);
@@ -206,6 +211,18 @@ export function planSubsections(tree: Tree, body: readonly Block[]): SubsectionP
        siblings' level — any sibling's, since stage 1 makes some sections of
        its own and they do not all start at one level. */
     if (!startsPart) return headings[0] === lo ? lo : undefined;
+    /* A numbered first block at the same numbered depth as another section is
+       the section's own heading, not the part's. Prefer it before scanning
+       later same-tag headings: PDF extraction can tag a run-in definition at
+       that same HTML level, and choosing it would make the real section
+       heading look like an ancestor. */
+    if (
+      headings[0] === lo &&
+      sectionNumber(body[lo]!.text) !== null &&
+      refs.some((r) => sectionNumber(body[r]!.text) !== null && sameLevel(body[lo]!, body[r]!))
+    ) {
+      return lo;
+    }
     /* After the first block first: there, the first block is usually the
        part's heading, and it can share its sections' tag. Only when nothing
        after it matches is the first block the section's own (a part stage 1
@@ -233,18 +250,52 @@ export function planSubsections(tree: Tree, body: readonly Block[]): SubsectionP
       skipped[why] += 1;
     };
 
-    const own = ownHeading(section, part, lo, headings);
-    if (own === undefined) {
-      skip("no-own-heading");
-      continue;
-    }
     let supplement = false;
     for (let i = lo; i <= hi; i++) if (body[i]!.treatment === "supplement") supplement = true;
     if (supplement) {
       skip("holds-supplement");
       continue;
     }
-    const after = headings.filter((i) => i > own).map((i) => ({ i, below: levelsBelow(body[i]!, body[own]!) }));
+    const own = ownHeading(section, part, lo, headings);
+    if (own === undefined) {
+      skip("no-own-heading");
+      continue;
+    }
+    /* PDF extraction can promote a definition's opening words to a heading
+       (`A group action` + `of G on a set …`) and can repeat the same visual
+       heading around a page break. Neither is another author sub-section. A
+       lower-case continuation is deliberately narrow; omitting an ambiguous
+       boundary is safer than publishing a false hierarchy. */
+    const headingName = (block: Block) =>
+      block.text
+        .trim()
+        .replace(/^\d{1,3}(?:\.\d{1,3})*(?:\([a-z]\))?\.?\s+/, "")
+        .replace(/\s+/g, " ");
+    const seenHeadingText = new Map<string, Block[]>([[headingName(body[own]!), [body[own]!]]]);
+    const after = headings
+      .filter((i) => i > own)
+      .filter((i) => {
+        const block = body[i]!;
+        const text = headingName(block);
+        const seen = seenHeadingText.get(text) ?? [];
+        if (seen.some((previous) => sameLevel(block, previous))) {
+          ignoredHeadings.repeated += 1;
+          return false;
+        }
+        seen.push(block);
+        seenHeadingText.set(text, seen);
+        const next = body[i + 1];
+        if (
+          next?.kind === "text" &&
+          isBodyEvidence(next) &&
+          /^\s*\p{Ll}[\p{L}'’-]*(?:\s+\S+)/u.test(next.text)
+        ) {
+          ignoredHeadings.runIn += 1;
+          return false;
+        }
+        return true;
+      })
+      .map((i) => ({ i, below: levelsBelow(body[i]!, body[own]!) }));
     if (after.length === 0) continue;
     if (after.some((h) => h.below === "incompatible")) {
       skip("incompatible-numbering");
@@ -273,7 +324,7 @@ export function planSubsections(tree: Tree, body: readonly Block[]): SubsectionP
     plans.push({ section, part, lo, hi, children });
   }
   plans.sort((a, b) => a.lo - b.lo);
-  return { plans, skipped };
+  return { plans, skipped, ignoredHeadings };
 }
 
 /* -------------------------------------------------------------- the call */
@@ -491,14 +542,46 @@ export function readSubsectionsAnswer(raw: string, plans: readonly SubsectionPla
 
 /* ------------------------------------------------------------ the stage */
 
-/** How a call reaches the model. Production's streams; a test's returns a string. */
-export type SubsectionsExecutor = (request: SubsectionsRequest) => Promise<string>;
+/** One call's text and usage; required so the step's own token totals cannot silently omit stage 2. */
+export interface SubsectionsAnswer {
+  text: string;
+  usage: ExpansionUsage;
+}
+
+/** How a call reaches the model. */
+export type SubsectionsExecutor = (request: SubsectionsRequest) => Promise<SubsectionsAnswer>;
+
+/** A test answer that spent nothing. */
+export function freeSubsectionsAnswer(text: string): SubsectionsAnswer {
+  return { text, usage: NO_EXPANSION_USAGE };
+}
+
+/** A safe, article-free 429 for the shared gate and the retry log. */
+class SubsectionsRateLimited extends Error {
+  constructor(readonly retryAfterMs: number | null) {
+    super("The sub-sections call was rate-limited.");
+    this.name = "SubsectionsRateLimited";
+  }
+}
 
 export function liveSubsectionsExecutor(power: ModelPower, signal?: AbortSignal): SubsectionsExecutor {
   return async (request) => {
-    const call = streamMessage("structure", request.params, { power, ...(signal ? { signal } : {}) });
-    const message: Anthropic.Message = await call.finalMessage();
-    return finishedText(message, "sub-sections", request.maxTokens, 0, THINKING_HEADROOM);
+    let message: Anthropic.Message;
+    try {
+      const call = streamMessage("structure", request.params, { power, ...(signal ? { signal } : {}) });
+      message = await call.finalMessage();
+    } catch (err) {
+      if (err instanceof Anthropic.APIError && err.status === 429) {
+        throw new SubsectionsRateLimited(err.headers ? parseRetryAfter(err.headers.get("retry-after"), Date.now()) : null);
+      }
+      /* The SDK builds its error text from the upstream body, which can echo
+         the article. This error reaches `runBatch`'s warning log. */
+      throw anthropicCallFailed(err);
+    }
+    return {
+      text: finishedText(message, "sub-sections", request.maxTokens, 0, THINKING_HEADROOM),
+      usage: usageOf(message.usage),
+    };
   };
 }
 
@@ -516,13 +599,23 @@ export interface SubsectionStats {
   calls: number;
   /** Calls that failed whole on their last draw. */
   failedCalls: number;
+  /** Successful calls' provider token counts, including redraws. The ledger remains authoritative on money. */
+  usage: ExpansionUsage;
   skipped: Record<SkipReason, number>;
+  /** Heading-shaped extraction artefacts omitted as boundaries. */
+  ignoredHeadings: { repeated: number; runIn: number };
   /** True when it was not started because the step's deadline was too close. */
   outOfTime: boolean;
 }
 
 /** Calls in flight for one article. */
 export const SUBSECTION_CONCURRENCY = 4;
+/**
+ * A Stop aborts every live stream, but `Promise.all` would return on the first
+ * one and let its peers finish after the step's spend collector had closed.
+ * Give those peers the same bounded drain as the older deepening wave.
+ */
+export const SUBSECTION_DRAIN_MS = 60_000;
 /**
  * **Calls in flight for the whole process**, across every job: a per-job
  * limit does not protect the account (src/structure-deepen.ts § `sharedGate`,
@@ -534,6 +627,7 @@ const sharedGate = new WidthGate(SUBSECTION_PROCESS_WIDTH);
 
 /** A 429 narrows the gate, honouring `Retry-After`; anything else does not. */
 function rateLimited(err: unknown): number | null | false {
+  if (err instanceof SubsectionsRateLimited) return err.retryAfterMs;
   if (err instanceof Anthropic.APIError && err.status === 429) {
     return err.headers ? parseRetryAfter(err.headers.get("retry-after"), Date.now()) : null;
   }
@@ -561,7 +655,7 @@ export async function addSubsections(opts: {
   /** Injectable for a test; production shares the process's. */
   gate?: WidthGate;
 }): Promise<{ root: ModelNode | null; stats: SubsectionStats }> {
-  const { plans, skipped } = planSubsections(opts.tree, opts.body);
+  const { plans, skipped, ignoredHeadings } = planSubsections(opts.tree, opts.body);
   const stats: SubsectionStats = {
     eligible: plans.length,
     made: 0,
@@ -569,7 +663,9 @@ export async function addSubsections(opts: {
     added: 0,
     calls: 0,
     failedCalls: 0,
+    usage: NO_EXPANSION_USAGE,
     skipped,
+    ignoredHeadings,
     outOfTime: false,
   };
   if (plans.length === 0) return { root: null, stats };
@@ -593,8 +689,9 @@ export async function addSubsections(opts: {
       opts.signal?.throwIfAborted();
       stats.calls += 1;
       try {
-        const raw = await gate.run(() => opts.execute(request), rateLimited, opts.signal);
-        const answers = readSubsectionsAnswer(raw, batch);
+        const answer = await gate.run(() => opts.execute(request), rateLimited, opts.signal);
+        stats.usage = addUsage(stats.usage, answer.usage);
+        const answers = readSubsectionsAnswer(answer.text, batch);
         answers.forEach((a, i) => {
           if (a === null) stats.failedSections += 1;
           else written.set(batch[i]!.section, a);
@@ -612,11 +709,10 @@ export async function addSubsections(opts: {
     stats.failedSections += batch.length;
   };
   let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(SUBSECTION_CONCURRENCY, batches.length) }, async () => {
-      while (next < batches.length) await runBatch(batches[next++]!);
-    }),
-  );
+  const workers = Array.from({ length: Math.min(SUBSECTION_CONCURRENCY, batches.length) }, async () => {
+    while (next < batches.length) await runBatch(batches[next++]!);
+  });
+  await allOrStop(workers, () => {}, SUBSECTION_DRAIN_MS);
   if (written.size === 0) return { root: null, stats };
 
   /* Attach the children to the proposal, by the section's range: the proposal
@@ -645,6 +741,13 @@ export async function addSubsections(opts: {
     for (const child of node.children ?? []) visit(child, depth + 1);
   };
   visit(root, 0);
+  /* A usable answer that cannot be attached is not success. The planner and
+     proposal are derived from the same tree, so this can only mean their
+     identity seam drifted; without the check, `failedSections` stays zero and
+     the article quietly keeps stage 1's shape. */
+  if (stats.made !== written.size) {
+    throw new Error(`Attached ${stats.made} of ${written.size} sections that had usable sub-section answers.`);
+  }
   return { root: stats.made > 0 ? root : null, stats };
 }
 

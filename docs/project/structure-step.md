@@ -835,7 +835,9 @@ sections at all ([261101b](../investigations/261101b-structure-fourth-level-two-
 - **On by default; `SPIDERYARN_SUBSECTIONS=0` turns it off** without a rebuild. Its counts are on
   the step's log line as `subsectionPass`, at every value. No checkpoint: a retried step resumes
   stage 1 free and buys stage 2 again, about a tenth of stage 1.
-- **Measured** on 19 documents: see the plan's results. The prose before the first sub-heading is
+- **Measured** on 19 documents ([261101c](../investigations/261101c-structure-fourth-level-staged-measured.md)):
+  98% of the author's sub-section boundaries found, none lost to a bad answer, about +37% on the
+  structure step of an article it touches and nothing on one it does not. The prose before the first sub-heading is
   a sub-section of its own, titled by the model, as stage 1 already does for a part's opening.
 
 ### And, behind a switch that is off, a third pass <a id="deepening"></a>

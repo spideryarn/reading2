@@ -9,6 +9,10 @@ schema) make an optional fourth level, sub-sections, where the author's sub-head
 section, without losing what the three-level tree does today, at under ~20% more cost and time for
 the median article?
 
+**Followed up the same day**: Greg suggested doing it in stages, and a staged second pass passed
+every gate and shipped — [261101c](261101c-structure-fourth-level-staged-measured.md). The
+one-call prompt below stays `toc/13`.
+
 **The answer, for now: the cost is no obstacle, the reliability is.** Both wordings made the level
 on the report's paper. Both also left one article with **no sections at all**, in both runs, where
 the old prompt gave 6–30. So the live prompt stays `toc/13`; what to try next is Greg's call
