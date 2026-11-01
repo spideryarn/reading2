@@ -12,7 +12,8 @@
  *    a sibling of 2.4; 2.4.5(a)–(c), tagged h2 by the extractor, start no
  *    section or part;
  * 2. no invented split in a section under 10 blocks;
- * 3. no more failed answers, re-asks or dropped children than the control
+ * 3. no more failed answers, re-asks or dropped children than the control,
+ *    and no article left with under half the control's sections in every run
  *    (collapsed rungs are printed only: they moved 2 → 4 between two controls);
  * 4. per article, the mean of its two runs in each arm, paired; the median
  *    article's cost and time each grow by at most 20%, reported for the whole
@@ -160,6 +161,21 @@ function main(): void {
   /* collapsedRungs is printed, not gated: it moved 2 → 4 between two runs of the same prompt. */
   for (const k of ["failed", "reasked", "droppedChildren"] as const) {
     if (a[k] > b[k]) verdict.push(`${k} rose ${b[k]} → ${a[k]}`);
+  }
+  /* Gate 3b (Sol, plan review 4, "no regression in author-boundary recall"):
+     an article whose sections fall below half the control's lower run in every
+     after run has lost its section level. Missed by the first report, seen in
+     the second wording's 2602 paper: 6 and 30 sections before, 0 and 0 after. */
+  const sectionsOf = (label: string, slug: string): number | null => {
+    const built = treeOf(label, slug);
+    return built ? Object.values(built.tree.nodes).filter((n) => n.depth === 2 && n.children.length > 0).length : null;
+  };
+  for (const d of DOCS) {
+    const before = arms.before.map((r) => sectionsOf(r.label, d.slug)).filter((x): x is number => x !== null);
+    const after = arms.after.map((r) => sectionsOf(r.label, d.slug)).filter((x): x is number => x !== null);
+    if (before.length === 0 || after.length === 0) continue;
+    const floor = Math.min(...before) / 2;
+    if (after.every((x) => x < floor)) verdict.push(`${d.slug} lost its sections (${before.join("/")} → ${after.join("/")})`);
   }
   console.log("\ninvented sub-section starts, to read:");
   for (const run of arms.after) {

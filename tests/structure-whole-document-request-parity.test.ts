@@ -57,9 +57,6 @@
  * **RE-PINNED 2026-10-03 for `toc/12`**: the paperwork list names the title
  * block and the reference list, and Structure's abstract paragraph follows it
  * (Greg, spya-abs6bj; plan 261003c).
- * **RE-PINNED 2026-11-01 for `toc/14`**: a section may have sub-sections where
- * the author's next heading level divides it, and the prompt says which level a
- * heading starts (Greg, spya-pn7gvw; plan 261029a § Stage 2).
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
  *
  * **SPLIT 2026-10-04**: until then the production expectation was the toc/10
@@ -132,26 +129,8 @@ anywhere.
 - Where a run between headings is longer than ~9 blocks, propose your own
   boundaries inside it at genuine topic shifts, and title those nodes.
 - Aim for 5-9 children per node so each level is an even stride.
-- Go up to 4 levels deep: root (depth 0), chapters (depth 1), sections
-  (depth 2), sub-sections (depth 3).
-- Map the author's heading levels onto depths in order: the highest level
-  used below the title starts chapters, the next level down starts sections,
-  and the level below that starts sub-sections. Judge a heading's level by
-  its numbering first and its <hN> tag second, since tags are sometimes
-  wrong: "2.5" is a section beside "2.4" whatever its tag, and "2.4.5(a)"
-  stays inside the node that holds 2.4.5. Headings below the sub-section
-  level stay inside their sub-section.
-- Where the author gives a chapter no sections, divide it into sections
-  yourself by the ~9-block rule above, exactly as before.
-- Where the author divides a section with sub-headings, give it one
-  sub-section per sub-heading, as many as there are. If the section has
-  prose before its first sub-heading, that prose is its first sub-section,
-  with a title you write and no "sourceHeading".
-- A section with no sub-headings stays undivided, unless it runs to 10 or
-  more blocks and covers clearly separate topics; then give it 2 or more
-  sub-sections at those topic shifts.
-- Do NOT emit leaf nodes for individual blocks. The deepest node is a
-  sub-section where a section has them, and the section where it does not.
+- Go 3 levels deep: root (depth 0), chapters (depth 1), sections (depth 2).
+- Do NOT emit leaf nodes for individual blocks. Stop at the section level.
 
 TITLES (internal nodes)
 
@@ -255,16 +234,7 @@ JSON only, no prose, no code fence:
 {"root": {"title": "...", "gist": "...", "question": "...",
           "sourceHeading": "...", "children": [
             {"title": "...", "gist": "...", "question": "...",
-             "start": <firstBlockNumber>, "sourceHeading": "...", "children": [
-               {"title": "...", "gist": "...", "start": <firstBlockNumber>,
-                "sourceHeading": "..."},
-               {"title": "...", "gist": "...", "start": <firstBlockNumber>,
-                "sourceHeading": "...", "children": [
-                  {"title": "...", "gist": "...", "start": <firstBlockNumber>},
-                  {"title": "...", "gist": "...", "start": <firstBlockNumber>,
-                   "sourceHeading": "..."}
-                ]}
-             ]}
+             "start": <firstBlockNumber>, "children": [ ... ]}
           ]}}
 
 Use only block ids that appear in the input. Do not invent ids.

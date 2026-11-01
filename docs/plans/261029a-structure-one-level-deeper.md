@@ -3,12 +3,12 @@
 Started 2026-10-29, for feedback `spya-pn7gvw` (Greg, admin, suggestion). Worktree
 `fbpn7gvw-structure-one-level-deeper`. Up: [structure.md](../project/structure.md).
 
-**Status: stage 1 (the reading view copes with a deeper tree) is done and on `dev` (7cc28dc53, Sol's
-code-review fixes f44c9da8e). Greg answered [q-vrnbyj](../user-feedback/questions/q-vrnbyj.md) on
-2026-10-29: automatic, and the layout chosen by trying it (§ Greg's answer). Stage 1b (column B
-opens the current section's sub-sections) is built. Stage 2 (the structure step makes the level)
-waits only on the box's OpenRouter key, over its monthly limit until 1 November, so no prompt can be
-measured before then. Queued as `qi-negzd289`.**
+**Status: stages 1 and 1b (the reading view) are on `dev` and in production. Stage 2 (the prompt)
+was measured on 2026-11-01 and not shipped: two wordings, each left one article with no sections at
+all in both runs, though cost and time passed and the second got the report's paper right. The live
+prompt is `toc/13`; the run now logs sub-sections and swallowed headings. Next step is Greg's,
+[q-k25zfg](../user-feedback/questions/q-k25zfg.md); the write-up is
+[261101b](../investigations/261101b-structure-fourth-level-two-wordings-measured.md).**
 
 ## What Greg asked
 
@@ -340,6 +340,23 @@ output tokens, sub-sections, heading-driven vs invented splits, invented splits 
 blocks (target 0), sections the author divides that the model left whole, openings own vs folded,
 swallowed headings before and after. **Ship rule as written**: the median article's cost and time
 each grow under ~20%, judged against the spread between `before-1` and `before-2`.
+
+**Revised after Sol's plan review** ([261029a-stage2-plan-review-sol.md](261029a-stage2-plan-review-sol.md),
+all seven findings taken): levels read from numbering as well as tags (the paper tags "2.4.5(a)" h2);
+invented sub-sections need separate topics, not length; an opening sub-section gets a new title and
+no `sourceHeading`; `children` non-empty; quality gates before cost (the paper's hand-checked shape,
+no short invented split, no rise in failures, re-asks or dropped children, and, added when the first
+report missed it, no article left with under half the control's sections); the production re-run
+goes through 261029l's Metadata › Structure button, which already drops an arc that no longer fits.
+
+**Result: not shipped.** Wording 1 (above, as revised) lost every section of 2607-22753 in both runs.
+Wording 2, Opus's (map heading levels onto depths, sections "exactly as before", a divided section in
+the OUTPUT example), got the paper right twice and lost every section of arxiv-2602-11988 in both
+runs. Cost and time passed under both (median +3% / +1%). The call does no thinking at all (0
+reasoning tokens, old prompt included). `src/structure.ts` is `toc/13` again, byte for byte. Kept: the
+run counts, the harness, and both wordings verbatim in `evals/structure-fourth-level/wordings.ts`.
+The numbers and what was ruled out are in
+[261101b](../investigations/261101b-structure-fourth-level-two-wordings-measured.md).
 
 ## Not in this change
 

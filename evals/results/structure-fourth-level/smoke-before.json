@@ -1,0 +1,55 @@
+{
+ "label": "smoke-before",
+ "at": "2026-11-01T01:45:07.427Z",
+ "commit": "087a9b260",
+ "srcDirty": false,
+ "promptVersion": "toc/13",
+ "systemSha256": "634fd08ec3e5f967",
+ "spentUsd": 0.0957,
+ "results": [
+  {
+   "slug": "tinbergen1963onethology-spya-ks84se",
+   "blocks": 96,
+   "body": 96,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:44:40.372Z",
+     "endedAt": "2026-11-01T01:45:07.407Z",
+     "ms": 27035,
+     "networkAttempts": 1,
+     "inputTokens": 31546,
+     "outputTokens": 3258,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.095672,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 25,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 0,
+    "headedSections": 0,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 4,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 2
+  }
+ ]
+}

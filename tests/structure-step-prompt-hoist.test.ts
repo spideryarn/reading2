@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
 
 describe("hoisting the structure prompt's three values", () => {
   it("moved the stamp and the effort without moving either value", () => {
-    expect(PROMPT_VERSION).toBe("toc/14");
+    expect(PROMPT_VERSION).toBe("toc/13");
     expect(PRODUCTION_EFFORT).toBe("low");
   });
 
@@ -127,13 +127,11 @@ describe("hoisting the structure prompt's three values", () => {
    * 2026-10-09, when the capable model became Sonnet 5.5 (plan 261009a): the
    * key hashes the wire request, model included, so a checkpoint Sonnet 5
    * wrote is correctly not reused for Sonnet 5.5. It moved again for toc/13,
-   * when a start became the numbered block's integer rather than its id. It
-   * moved from `268a713f09adf694` for toc/14's optional fourth level (plan
-   * 261029a § Stage 2).
+   * when a start became the numbered block's integer rather than its id.
    */
-  it("mints one stable key for the toc/14 structure request", () => {
+  it("mints one stable key for the toc/13 structure request", () => {
     expect(checkpointKey(canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard"))).toBe(
-      "96cdf7f217a1ce41",
+      "268a713f09adf694",
     );
   });
 });

@@ -1,11 +1,11 @@
 ---
 id: q-vrnbyj
 report: spya-pn7gvw
-status: open
+status: answered
 asked: 2026-10-29
 title: Structure one level deeper: once it is built, re-run this one paper in production so you can see it (about 65 cents)?
 refs: docs/plans/261029a-structure-one-level-deeper.md · docs/user-feedback/261029_0300-structure-one-level-deeper.md · m-pe3zds · m-fq095c · qi-negzd289 · spya-pn7gvw
-acted: spya-b2ceuy
+acted: spya-b2ceuy, spya-yg89m9
 ---
 Done as you said: 1A, the extra level is made automatically. For the layout I built three ways on the real page, and three judges (a product manager and two first-time readers) all picked B, the section you are in opening its sub-sections in column B. That is now built; m-fq095c has the screenshots and what they said.
 
@@ -49,3 +49,7 @@ Recommendation: B. Simplest, and it shows the new level on a laptop. Add a third
 (Option 2B. All three options are drawn out in m-pe3zds.)
 
 Also: once it is built (after 1 November), shall I re-run this one paper's structure in production so you can see it? About 65 cents. Yes / no.
+
+Your reply, 29 Oct (spya-yg89m9): "Yes, re-run this paper."
+
+What happened. The re-run waits, because the prompt change did not pass its tests on 1 Nov and was not shipped: your paper came out right, but another article lost all its sections. Nothing has been written to production. The next step is a new question, q-k25zfg. Your yes stands for whichever version does ship.

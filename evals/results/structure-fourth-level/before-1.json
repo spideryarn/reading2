@@ -1,0 +1,627 @@
+{
+ "label": "before-1",
+ "at": "2026-11-01T01:46:37.062Z",
+ "commit": "087a9b260",
+ "srcDirty": false,
+ "promptVersion": "toc/13",
+ "systemSha256": "634fd08ec3e5f967",
+ "spentUsd": 1.6604,
+ "results": [
+  {
+   "slug": "arxiv-2308-08708-spya-xax6v4",
+   "blocks": 667,
+   "body": 667,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:17.070Z",
+     "endedAt": "2026-11-01T01:45:38.721Z",
+     "ms": 21651,
+     "networkAttempts": 1,
+     "inputTokens": 97863,
+     "outputTokens": 2701,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.222736,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 3,
+    "sections": 31,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 4,
+    "headedSections": 4,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 0,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "rovelli-order-of-time-7098a4fca8e95ec987b96f1c97-spya-r26sug",
+   "blocks": 1123,
+   "body": 980,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:17.122Z",
+     "endedAt": "2026-11-01T01:45:33.827Z",
+     "ms": 16705,
+     "networkAttempts": 1,
+     "inputTokens": 90639,
+     "outputTokens": 2146,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.202738,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 18,
+    "sections": 14,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 5,
+    "headedSections": 5,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 3,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "arxiv-2602-11988-spya-sudvzx",
+   "blocks": 241,
+   "body": 241,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:17.127Z",
+     "endedAt": "2026-11-01T01:45:30.470Z",
+     "ms": 13343,
+     "networkAttempts": 1,
+     "inputTokens": 30917,
+     "outputTokens": 1585,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.077684,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 6,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 5,
+    "headedSections": 5,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 2,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "arxiv-2609-16247-spya-y0kw0z",
+   "blocks": 278,
+   "body": 278,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:17.132Z",
+     "endedAt": "2026-11-01T01:45:37.006Z",
+     "ms": 19874,
+     "networkAttempts": 1,
+     "inputTokens": 40673,
+     "outputTokens": 2501,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.106356,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 3,
+    "sections": 21,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 4,
+    "headedSections": 4,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 4,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "s41593-022-01026-4-spya-bh0g5s",
+   "blocks": 313,
+   "body": 313,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:30.495Z",
+     "endedAt": "2026-11-01T01:45:51.227Z",
+     "ms": 20732,
+     "networkAttempts": 1,
+     "inputTokens": 43716,
+     "outputTokens": 2997,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.117402,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 12,
+    "sections": 26,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 6,
+    "headedSections": 6,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 5,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 1
+  },
+  {
+   "slug": "constitution",
+   "blocks": 360,
+   "body": 360,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:33.851Z",
+     "endedAt": "2026-11-01T01:45:55.185Z",
+     "ms": 21334,
+     "networkAttempts": 1,
+     "inputTokens": 52436,
+     "outputTokens": 2917,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.134042,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 23,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 3,
+    "headedSections": 3,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 3,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "pmc13013618-spya-uekgh6",
+   "blocks": 214,
+   "body": 214,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:37.018Z",
+     "endedAt": "2026-11-01T01:45:54.886Z",
+     "ms": 17868,
+     "networkAttempts": 1,
+     "inputTokens": 45673,
+     "outputTokens": 2386,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.115206,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 10,
+    "sections": 22,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 0,
+    "headedSections": 0,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 1,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "2607-22753v1-spya-nfrmw5",
+   "blocks": 245,
+   "body": 245,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:38.739Z",
+     "endedAt": "2026-11-01T01:45:59.973Z",
+     "ms": 21234,
+     "networkAttempts": 1,
+     "inputTokens": 50437,
+     "outputTokens": 2869,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.129564,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 7,
+    "sections": 20,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 4,
+    "headedSections": 4,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 3,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "noema-mythology-of-conscious-ai",
+   "blocks": 141,
+   "body": 141,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:51.235Z",
+     "endedAt": "2026-11-01T01:46:08.707Z",
+     "ms": 17472,
+     "networkAttempts": 1,
+     "inputTokens": 22958,
+     "outputTokens": 2323,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.069146,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 20,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 0,
+    "headedSections": 0,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 4,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+   "blocks": 244,
+   "body": 244,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:54.893Z",
+     "endedAt": "2026-11-01T01:46:26.372Z",
+     "ms": 31479,
+     "networkAttempts": 1,
+     "inputTokens": 23564,
+     "outputTokens": 4467,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.091798,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 35,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 0,
+    "headedSections": 0,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 2,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "dhp-intro-than-spya-v5mdhd",
+   "blocks": 364,
+   "body": 364,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:55.206Z",
+     "endedAt": "2026-11-01T01:46:13.903Z",
+     "ms": 18697,
+     "networkAttempts": 1,
+     "inputTokens": 39751,
+     "outputTokens": 2226,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.101762,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 20,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 0,
+    "headedSections": 0,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 5,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "tinbergen1963onethology-spya-ks84se",
+   "blocks": 96,
+   "body": 96,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:45:59.987Z",
+     "endedAt": "2026-11-01T01:46:05.182Z",
+     "ms": 5195,
+     "networkAttempts": 1,
+     "inputTokens": 31546,
+     "outputTokens": 461,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.067702,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 8,
+    "sections": 0,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 0,
+    "headedSections": 0,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 0,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 1
+  },
+  {
+   "slug": "arxiv-2212-spya-u5293w",
+   "blocks": 334,
+   "body": 334,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:46:05.195Z",
+     "endedAt": "2026-11-01T01:46:21.911Z",
+     "ms": 16716,
+     "networkAttempts": 1,
+     "inputTokens": 50355,
+     "outputTokens": 2306,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.12377,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 7,
+    "sections": 23,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 6,
+    "headedSections": 6,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 0,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+   "blocks": 172,
+   "body": 172,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T01:46:08.717Z",
+     "endedAt": "2026-11-01T01:46:37.058Z",
+     "ms": 28341,
+     "networkAttempts": 1,
+     "inputTokens": 30639,
+     "outputTokens": 3919,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.100468,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 35,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "undividedHeadedSections": 0,
+    "headedSections": 0,
+    "singleSubsection": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 2,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  }
+ ]
+}

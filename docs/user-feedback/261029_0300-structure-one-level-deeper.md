@@ -1,7 +1,7 @@
 ---
 reports: spya-pn7gvw
 ending: awaiting
-comment: Done as you chose: the level is made automatically, and column B opens the section you are in to show its sub-sections (all three judges picked it). No article has it until after the 1 Nov key reset. Open: re-run this paper then?
+comment: The extra level was tried on 1 Nov: your paper came out right, but another article lost all its sections, so it is not shipped and your paper was not re-run. Open: how to try again?
 ---
 # Structure one level deeper
 
@@ -16,7 +16,7 @@ perhaps the reader asks for it; show a third column when there is one and the wi
 enough; e.g. in "other theories of consciousness" each theory should at least have its own section.
 (Full text: `npx tsx scripts/feedback-unswept.ts --show spya-pn7gvw`.)
 
-**Ending: Awaiting Greg**, on question **q-vrnbyj**, with the half that does not depend on his
+**Ending: Awaiting Greg**, now on question **q-k25zfg** (q-vrnbyj answered), with the half that does not depend on his
 answer built and on `dev`. Plan
 [261029a](../plans/261029a-structure-one-level-deeper.md), with GPT Sol's plan and code reviews
 beside it; the layouts drawn out in mockup `m-pe3zds`.
@@ -51,3 +51,16 @@ because no article has the extra level.
 cannot be measured until the box's OpenRouter key resets on 1 November and ships only if the median
 structure call grows by less than about a fifth; and, if he says yes to the one question still open
 in q-vrnbyj, re-running this one paper in production (about 65¢). No backfill.
+
+**Stage 2, 2026-11-01 (`qi-negzd289`): measured, not shipped.** No addenda when re-read before
+acting and before this update. The key had reset. Greg's reply to q-vrnbyj (`spya-yg89m9`, 29 Oct):
+*"Yes, re-run this paper."* Two wordings of the prompt were tried on 14 of his articles, two runs
+each against the old prompt run twice ($10.24). Cost and time were fine (median article +3%, +1%).
+The second wording got his paper right in both runs: 2.4.1–2.4.6 under 2.4, and 2.5 beside it.
+But each wording left one other article with no sections at all, in both runs, so the live prompt
+is `toc/13` again and the production re-run waits. Kept: each structure run now logs the
+sub-sections it made and the author headings it swallowed. The harness and both wordings are kept
+for the next try. Write-up:
+[261101b](../investigations/261101b-structure-fourth-level-two-wordings-measured.md). How to go on
+(let the call think, a third wording on fresh articles, both, or stop) is
+[q-k25zfg](questions/q-k25zfg.md).

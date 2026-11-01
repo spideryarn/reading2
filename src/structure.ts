@@ -252,71 +252,22 @@ const TOC10_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "..."
           "range": ["<firstBlockId>", "<lastBlockId>"],
           "sourceHeading": "...", "children": [ ... ]}}`;
 
-
-/* **`toc/14`, 2026-11-01: an optional fourth level, and which level a heading
-   starts.** Until now a section could not be divided, so a section the author
-   divides with sub-headings (the paper's "2.4 Other Theories", six h4s) was one
-   row, and with nowhere to put them the model also left same-level headings
-   inside a neighbour ("2.5" inside "2.4"). Only these two bullets move.
-   docs/plans/261029a-structure-one-level-deeper.md § Stage 2 as built. */
-const TOC13_DEPTH = `- Go 3 levels deep: root (depth 0), chapters (depth 1), sections (depth 2).
-- Do NOT emit leaf nodes for individual blocks. Stop at the section level.`;
-
-const TOC14_DEPTH = `- Go up to 4 levels deep: root (depth 0), chapters (depth 1), sections
-  (depth 2), sub-sections (depth 3).
-- Map the author's heading levels onto depths in order: the highest level
-  used below the title starts chapters, the next level down starts sections,
-  and the level below that starts sub-sections. Judge a heading's level by
-  its numbering first and its <hN> tag second, since tags are sometimes
-  wrong: "2.5" is a section beside "2.4" whatever its tag, and "2.4.5(a)"
-  stays inside the node that holds 2.4.5. Headings below the sub-section
-  level stay inside their sub-section.
-- Where the author gives a chapter no sections, divide it into sections
-  yourself by the ~9-block rule above, exactly as before.
-- Where the author divides a section with sub-headings, give it one
-  sub-section per sub-heading, as many as there are. If the section has
-  prose before its first sub-heading, that prose is its first sub-section,
-  with a title you write and no "sourceHeading".
-- A section with no sub-headings stays undivided, unless it runs to 10 or
-  more blocks and covers clearly separate topics; then give it 2 or more
-  sub-sections at those topic shifts.
-- Do NOT emit leaf nodes for individual blocks. The deepest node is a
-  sub-section where a section has them, and the section where it does not.`;
-
-/* The example shows one undivided section beside one divided one, with an
-   opening sub-section that has no sourceHeading: without thinking, the
-   example's shape weighs more than the bullets (Opus, 2026-11-01, on the
-   first toc/14 wording's measured regression). */
-const TOC14_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "...",
+const TOC11_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "...",
           "sourceHeading": "...", "children": [
             {"title": "...", "gist": "...", "question": "...",
-             "start": <firstBlockNumber>, "sourceHeading": "...", "children": [
-               {"title": "...", "gist": "...", "start": <firstBlockNumber>,
-                "sourceHeading": "..."},
-               {"title": "...", "gist": "...", "start": <firstBlockNumber>,
-                "sourceHeading": "...", "children": [
-                  {"title": "...", "gist": "...", "start": <firstBlockNumber>},
-                  {"title": "...", "gist": "...", "start": <firstBlockNumber>,
-                   "sourceHeading": "..."}
-                ]}
-             ]}
+             "start": <firstBlockNumber>, "children": [ ... ]}
           ]}}`;
 
 function replacePromptBlock(prompt: string, before: string, after: string): string {
-  if (!prompt.includes(before)) throw new Error("A structure prompt patch no longer matches the prompt it patches.");
+  if (!prompt.includes(before)) throw new Error("The toc/11 prompt patch no longer matches toc/10.");
   return prompt.replace(before, after);
 }
 
-/** Every block outside STRUCTURE and OUTPUT is inherited byte-for-byte from toc/10. toc/11–13's
-    OUTPUT example stopped at a depth-1 node; toc/14's shows the fourth level. */
+/** Every block outside STRUCTURE and OUTPUT is inherited byte-for-byte from toc/10. */
 export const SYSTEM = replacePromptBlock(
-  replacePromptBlock(
-    replacePromptBlock(STRUCTURE_BASE_SYSTEM, TOC10_STRUCTURE, TOC11_STRUCTURE),
-    TOC10_OUTPUT,
-    TOC14_OUTPUT,
-  ),
-  TOC13_DEPTH,
-  TOC14_DEPTH,
+  replacePromptBlock(STRUCTURE_BASE_SYSTEM, TOC10_STRUCTURE, TOC11_STRUCTURE),
+  TOC10_OUTPUT,
+  TOC11_OUTPUT,
 );
 
 const stringSchema = { type: "string" } as const;
@@ -330,29 +281,12 @@ const objectSchema = (
   required: readonly string[],
 ) => ({ type: "object", properties, required, additionalProperties: false }) as const;
 
-/* A sub-section, `toc/14`: a section's shape, and nothing under it. */
-const depth3Schema = objectSchema(
-  {
-    title: stringSchema,
-    gist: stringSchema,
-    start: blockNumberSchema,
-    sourceHeading: stringSchema,
-  },
-  ["title", "gist", "start"],
-);
-
 const depth2Schema = objectSchema(
   {
     title: stringSchema,
     gist: stringSchema,
     start: blockNumberSchema,
     sourceHeading: stringSchema,
-    /* Optional, as depth 1's are: most sections have none. Absent means "not
-       divided"; present is non-empty, which the provider's subset can say
-       (GPT Sol, plan review). "At least 2" is the prompt's, since the subset
-       has no `minItems: 2`; a lone sub-section covering its whole section is
-       spliced away by `collapseRestatedRungs`. */
-    children: nonEmptyArrayOf(depth3Schema),
   },
   ["title", "gist", "start"],
 );
@@ -374,7 +308,7 @@ const depth1Schema = objectSchema(
   ["title", "gist", "question", "start"],
 );
 
-/** Four levels, unrolled: root → depth 1 → depth 2 → optional depth 3, exactly as SYSTEM asks. */
+/** Three levels, unrolled: root → depth 1 → depth 2, exactly as SYSTEM asks. */
 export const STRUCTURE_OUTPUT_SCHEMA = objectSchema(
   {
     root: objectSchema(
@@ -2480,10 +2414,12 @@ export interface StructureRun {
   collapsedRungs: number;
   /**
    * **How deep the tree went, and whether it kept the author's headings** —
-   * sub-sections (depth 3, `toc/14`), the sections holding them, and author
-   * headings left inside a node that begins with a heading as coarse as theirs.
-   * src/structure-depth.ts. Reported at 0 like the others: a prompt that stopped
-   * making the level, or went back to swallowing headings, shows here first.
+   * sub-sections (depth 3), the sections holding them, and author headings left
+   * inside a node that begins with a heading as coarse as theirs.
+   * src/structure-depth.ts. Reported at 0 like the others. `toc/13` cannot make
+   * a sub-section, so the first two read 0 today; they are here so the prompt
+   * that can (plan 261029a § Stage 2) is watched from its first run, and
+   * `swallowedHeadings` is live now.
    */
   subsections: number;
   deepenedSections: number;
