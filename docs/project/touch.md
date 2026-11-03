@@ -704,13 +704,14 @@ focus and reopen the keyboard, so the band does not hand it the caret while a so
 quiz answer: Enter is a newline, iOS offers a web page no way to add a key, and the paragraph at
 the end of this section still stands. The button that sends is what ends those.
 
-**A key that promises to send has to refuse while the microphone is on.**
+**A key that promises to send must not send the live guess while the microphone is on.**
 Labelling Enter *send* on a box with a microphone beside it creates a race the
 box did not have before: press it mid-sentence and the rough live guesses go, or
 on Safari and Firefox nothing that was said goes at all, and the microphone keeps
-running. Every dictation-backed submitter now guards `dictation.armed` as well as
-`readOnly`, and disables its button in both —
-[dictation.md § Adding it to a box](dictation.md#adding-a-box-that-takes-dictation-somewhere-else).
+running. Every dictation-backed submitter used to refuse while busy; since
+2026-11-03 (`spya-gjcyq3`) each goes through `dictate.submit`, which stops the
+microphone and sends once the real transcript lands —
+[dictation.md § Send while dictating](dictation.md#send-while-dictating-stops-and-sends).
 
 Every box in `src/web/` is listed, with its decision, in
 [`tests/what-the-enter-key-promises.test.tsx`](../../tests/what-the-enter-key-promises.test.tsx)
