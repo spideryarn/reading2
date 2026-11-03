@@ -143,8 +143,12 @@ export function useDictationField<C>({
 }: {
   value: string;
   onChange(next: string): void;
-  /** Blur, Cmd/Ctrl+Enter, or the end of a dictation. Optional. */
-  onCommit?(): void;
+  /**
+   * The end of a dictation, including a failed ending. `delivered` means a
+   * real transcript was accepted into the box; an error message alone cannot
+   * establish that (a successful ending can retain a warning).
+   */
+  onCommit?(delivered: boolean): void;
   /**
    * **The box's own done action** — Send, Answer, Save — exactly as its button
    * calls it, with all its own refusals. Given one, a double press on Stop runs
@@ -426,6 +430,7 @@ export function useDictationField<C>({
       return landed;
     },
     onEnd: () => {
+      const landed = delivered.current;
       /* Read and cleared here, at every ending, so a wish to send never
          outlives the ending it was made for. */
       const wish = wantSend.current;
@@ -463,7 +468,7 @@ export function useDictationField<C>({
          Cleared, this meant a retry inserted wherever the caret happened to be
          — which after a failure is wherever the reader clicked while reading
          the error. GPT Sol's plan review, F4. */
-      commit.current?.();
+      commit.current?.(landed);
     },
     context,
     transcribe,

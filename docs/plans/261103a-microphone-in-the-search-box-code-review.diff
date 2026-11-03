@@ -1,0 +1,600 @@
+diff --git a/docs/project/dictation.md b/docs/project/dictation.md
+index 7fd3b7b60..3d4d0cd46 100644
+--- a/docs/project/dictation.md
++++ b/docs/project/dictation.md
+@@ -28,7 +28,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
+ - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
+ 
+ A microphone button beside a text box. Press it, talk, press it again, and your words are in the
+-box. It is on seventeen boxes today — both profile boxes, the add page's two (*Why are you reading
++box. It is on eighteen boxes today — both profile boxes, the add page's two (*Why are you reading
+ this?* and *About you*, [§ A page that leaves by itself](#a-page-that-leaves-by-itself)), the chat composer, the comment follow-up and
+ the comment's own note, the annotate box, Skim's *What are you skimming for?*, Referee's new
+ criterion, the box that scopes the Candidates search, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
+@@ -38,11 +38,17 @@ the note under an Illustrated picture
+ ([illustrated.md](illustrated.md#steering)) and the command bar's box
+ ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
+ box at the top of every Help page
+-([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
+-eighteenth is three lines. **A box for more than a few words of the reader's prose gets one by
+-default** (Greg, 2026-10-19, `spya-wc4vku`), and
++([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)), and Search mode's box
++([search.md § A microphone in the panel's own box](search.md#a-microphone-in-the-panels-own-box))
++— and adding it to a nineteenth is three lines. **A box for more than a few words of the reader's
++prose gets one by default** (Greg, 2026-10-19, `spya-wc4vku`), and
+ [`tests/prose-boxes-have-a-microphone.test.ts`](../../tests/prose-boxes-have-a-microphone.test.ts)
+ fails on a new `<textarea>` without one unless its component is listed there with the reason.
++**A search box does not, with one exception Greg asked for by name**: Search mode's, whose meaning
++matcher takes a description rather than a few keywords (*"Search should have a microphone
++dictation button"*, 2026-11-02, `spya-ubbygh`). The shelf's filter and the Dock's quick-search box
++stay without (*"not … the search bar on the homepage"*, 2026-10-20). Its one twist is that edits
++there ask a paid search after a pause, so the dictated words reach that only once they have landed.
+ 
+ This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
+ back and either of you can cut the other off — is a separate feature, not a setting on this one:
+@@ -784,7 +790,7 @@ passed over, and GPT Sol's review.
+   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
+   itself: `feedback`, `feedback-reply:<question>`, `feedback-addendum:<report>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
+   `:draft:<block>`), `comment:<id>`, `comment-note:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
+-  `quiz:<slug>:<question>`, `commands:<slug>`, `skim:purpose:<slug>`,
++  `quiz:<slug>:<question>`, `commands:<slug>`, `search:<slug>`, `skim:purpose:<slug>`,
+   `referee:criterion:<slug>`, `candidates:<slug>`, `profile:<field>` for About you and
+   `profile:<field>:<slug>` for *Why you're reading this one*, and on the add page
+   `add:purpose:<wanted>` (the normalised address or the upload's id, never the bare `source`,
+diff --git a/docs/project/search.md b/docs/project/search.md
+index 815fb04f2..13ca09b78 100644
+--- a/docs/project/search.md
++++ b/docs/project/search.md
+@@ -113,7 +113,7 @@ function doing the same job.
+ 
+ - [§ The one decision](#the-one-decision-everything-else-follows-from) — why two matchers share one downstream
+ - [§ Quick search](#quick-search-a-meaning-search-in-about-a-second) — the meaning button's first answer (Jev, ~1 s), how it hands over to thorough, and why the toggle has two buttons since 2026-10-12
+-- [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar) — the bottom-bar box, the command bar, the cross
++- [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar) — the bottom-bar box, the command bar, the cross, the microphone
+ - [§ Why this is on the augment side](#why-this-is-on-the-augment-side-of-the-line) — the intent: finding, not answering
+ - [§ The mode band](#the-mode-band) and [§ The bottom bar](#the-bottom-bar) — where search sits in the chrome
+ - [§ Drawing the marks](#drawing-the-marks-and-the-wall-that-wasnt-there) — overlapping washes, and the wall that was not there
+@@ -639,6 +639,27 @@ alone, and puts the cursor in the box. `.srch-clear` in
+ [`search.css`](../../src/web/styles/search.css); its finger target is 40px wide but only as tall
+ as the field, because the matcher buttons sit just below and nothing clips it.
+ 
++### A microphone in the panel's own box
++
++> Search should have a microphone dictation button
++>
++> — Greg, 2026-11-02 (`spya-ubbygh`)
++
++Since 2026-11-03 the box has the shared microphone, to the right of the field, in both matchers
++(plan [261103a](../plans/261103a-microphone-in-the-search-box.md)). It is the one search box with
++one: the rule gives the microphone to prose, *not a search*, and a meaning search's
++*"describe what to look for…"* is prose; the shelf's filter and the bar's box stay without
++([dictation.md](dictation.md) has the list).
++
++**Half-heard words never ask a search.** The typing session asks a paid quick search after a pause,
++so while the microphone is on — Chromium's live guesses, and keys typed meanwhile — nothing reaches
++the session. When the words land, the session gets them once and they are typed words from there:
++the quick search after the pause. A failed transcription hands over nothing; the rough words wait
++for an edit or Retry. Enter or *find* while the microphone is busy stop it and search when the words
++land, and so does a double press on Stop. A wish made in words mode is withdrawn if the toggle moves
++to meaning first (`doneKey`), since there it would be a paid search nobody asked for. Tests:
++[`search-box-dictation.test.tsx`](../../tests/search-box-dictation.test.tsx).
++
+ ## Why this is on the augment side of the line
+ 
+ [vision.md](vision.md) exists to refuse tools that read the article *instead of* you. A results list
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index e25c5a75a..d9900be53 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -197,7 +197,7 @@
+   "summary": "Find a passage by the words it uses, or by what it says.",
+   "keywords": "find look for passage words meaning quick fast phrase highlight mark colour where does it say semantic theme find highlight locate look for ctrl f ctrl+f cmd f keyword semantic search search",
+   "experimental": false,
+-  "body": "## In short\n\nSearch finds a passage when you remember roughly what it said but not where. Search by **words** for\nan exact phrase, or by **meaning** to ask a question of the whole piece — “where does she concede a\nweakness?” — and find passages the AI thinks answer it even when they use none of your words. The\nmatches are marked in the text, so you can see where a theme runs through the piece.\n\n(Picture: A search for the word science: 16 passages, each shown with the words around the match. Caption: A search by words: every passage that uses them, in the order they come.)\n\n## How it works\n\nFind a passage by the words it uses, or by what it says.\n\nTwo matchers behind one box, and they cost differently: words matches against the text already in front of you, while meaning sends the query to a model and finds passages that say what you asked for without using your words. Meaning searches are saved, so you can switch several on together and come back to them.\n\n## When to use it\n\nUse **words** when you remember a phrase. Use **meaning** to ask a question of the whole piece —\n“where does he concede a weakness?”, “anywhere she gives numbers” — or to follow a theme through a\nlong article. Search opens on meaning, so switch to words for an exact look-up. Your browser’s own\nFind works as usual.\n\nA meaning search answers twice. First, in about a second, a fast model scores every paragraph,\nand the ones that match are marked whole, with no reasons; that search is tagged **quick**. It\nsearches whenever you pause typing, and what you type keeps one saved search, updated as you go\nrather than a new one each time. Press Enter when you are done; typing again after that, or after a\nbreak, starts a new one. Its paragraphs are marked with a bar down the side and a mark in the spine,\nnot a highlight over the words.\n\nThen, once you stop typing and the quick answer has settled for two seconds (at once if you pressed\nEnter), the thorough search starts by itself: the full model reads the whole piece, usually in about\nten seconds, and marks the words that answer you, each with a line of reasoning. The quick search\nshows a spinner while it runs. On success its results take the quick ones' place; if it fails, the\nquick results stay, and **thorough** on the quick search asks again.\n\nTo start a quick search from anywhere in the article, type in the **Quick search** box in the bottom\nbar, press the **⚡** button that takes its place while Search is open, or press **/**. A phone or a\nnarrow window has no room for the box: open **Search** and type. Typing *search for …*\nin the command bar does it too, at any width: the first row it offers is the quick search, and the\nsecond finds the exact words. The box keeps your words after a search, so you can add to them; the\n**×** at its right-hand end empties it, and the box in the Search panel has one as well.\n\n## Reading it\n\nEach meaning search gets its own colour, and its matches are marked in the text in that colour and\n**down the spine** as thin bars, so you can see at a glance whether a theme sits in one place or\nruns through the whole piece — see [Reading the spine](/help/spine).\n\nTick several searches to show them together; click a search’s words to show only that one. **↺**\nputs the question back in the box to ask again.\n\nPress a match in the list to jump to it in the text. <kbd>←</kbd> <kbd>→</kbd> while reading step\nfrom match to match in the list’s order, but not while you are typing in the box.\n\nEach match has a score out of 100. It is the AI’s judgement of its own answer, not a measurement, so\nread a high score as “worth a look” rather than “certain”. **prioritised**, the default, hides weak\nmatches from the list *and* the text; if you expected more marks, move the **confidence** slider\nleft.\n\nWhich searches are showing is part of the address, so a link you send opens with the same marks."
++  "body": "## In short\n\nSearch finds a passage when you remember roughly what it said but not where. Search by **words** for\nan exact phrase, or by **meaning** to ask a question of the whole piece — “where does she concede a\nweakness?” — and find passages the AI thinks answer it even when they use none of your words. The\nmatches are marked in the text, so you can see where a theme runs through the piece.\n\n(Picture: A search for the word science: 16 passages, each shown with the words around the match. Caption: A search by words: every passage that uses them, in the order they come.)\n\n## How it works\n\nFind a passage by the words it uses, or by what it says.\n\nTwo matchers behind one box, and they cost differently: words matches against the text already in front of you, while meaning sends the query to a model and finds passages that say what you asked for without using your words. Meaning searches are saved, so you can switch several on together and come back to them.\n\n## When to use it\n\nUse **words** when you remember a phrase. Use **meaning** to ask a question of the whole piece —\n“where does he concede a weakness?”, “anywhere she gives numbers” — or to follow a theme through a\nlong article. Search opens on meaning, so switch to words for an exact look-up. Your browser’s own\nFind works as usual. The microphone beside the box lets you say what you are looking for instead\nof typing it; the search starts once your words are in the box, and pressing Stop twice quickly\nsearches as soon as they arrive.\n\nA meaning search answers twice. First, in about a second, a fast model scores every paragraph,\nand the ones that match are marked whole, with no reasons; that search is tagged **quick**. It\nsearches whenever you pause typing, and what you type keeps one saved search, updated as you go\nrather than a new one each time. Press Enter when you are done; typing again after that, or after a\nbreak, starts a new one. Its paragraphs are marked with a bar down the side and a mark in the spine,\nnot a highlight over the words.\n\nThen, once you stop typing and the quick answer has settled for two seconds (at once if you pressed\nEnter), the thorough search starts by itself: the full model reads the whole piece, usually in about\nten seconds, and marks the words that answer you, each with a line of reasoning. The quick search\nshows a spinner while it runs. On success its results take the quick ones' place; if it fails, the\nquick results stay, and **thorough** on the quick search asks again.\n\nTo start a quick search from anywhere in the article, type in the **Quick search** box in the bottom\nbar, press the **⚡** button that takes its place while Search is open, or press **/**. A phone or a\nnarrow window has no room for the box: open **Search** and type. Typing *search for …*\nin the command bar does it too, at any width: the first row it offers is the quick search, and the\nsecond finds the exact words. The box keeps your words after a search, so you can add to them; the\n**×** at its right-hand end empties it, and the box in the Search panel has one as well.\n\n## Reading it\n\nEach meaning search gets its own colour, and its matches are marked in the text in that colour and\n**down the spine** as thin bars, so you can see at a glance whether a theme sits in one place or\nruns through the whole piece — see [Reading the spine](/help/spine).\n\nTick several searches to show them together; click a search’s words to show only that one. **↺**\nputs the question back in the box to ask again.\n\nPress a match in the list to jump to it in the text. <kbd>←</kbd> <kbd>→</kbd> while reading step\nfrom match to match in the list’s order, but not while you are typing in the box.\n\nEach match has a score out of 100. It is the AI’s judgement of its own answer, not a measurement, so\nread a high score as “worth a look” rather than “certain”. **prioritised**, the default, hides weak\nmatches from the list *and* the text; if you expected more marks, move the **confidence** slider\nleft.\n\nWhich searches are showing is part of the address, so a link you send opens with the same marks."
+  },
+  {
+   "anchor": "mode-referee",
+diff --git a/src/web/SearchPanel.tsx b/src/web/SearchPanel.tsx
+index d96c0591a..e2d42e307 100644
+--- a/src/web/SearchPanel.tsx
++++ b/src/web/SearchPanel.tsx
+@@ -130,6 +130,11 @@ import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draf
+ import { PrivateCopy, type PrivateCopyFacts } from "./PublicChrome.js";
+ import { Excerpt } from "./Excerpt.js";
+ import { useFollowRow } from "./list-step.js";
++import { DictationButton, DictationStrip } from "./DictationStrip.js";
++import { keepDictation } from "./dictation-keep.js";
++import { type DictationContext, useReaderTranscriber } from "./dictation-upload.js";
++import { dictationReporter } from "./dictation-report.js";
++import { useDictationField } from "./useDictationField.js";
+ 
+ /**
+  * **Whose searches these are, and therefore what may be done to them.**
+@@ -428,6 +433,7 @@ export function SearchPanel({
+           onAsk={own.onAsk}
+           typing={own.typing}
+           quietMount={quietMount}
++          slug={slug}
+         />
+       )}
+       {/* **And in its place, for a signed-in visitor, their own copy**, in
+@@ -588,9 +594,11 @@ const Box = forwardRef<
+     typing: TypingControls | undefined;
+     /** Do not take focus on mount: the bar's box has it (Sol F2). */
+     quietMount: boolean;
++    /** The article, for the microphone's vocabulary and its kept copy. */
++    slug: string | undefined;
+   }
+ >(function Box(
+-  { matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk, typing, quietMount },
++  { matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk, typing, quietMount, slug },
+   ref,
+ ) {
+   /* The parent needs this to focus the box from ↺, and the input needs it for
+@@ -644,12 +652,80 @@ const Box = forwardRef<
+     asking !== null && (loaded || session !== undefined) && draft.trim().length > 0 && !repeat;
+   const ask = () => {
+     if (!ready || asking === null) return;
++    /* These words are being asked now; the dictation's hand-off below must
++       not edit them into a second session. */
++    heard.current = null;
+     if (session) session.flush(draft);
+     else onAsk(draft, asking);
+     /* Enter and find share the accepted search: let go of a soft keyboard
+        so the hits can be read. A refused search keeps the caret. */
+     putKeyboardAway(box.current);
+   };
++
++  /**
++   * **The microphone** (plan 261103a; Greg, spya-ubbygh: *"Search should have
++   * a microphone dictation button"*) — the shared field, as every other box
++   * has it (dictation.md § Adding it to a box). Both matchers, because the box
++   * is one input over both.
++   *
++   * **Its writes never reach the typing session while it is listening.** On
++   * Chromium the live phrases arrive through `onChange`, and an edit is what
++   * asks a paid quick search after a pause — so a half-heard phrase would be
++   * searched for. The session hears the words once, when the dictation ends
++   * (`onCommit`, which the field calls only then), and from there they are
++   * typed words: a quick search after the pause, revised by later edits.
++   * `heard` carries them to the effect below, which runs once the dictation
++   * is over and only if it did not fail — a failed transcription leaves
++   * Chromium's rough guesses in the box, and those are not to be searched for
++   * unless the reader edits them (or Retry replaces them, which lands here
++   * again). Keys typed while the microphone is on wait in `heard` too.
++   *
++   * `onDone` is Enter's own function, so a double press on Stop — and Enter or
++   * *find* pressed while the microphone is busy — searches the landed words
++   * (`finishThenDone`), as Feedback's Send does. `doneKey` is the matcher: a
++   * wish made in words mode, where Enter only puts the keyboard away, must not
++   * become a paid search because the toggle moved before the words arrived
++   * (GPT Sol's plan review).
++   */
++  const heard = useRef<string | null>(null);
++  const transcribe = useReaderTranscriber();
++  const dictate = useDictationField<DictationContext>({
++    value,
++    onChange: (next) => {
++      if (matcher === "words") onFind(next || null);
++      else {
++        heard.current = next;
++        setDraft(next);
++      }
++    },
++    onDone: () => {
++      if (matcher === "words") putKeyboardAway(box.current);
++      else ask();
++    },
++    doneKey: matcher,
++    box,
++    context: slug === undefined ? { kind: "profile" } : { kind: "article", slug },
++    transcribe,
++    report: dictationReporter("search"),
++    keep: keepDictation(`search:${slug ?? ""}`),
++  });
++  /* The words reach the session once the microphone is done with the box.
++     After the field's own effects, so a double press's `ask` (which clears
++     `heard`) has already flushed them and this asks nothing twice. */
++  const dictationBusy = dictate.busy;
++  const dictationFailed = dictate.dictation.error !== null;
++  // biome-ignore lint/correctness/useExhaustiveDependencies: on the busy edge only; `session` and `matcher` are read as of that render.
++  useEffect(() => {
++    if (dictationBusy) return;
++    const words = heard.current;
++    heard.current = null;
++    if (words !== null && !dictationFailed && matcher !== "words") session?.edit(words);
++  }, [dictationBusy]);
++  /** Enter's and *find*'s press: while the microphone is busy, search once its words land. */
++  const press = () => {
++    if (dictate.busy) dictate.finishThenDone();
++    else ask();
++  };
+   /**
+    * **Empty the box, and nothing else** — Escape's body, and the cross's
+    * (plan 261005i). It used to also close the open search, back when there was
+@@ -688,6 +764,9 @@ const Box = forwardRef<
+ 
+   return (
+     <div className="srch-box">
++      {/* The field and its microphone side by side, so the cross and the
++          spinner keep their places inside the field (search.css). */}
++      <div className="srch-line">
+       <div className={`srch-field${value === "" ? "" : " srch-field--filled"}${busy ? " srch-field--busy" : ""}`}>
+         <input
+           ref={box}
+@@ -701,6 +780,7 @@ const Box = forwardRef<
+              docs/project/touch.md § What the Enter key promises. */
+           enterKeyHint="search"
+           value={value}
++          readOnly={dictate.readOnly}
+           placeholder={
+             matcher === "words" ? "find these words…" : "describe what to look for…"
+           }
+@@ -711,7 +791,10 @@ const Box = forwardRef<
+             if (matcher === "words") onFind(e.target.value || null);
+             else {
+               setDraft(e.target.value);
+-              session?.edit(e.target.value);
++              /* Typed while the microphone is on: held for its ending, as
++                 its own words are, so no pause asks about a half-heard box. */
++              if (dictate.busy) heard.current = e.target.value;
++              else session?.edit(e.target.value);
+             }
+           }}
+           onFocus={() => session?.focus()}
+@@ -722,7 +805,8 @@ const Box = forwardRef<
+                question (keyboard.md § Enter in a text box; Sol's D9). */
+             if (e.key === "Enter" && !isImeComposing(e)) {
+               e.preventDefault();
+-              if (ready) {
++              if (dictate.busy) dictate.finishThenDone();
++              else if (ready) {
+                 ask();
+               }
+               /* Words mode has nothing to ask — the hits arrived as the reader
+@@ -769,6 +853,18 @@ const Box = forwardRef<
+           </button>
+         )}
+       </div>
++      {/* Hidden where the browser cannot open a microphone, as in every other box. */}
++      {dictate.dictation.supported && (
++        <DictationButton
++          dictation={dictate.dictation}
++          toggle={dictate.toggle}
++          sendingAfter={dictate.sendingAfter}
++          doubleStop={dictate.doubleStop}
++          done="enter"
++        />
++      )}
++      </div>
++      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} done="enter" />
+ 
+       <div className="srch-modes">
+         {/* A radio group and not two toggles: these are one of two, not two
+@@ -849,8 +945,8 @@ const Box = forwardRef<
+                the handler's: `ask` checks `ready` first, which it did anyway,
+                because `disabled` lands on the next render and the handler is
+                what a press actually reaches. The Enter key asks the same. */
+-            aria-disabled={!ready || undefined}
+-            onClick={ask}
++            aria-disabled={(!ready && !dictate.busy) || undefined}
++            onClick={press}
+             data-tip={
+               !loaded
+                 ? "Waiting for your saved searches to load"
+diff --git a/src/web/dictation-report.ts b/src/web/dictation-report.ts
+index 44fb4a1a7..193788277 100644
+--- a/src/web/dictation-report.ts
++++ b/src/web/dictation-report.ts
+@@ -61,6 +61,7 @@ export type DictationSurface =
+   | "profile"
+   | "quiz"
+   | "referee"
++  | "search"
+   | "skim";
+ 
+ /** The browser's engine and form, coarsely, from a closed set. */
+diff --git a/src/web/help/pages/modes/search.md b/src/web/help/pages/modes/search.md
+index a3f52c5dd..9515f3ba6 100644
+--- a/src/web/help/pages/modes/search.md
++++ b/src/web/help/pages/modes/search.md
+@@ -17,7 +17,9 @@ matches are marked in the text, so you can see where a theme runs through the pi
+ Use **words** when you remember a phrase. Use **meaning** to ask a question of the whole piece —
+ “where does he concede a weakness?”, “anywhere she gives numbers” — or to follow a theme through a
+ long article. Search opens on meaning, so switch to words for an exact look-up. Your browser’s own
+-Find works as usual.
++Find works as usual. The microphone beside the box lets you say what you are looking for instead
++of typing it; the search starts once your words are in the box, and pressing Stop twice quickly
++searches as soon as they arrive.
+ 
+ A meaning search answers twice. First, in about a second, a fast model scores every paragraph,
+ and the ones that match are marked whole, with no reasons; that search is tagged **quick**. It
+diff --git a/src/web/styles/search.css b/src/web/styles/search.css
+index 795812942..564cbb366 100644
+--- a/src/web/styles/search.css
++++ b/src/web/styles/search.css
+@@ -29,6 +29,11 @@
+    in the corner: mode-band.css § `.mode-band > .band-about`. Sideways only, so
+    the zero-slack vertical fit is untouched. */
+ .mode-band.has-about > .srch-box { padding-right: calc(0.6rem + var(--band-about-room)); }
++/* The field and its microphone (plan 261103a): the field takes the room, the
++   microphone keeps its own size to the right, outside the field so the cross
++   and the spinner below keep their places. */
++.srch-line { display: flex; align-items: center; gap: 0.4rem; }
++.srch-line > .srch-field { flex: 1; min-width: 0; }
+ .srch-field { position: relative; display: flex; align-items: center; }
+ /* Its border, corner, ground, padding and focus are every band's text box's:
+    mode-band.css § text boxes in the bands. */
+diff --git a/tests/search-box-dictation.test.tsx b/tests/search-box-dictation.test.tsx
+new file mode 100644
+index 000000000..b688e7b59
+--- /dev/null
++++ b/tests/search-box-dictation.test.tsx
+@@ -0,0 +1,266 @@
++// @vitest-environment jsdom
++/**
++ * **Search mode's box takes dictation** — plan
++ * docs/plans/261103a-microphone-in-the-search-box.md (report spya-ubbygh).
++ *
++ * The box is a meaning search as you type: every edit feeds the typing
++ * session, which asks a paid quick search after a pause. What is pinned:
++ *
++ *  - the box has the shared microphone;
++ *  - Chromium's live phrases fill the box but never reach the session, so a
++ *    half-heard phrase cannot ask a search; the landed words reach it once;
++ *  - Enter while the microphone is on stops it and searches when the words
++ *    land, with those words (dictation.md § Adding it to a box).
++ *
++ * `useDictation` is stubbed as tests/comment-note-dictation.test.tsx does.
++ */
++import { act, useState } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++import type { Matcher } from "../src/web/params.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++interface MicOptions {
++  onText(text: string): void;
++  onTranscript(text: string): boolean | undefined;
++  onEnd(): void;
++}
++const mic = vi.hoisted(() => ({
++  state: { armed: false, transcribing: false } as { armed: boolean; transcribing: boolean },
++  error: null as string | null,
++  options: null as unknown,
++  toggles: 0,
++}));
++vi.mock("../src/web/useDictation.js", () => ({
++  useDictation: (options: unknown) => {
++    mic.options = options;
++    const s = mic.state;
++    return {
++      supported: true,
++      phase: s.armed ? "listening" : s.transcribing ? "transcribing" : "idle",
++      armed: s.armed,
++      transcribing: s.transcribing,
++      liveText: true,
++      interim: "",
++      level: { current: 0 },
++      meter: "none",
++      quiet: false,
++      error: mic.error,
++      startedAt: null,
++      endsAt: null,
++      deviceLabel: null,
++      deviceId: null,
++      deviceUnavailable: false,
++      recording: null,
++      keptOnDevice: false,
++      canRetry: false,
++      toggle() {
++        mic.toggles += 1;
++        /* Stop goes to the transcription, as the real hook does. */
++        mic.state = s.armed ? { armed: false, transcribing: true } : { armed: true, transcribing: false };
++        return undefined;
++      },
++      dismiss() {},
++      chooseDevice() {},
++      clearRecording() {},
++      retry() {},
++    };
++  },
++}));
++vi.mock("../src/web/dictation-upload.js", () => ({
++  useReaderTranscriber: () => async () => {
++    throw new Error("not called");
++  },
++}));
++
++const { SearchPanel } = await import("../src/web/SearchPanel.js");
++type Access = Parameters<typeof SearchPanel>[0]["access"];
++
++let container: HTMLDivElement;
++let root: Root;
++let edits: string[];
++let flushes: string[];
++let tick: () => void = () => {};
++
++const typing = {
++  edit: (text: string) => void edits.push(text),
++  flush: (text: string) => void flushes.push(text),
++  ownsWords: () => false,
++  end() {},
++  blur() {},
++  focus() {},
++};
++
++function Harness({ start }: { start: Matcher }) {
++  const [matcher, setMatcher] = useState<Matcher>(start);
++  const [find, setFind] = useState<string | null>(null);
++  const [, setN] = useState(0);
++  tick = () => setN((n) => n + 1);
++  const access: Access = {
++    kind: "owner",
++    loaded: true,
++    loadError: null,
++    error: null,
++    running: new Set(),
++    typing,
++    onAsk: () => {},
++    onRetry: () => {},
++    onRecolour: () => {},
++    onDelete: () => {},
++  };
++  return (
++    <SearchPanel
++      access={access}
++      slug="constitution"
++      matcher={matcher}
++      onMatcher={setMatcher}
++      find={find}
++      onFind={setFind}
++      runs={[]}
++      active={[]}
++      slots={new Map()}
++      onToggle={() => {}}
++      onSolo={() => {}}
++      onToggleAll={() => {}}
++      found={[]}
++      all={[]}
++      order="document"
++      onOrder={() => {}}
++      gate={0}
++      gateMoved={false}
++      onGate={() => {}}
++      openKey={null}
++      onOpen={() => {}}
++    />
++  );
++}
++
++const input = () => container.querySelector<HTMLInputElement>("input.srch-input")!;
++const micButton = () => container.querySelector<HTMLButtonElement>(".srch-box button.prof-mic");
++const options = () => mic.options as MicOptions;
++
++async function redraw(): Promise<void> {
++  await act(async () => tick());
++}
++async function phase(armed: boolean, transcribing: boolean): Promise<void> {
++  mic.state = { armed, transcribing };
++  await redraw();
++}
++async function land(words: string): Promise<void> {
++  mic.state = { armed: false, transcribing: false };
++  await act(async () => {
++    options().onTranscript(words);
++    options().onEnd();
++  });
++  await redraw();
++}
++
++beforeEach(async () => {
++  mic.state = { armed: false, transcribing: false };
++  mic.error = null;
++  mic.options = null;
++  mic.toggles = 0;
++  edits = [];
++  flushes = [];
++  container = document.createElement("div");
++  document.body.appendChild(container);
++  root = createRoot(container);
++  await act(async () => root.render(<Harness start="meaning" />));
++});
++
++afterEach(async () => {
++  await act(async () => root.unmount());
++  container.remove();
++});
++
++describe("Search mode's microphone (261103a)", () => {
++  it("has the shared microphone", () => {
++    expect(micButton()).not.toBeNull();
++  });
++
++  it("asks nothing on half-heard words, and hands the landed words to the session once", async () => {
++    await act(async () => micButton()!.click());
++    await phase(true, false);
++    await act(async () => options().onText("rough live guess"));
++    expect(input().value).toBe("rough live guess");
++    expect(edits).toEqual([]);
++    await phase(false, true);
++    await land("the separation of powers");
++    expect(input().value).toBe("the separation of powers");
++    expect(edits).toEqual(["the separation of powers"]);
++    expect(flushes).toEqual([]);
++  });
++
++  it("Enter while the microphone is on stops it and searches when the words land", async () => {
++    await act(async () => micButton()!.click());
++    await phase(true, false);
++    await act(async () => options().onText("rough"));
++    const toggles = mic.toggles;
++    await act(async () => {
++      input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
++    });
++    expect(flushes).toEqual([]);
++    expect(mic.toggles).toBe(toggles + 1);
++    await land("checks and balances");
++    expect(flushes).toEqual(["checks and balances"]);
++    // The double press's search is the only one: no second session after it.
++    expect(edits).toEqual([]);
++  });
++
++  it("Enter on an empty box while recording (Safari: no live words) still waits for the words", async () => {
++    await act(async () => micButton()!.click());
++    await phase(true, false);
++    expect(input().value).toBe("");
++    await act(async () => {
++      input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
++    });
++    await land("judicial review");
++    expect(flushes).toEqual(["judicial review"]);
++  });
++
++  it("a failed transcription leaves the rough words unsearched", async () => {
++    await act(async () => micButton()!.click());
++    await phase(true, false);
++    await act(async () => options().onText("rough live guess"));
++    mic.state = { armed: false, transcribing: false };
++    mic.error = "Could not turn that into text. [mic-transcribe]";
++    await act(async () => options().onEnd());
++    await redraw();
++    expect(input().value).toBe("rough live guess");
++    expect(edits).toEqual([]);
++  });
++
++  it("keys typed while the microphone is on wait for its ending", async () => {
++    await act(async () => micButton()!.click());
++    await phase(true, false);
++    await act(async () => options().onText("rough"));
++    await act(async () => {
++      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set?.call(
++        input(),
++        "rough typed",
++      );
++      input().dispatchEvent(new Event("input", { bubbles: true }));
++    });
++    expect(edits).toEqual([]);
++  });
++
++  it("a words-mode Enter is not a paid search after the toggle moves to meaning", async () => {
++    const radio = (name: string) =>
++      [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
++        (b) => b.textContent?.trim() === name,
++      )!;
++    await act(async () => radio("words").click());
++    expect(radio("words").getAttribute("aria-checked")).toBe("true");
++    await act(async () => micButton()!.click());
++    await phase(true, false);
++    await act(async () => {
++      input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
++    });
++    await act(async () => radio("meaning").click());
++    await land("the commerce clause");
++    expect(input().value).toBe("the commerce clause");
++    expect(flushes).toEqual([]);
++  });
++});

@@ -17,7 +17,9 @@ matches are marked in the text, so you can see where a theme runs through the pi
 Use **words** when you remember a phrase. Use **meaning** to ask a question of the whole piece —
 “where does he concede a weakness?”, “anywhere she gives numbers” — or to follow a theme through a
 long article. Search opens on meaning, so switch to words for an exact look-up. Your browser’s own
-Find works as usual.
+Find works as usual. The microphone beside the box lets you say what you are looking for instead
+of typing it. In meaning mode, the search starts a moment after your words appear in the box;
+press Stop twice quickly to search as soon as they do.
 
 A meaning search answers twice. First, in about a second, a fast model scores every paragraph,
 and the ones that match are marked whole, with no reasons; that search is tagged **quick**. It

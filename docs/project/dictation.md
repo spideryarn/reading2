@@ -28,7 +28,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on seventeen boxes today — both profile boxes, the add page's two (*Why are you reading
+box. It is on eighteen boxes today — both profile boxes, the add page's two (*Why are you reading
 this?* and *About you*, [§ A page that leaves by itself](#a-page-that-leaves-by-itself)), the chat composer, the comment follow-up and
 the comment's own note, the annotate box, Skim's *What are you skimming for?*, Referee's new
 criterion, the box that scopes the Candidates search, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
@@ -38,11 +38,17 @@ the note under an Illustrated picture
 ([illustrated.md](illustrated.md#steering)) and the command bar's box
 ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
 box at the top of every Help page
-([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
-eighteenth is three lines. **A box for more than a few words of the reader's prose gets one by
-default** (Greg, 2026-10-19, `spya-wc4vku`), and
+([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)), and Search mode's box
+([search.md § A microphone in the panel's own box](search.md#a-microphone-in-the-panels-own-box))
+— and adding it to a nineteenth is three lines. **A box for more than a few words of the reader's
+prose gets one by default** (Greg, 2026-10-19, `spya-wc4vku`), and
 [`tests/prose-boxes-have-a-microphone.test.ts`](../../tests/prose-boxes-have-a-microphone.test.ts)
 fails on a new `<textarea>` without one unless its component is listed there with the reason.
+**A search box does not, with one exception Greg asked for by name**: Search mode's, whose meaning
+matcher takes a description rather than a few keywords (*"Search should have a microphone
+dictation button"*, 2026-11-02, `spya-ubbygh`). The shelf's filter and the Dock's quick-search box
+stay without (*"not … the search bar on the homepage"*, 2026-10-20). Its one twist is that edits
+there ask a paid search after a pause, so the dictated words reach that only once they have landed.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:
@@ -784,7 +790,7 @@ passed over, and GPT Sol's review.
   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
   itself: `feedback`, `feedback-reply:<question>`, `feedback-addendum:<report>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
   `:draft:<block>`), `comment:<id>`, `comment-note:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
-  `quiz:<slug>:<question>`, `commands:<slug>`, `skim:purpose:<slug>`,
+  `quiz:<slug>:<question>`, `commands:<slug>`, `search:<slug>`, `skim:purpose:<slug>`,
   `referee:criterion:<slug>`, `candidates:<slug>`, `profile:<field>` for About you and
   `profile:<field>:<slug>` for *Why you're reading this one*, and on the add page
   `add:purpose:<wanted>` (the normalised address or the upload's id, never the bare `source`,

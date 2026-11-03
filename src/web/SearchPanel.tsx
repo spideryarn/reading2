@@ -130,6 +130,11 @@ import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draf
 import { PrivateCopy, type PrivateCopyFacts } from "./PublicChrome.js";
 import { Excerpt } from "./Excerpt.js";
 import { useFollowRow } from "./list-step.js";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { keepDictation } from "./dictation-keep.js";
+import { type DictationContext, useReaderTranscriber } from "./dictation-upload.js";
+import { dictationReporter } from "./dictation-report.js";
+import { useDictationField } from "./useDictationField.js";
 
 /**
  * **Whose searches these are, and therefore what may be done to them.**
@@ -428,6 +433,7 @@ export function SearchPanel({
           onAsk={own.onAsk}
           typing={own.typing}
           quietMount={quietMount}
+          slug={slug}
         />
       )}
       {/* **And in its place, for a signed-in visitor, their own copy**, in
@@ -588,9 +594,11 @@ const Box = forwardRef<
     typing: TypingControls | undefined;
     /** Do not take focus on mount: the bar's box has it (Sol F2). */
     quietMount: boolean;
+    /** The article, for the microphone's vocabulary and its kept copy. */
+    slug: string | undefined;
   }
 >(function Box(
-  { matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk, typing, quietMount },
+  { matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk, typing, quietMount, slug },
   ref,
 ) {
   /* The parent needs this to focus the box from ↺, and the input needs it for
@@ -644,11 +652,92 @@ const Box = forwardRef<
     asking !== null && (loaded || session !== undefined) && draft.trim().length > 0 && !repeat;
   const ask = () => {
     if (!ready || asking === null) return;
+    /* These words are being asked now; the dictation's hand-off below must
+       not edit them into a second session. */
+    heard.current = null;
     if (session) session.flush(draft);
     else onAsk(draft, asking);
     /* Enter and find share the accepted search: let go of a soft keyboard
        so the hits can be read. A refused search keeps the caret. */
     putKeyboardAway(box.current);
+  };
+
+  /**
+   * **The microphone** (plan 261103a; Greg, spya-ubbygh: *"Search should have
+   * a microphone dictation button"*) — the shared field, as every other box
+   * has it (dictation.md § Adding it to a box). Both matchers, because the box
+   * is one input over both.
+   *
+   * **Its writes never reach the typing session while it is listening.** On
+   * Chromium the live phrases arrive through `onChange`, and an edit is what
+   * asks a paid quick search after a pause — so a half-heard phrase would be
+   * searched for. The session hears the words once, when a transcript lands
+   * (`onCommit` tells us whether delivery succeeded), and from there they are
+   * typed words: a quick search after the pause, revised by later edits.
+   * `heard` carries them to the effect below, which runs once the dictation
+   * is over and only if a transcript landed — a failed transcription leaves
+   * Chromium's rough guesses in the box, and those are not to be searched for
+   * unless the reader edits them (or Retry replaces them, which lands here
+   * again). Keys typed while the microphone is on wait in `heard` too.
+   *
+   * `onDone` is Enter's own function, so a double press on Stop — and Enter or
+   * *find* pressed while the microphone is busy — searches the landed words
+   * (`finishThenDone`), as Feedback's Send does. `doneKey` is the matcher: a
+   * wish made in words mode, where Enter only puts the keyboard away, must not
+   * become a paid search because the toggle moved before the words arrived
+   * (GPT Sol's plan review).
+   */
+  const heard = useRef<string | null>(null);
+  const transcribe = useReaderTranscriber();
+  const dictate = useDictationField<DictationContext>({
+    value,
+    onChange: (next) => {
+      if (matcher === "words") onFind(next || null);
+      else {
+        heard.current = next;
+        setDraft(next);
+      }
+    },
+    onCommit: (delivered) => {
+      // No transcript, or the span check refused it: rough guesses stay inert.
+      if (!delivered) heard.current = null;
+    },
+    onDone: () => {
+      if (matcher === "words") putKeyboardAway(box.current);
+      else ask();
+    },
+    doneKey: matcher,
+    box,
+    context: slug === undefined ? { kind: "profile" } : { kind: "article", slug },
+    transcribe,
+    report: dictationReporter("search"),
+    keep: keepDictation(`search:${slug ?? ""}`),
+  });
+  /* The words reach the session once the microphone is done with the box.
+     After the field's own effects, so a double press's `ask` (which clears
+     `heard`) has already flushed them and this asks nothing twice. */
+  const dictationBusy = dictate.busy;
+  const handoffMatcher = useRef<Matcher | null>(null);
+  const wasDictating = useRef(false);
+  useEffect(() => {
+    if (dictationBusy && !wasDictating.current) handoffMatcher.current = matcher;
+    else if (handoffMatcher.current !== matcher) handoffMatcher.current = null;
+    wasDictating.current = dictationBusy;
+  }, [dictationBusy, matcher]);
+  /* Changing matcher keeps the text, but withdraws automatic submission too:
+     cancelling onDone with doneKey alone still let a words-mode Enter become
+     a paid quick search through edit(). Going away and back stays cancelled. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on the busy edge only; `session` and `matcher` are read as of that render.
+  useEffect(() => {
+    if (dictationBusy) return;
+    const words = heard.current;
+    heard.current = null;
+    if (words !== null && handoffMatcher.current === matcher && matcher !== "words") session?.edit(words);
+  }, [dictationBusy]);
+  /** Enter's and *find*'s press: while the microphone is busy, search once its words land. */
+  const press = () => {
+    if (dictate.busy) dictate.finishThenDone();
+    else ask();
   };
   /**
    * **Empty the box, and nothing else** — Escape's body, and the cross's
@@ -657,6 +746,7 @@ const Box = forwardRef<
    * them would undo work the reader can see they did.
    */
   const clear = () => {
+    heard.current = null;
     if (matcher === "words") onFind(null);
     else {
       setDraft("");
@@ -688,6 +778,9 @@ const Box = forwardRef<
 
   return (
     <div className="srch-box">
+      {/* The field and its microphone side by side, so the cross and the
+          spinner keep their places inside the field (search.css). */}
+      <div className="srch-line">
       <div className={`srch-field${value === "" ? "" : " srch-field--filled"}${busy ? " srch-field--busy" : ""}`}>
         <input
           ref={box}
@@ -701,6 +794,7 @@ const Box = forwardRef<
              docs/project/touch.md § What the Enter key promises. */
           enterKeyHint="search"
           value={value}
+          readOnly={dictate.readOnly}
           placeholder={
             matcher === "words" ? "find these words…" : "describe what to look for…"
           }
@@ -711,7 +805,10 @@ const Box = forwardRef<
             if (matcher === "words") onFind(e.target.value || null);
             else {
               setDraft(e.target.value);
-              session?.edit(e.target.value);
+              /* Typed while the microphone is on: held for its ending, as
+                 its own words are, so no pause asks about a half-heard box. */
+              if (dictate.busy) heard.current = e.target.value;
+              else session?.edit(e.target.value);
             }
           }}
           onFocus={() => session?.focus()}
@@ -722,7 +819,8 @@ const Box = forwardRef<
                question (keyboard.md § Enter in a text box; Sol's D9). */
             if (e.key === "Enter" && !isImeComposing(e)) {
               e.preventDefault();
-              if (ready) {
+              if (dictate.busy) dictate.finishThenDone();
+              else if (ready) {
                 ask();
               }
               /* Words mode has nothing to ask — the hits arrived as the reader
@@ -769,6 +867,18 @@ const Box = forwardRef<
           </button>
         )}
       </div>
+      {/* Hidden where the browser cannot open a microphone, as in every other box. */}
+      {dictate.dictation.supported && (
+        <DictationButton
+          dictation={dictate.dictation}
+          toggle={dictate.toggle}
+          sendingAfter={dictate.sendingAfter}
+          doubleStop={dictate.doubleStop}
+          done="enter"
+        />
+      )}
+      </div>
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} done="enter" />
 
       <div className="srch-modes">
         {/* A radio group and not two toggles: these are one of two, not two
@@ -849,8 +959,8 @@ const Box = forwardRef<
                the handler's: `ask` checks `ready` first, which it did anyway,
                because `disabled` lands on the next render and the handler is
                what a press actually reaches. The Enter key asks the same. */
-            aria-disabled={!ready || undefined}
-            onClick={ask}
+            aria-disabled={(!ready && !dictate.busy) || undefined}
+            onClick={press}
             data-tip={
               !loaded
                 ? "Waiting for your saved searches to load"

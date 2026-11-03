@@ -61,6 +61,7 @@ export type DictationSurface =
   | "profile"
   | "quiz"
   | "referee"
+  | "search"
   | "skim";
 
 /** The browser's engine and form, coarsely, from a closed set. */
