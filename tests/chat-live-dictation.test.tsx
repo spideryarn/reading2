@@ -43,6 +43,8 @@ vi.mock("../src/web/useDictationField.js", () => ({
       busy: armed,
       toggle,
       finishThenDone: () => {},
+      submit: () => {},
+      unsent: false,
       dictation: {
         supported: true,
         phase: armed ? "listening" : "idle",

@@ -1079,10 +1079,13 @@ export function QuizPanel({
     return i >= 0 && included[i] === true;
   };
 
-  const cannotAnswer = !typed.trim() || tooLong || marking || owner.stale || dictate.busy;
+  /* Not the microphone: Answer while dictating stops it and answers once the
+     words land (`dictate.submit`, spya-gjcyq3), and an empty box is no refusal
+     while words are on their way. */
+  const cannotAnswer = (!dictate.busy && !typed.trim()) || tooLong || marking || owner.stale;
   const answerName = marking ? "Marking…" : mine?.status === "failed" && !superseded ? "Try again" : "Answer";
 
-  const submit = () => {
+  const submit = (): boolean => {
     /* **Not while the microphone is involved, and that is two states.**
        `readOnly` stops typing and nothing else, so this button is still live
        during the two seconds between the reader stopping and the good words
@@ -1092,10 +1095,12 @@ export function QuizPanel({
        two-pass design must not produce, and it would be marked as the reader's
        own answer. The same pair chat's composer carries, for the same reason.
        docs/project/dictation.md § Adding it to a box. */
-    if (dictate.busy || !question) return;
+    if (dictate.busy || !question) return false;
     const answer = typed.trim();
-    if (answer === "" || tooLong || marking || owner.stale) return;
+    /* `false`: refused words that landed get a "Nothing was sent." */
+    if (answer === "" || tooLong || marking || owner.stale) return false;
     void owner.mark(question.id, answer);
+    return true;
   };
 
   return (
@@ -1311,7 +1316,7 @@ export function QuizPanel({
                     e.stopPropagation();
                     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                       e.preventDefault();
-                      submit();
+                      dictate.submit();
                     }
                   }}
                   disabled={marking || owner.stale}
@@ -1351,7 +1356,7 @@ export function QuizPanel({
                       aria-label={answerName}
                       aria-busy={marking || undefined}
                       aria-disabled={cannotAnswer || undefined}
-                      onClick={cannotAnswer ? undefined : submit}
+                      onClick={cannotAnswer ? undefined : dictate.submit}
                     >
                       {marking ? <LoaderCircle className="cmt-spinner" size={18} /> : <SendHorizontal size={18} />}
                     </button>
@@ -1363,7 +1368,7 @@ export function QuizPanel({
                     </span>
                   )}
                 </div>
-                <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+                <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} />
                 {(() => {
                   const earlier = owner.kept.get(question.id);
                   if (mine || !earlier || quizLook(earlier, Date.now()) !== "due") return null;

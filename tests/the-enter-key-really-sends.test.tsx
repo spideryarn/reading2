@@ -36,13 +36,26 @@ import { DELAY } from "../src/web/Tooltip.js";
  * states that must refuse to send. The real hook opens a device.
  */
 const mic = { supported: true, armed: false, transcribing: false };
+/**
+ * Each `submit` made while the microphone was involved: the real field stops it
+ * and runs `onDone` once the words land (tests/dictation-finish-then-done.test.tsx
+ * proves that half). Here, that the box's Send, Enter and form reach it.
+ */
+const finishing: string[] = [];
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({
-    dictation: { ...mic, toggle: () => {} },
-    readOnly: mic.transcribing,
-    busy: mic.transcribing || mic.armed,
-    toggle: () => {},
-  }),
+  useDictationField: (opts: { onDone?: () => void }) => {
+    const busy = mic.transcribing || mic.armed;
+    return {
+      dictation: { ...mic, toggle: () => {} },
+      readOnly: mic.transcribing,
+      busy,
+      toggle: () => {},
+      submit: () => {
+        if (busy) finishing.push(mic.armed ? "armed" : "transcribing");
+        else opts.onDone?.();
+      },
+    };
+  },
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({
   DictationButton: () => null,
@@ -95,6 +108,7 @@ beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   mic.armed = false;
   mic.transcribing = false;
+  finishing.length = 0;
   signIns.length = 0;
   host = document.createElement("div");
   document.body.append(host);
@@ -311,28 +325,37 @@ describe("the chat composer", () => {
    * posted Chrome's live guesses and left the microphone running. GPT Sol,
    * 2026-09-04, finding 3. docs/project/dictation.md § Adding it to a box.
    */
-  it("sends nothing while the microphone is on, and does not offer to", () => {
+  /* Since 2026-11-03 (spya-gjcyq3, plan 261103b) neither state refuses:
+     Enter or Send asks the field to stop and send once the words land, and
+     the rough words in the box are never what goes. */
+  it("while the microphone is on, Enter sends nothing now and asks to send once the words land", () => {
     mic.armed = true;
     const box = mount(false);
     type(box, "half a sentence");
     press(box, "Enter");
 
-    expect(sent).toEqual([]);
-    /* `aria-disabled`, not `disabled`, so the card below still opens on it —
-       docs/project/tooltips.md § the shelf's action row. */
-    expect(sendButton()?.getAttribute("aria-disabled"), "Send looks pressable while recording").toBe(
-      "true",
-    );
+    expect(sent, "never the rough live words").toEqual([]);
+    expect(finishing).toEqual(["armed"]);
+    expect(sendButton()?.getAttribute("aria-disabled"), "Send is live while recording").toBe(null);
   });
 
-  it("sends nothing while the transcript is on its way", () => {
+  it("while the transcript is on its way, Enter asks to send once it lands", () => {
     mic.transcribing = true;
     const box = mount(false);
     type(box, "half a sentence");
     press(box, "Enter");
 
     expect(sent).toEqual([]);
-    expect(sendButton()?.getAttribute("aria-disabled")).toBe("true");
+    expect(finishing).toEqual(["transcribing"]);
+    expect(sendButton()?.getAttribute("aria-disabled")).toBe(null);
+  });
+
+  it("an empty box is live while dictating: on Safari the words are not in it yet", () => {
+    mic.armed = true;
+    mount(false);
+    expect(sendButton()?.getAttribute("aria-disabled")).toBe(null);
+    act(() => sendButton()?.click());
+    expect(finishing).toEqual(["armed"]);
   });
 
   /**
@@ -411,12 +434,22 @@ describe("the chat composer", () => {
 
   /* Unavailable is refused in the handler, since `aria-disabled` refuses nothing. */
   it("sends nothing when the unavailable button is clicked", () => {
+    mount(false);
+    expect(sendButton()?.getAttribute("aria-disabled")).toBe("true");
+    act(() => sendButton()?.click());
+
+    expect(sent).toEqual([]);
+    expect(finishing).toEqual([]);
+  });
+
+  it("Send clicked while the microphone is on asks to send once the words land", () => {
     mic.armed = true;
     const box = mount(false);
     type(box, "half a sentence");
     act(() => sendButton()?.click());
 
     expect(sent).toEqual([]);
+    expect(finishing).toEqual(["armed"]);
   });
 });
 
@@ -573,24 +606,26 @@ describe("the comment follow-up box", () => {
    * **The guard was right and the button was lit**, which is the worse half of
    * the two: pressing it did nothing and said nothing. GPT Sol, 2026-09-04.
    */
-  it("refuses while the microphone is on, and says so by going flat", () => {
+  it("while the microphone is on, asks nothing now and asks once the words land", () => {
     mic.armed = true;
     const { box, form } = mount();
     type(box, "half a sentence");
     submit(form);
 
     expect(asked).toEqual([]);
-    expect(askButton()?.disabled, "Ask in chat looks pressable while recording").toBe(true);
+    expect(finishing).toEqual(["armed"]);
+    expect(askButton()?.disabled, "Ask in chat is live while recording").toBe(false);
   });
 
-  it("refuses while the transcript is on its way", () => {
+  it("while the transcript is on its way, asks once it lands", () => {
     mic.transcribing = true;
     const { box, form } = mount();
     type(box, "half a sentence");
     submit(form);
 
     expect(asked).toEqual([]);
-    expect(askButton()?.disabled).toBe(true);
+    expect(finishing).toEqual(["transcribing"]);
+    expect(askButton()?.disabled).toBe(false);
   });
 });
 

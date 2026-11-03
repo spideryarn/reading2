@@ -3700,8 +3700,14 @@ export function Composer({
       (!handoff || submittedBox.value === "")
     ) putKeyboardAway(submittedBox);
   };
-  /** Every state `submit` refuses, so the Send button can say so before a press. */
-  const unavailable = busy || mentionWaiting || dictate.busy || value.trim() === "";
+  /**
+   * Every state `submit` refuses, so the Send button can say so before a press
+   * — **except the microphone**: Send while dictating stops it and sends once
+   * the words land (`dictate.submit`, report spya-gjcyq3), so it stays live, and
+   * an empty box is not a refusal then, since on Safari and Firefox the words
+   * are not in it until they land.
+   */
+  const unavailable = busy || mentionWaiting || (!dictate.busy && value.trim() === "");
 
   /* **Picking an article from the `@` list** writes `@Short title ` over the
      `@query`, and the caret lands after it once React has drawn the new text
@@ -3781,7 +3787,9 @@ export function Composer({
       className="chat-composer"
       onSubmit={(e) => {
         e.preventDefault();
-        void submit();
+        /* `submit` below is the field's `onDone`; the field runs it now, or
+           stops the microphone and runs it once the words land (spya-gjcyq3). */
+        dictate.submit();
       }}
     >
       <MentionChips picked={mention.picked} onRemove={unpick} />
@@ -3846,7 +3854,9 @@ export function Composer({
           if (mention.shown && !isImeComposing(e) && mention.keyDown(e, choose)) return;
           if (isSendEnter(e)) {
             e.preventDefault();
-            void submit();
+            /* Through the field: while dictating, stop and send once the
+               words land (dictation.md § Send while dictating). */
+            dictate.submit();
           }
           /* A handoff puts the caret here with the question already written.
              The Enter that made it, still held, neither sends nor adds lines. */
@@ -3968,7 +3978,7 @@ export function Composer({
         />
       )}
       </span>
-      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} />
       {live && onStartLive && <LiveStatus
         live={live}
         onRestart={onStartLive}

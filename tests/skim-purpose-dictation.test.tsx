@@ -62,7 +62,10 @@ vi.mock("../src/web/useDictation.js", () => ({
       keptOnDevice: false,
       canRetry: false,
       toggle() {
-        mic.state = { armed: !s.armed, transcribing: false };
+        /* As the real hook: Stop goes on to transcribing, and only an ending
+           (`end` below) reaches idle. Straight to idle, with no `onEnd`, is an
+           ending nobody is told about. */
+        mic.state = s.armed ? { armed: false, transcribing: true } : { armed: true, transcribing: false };
         return undefined;
       },
       dismiss() {},
@@ -208,18 +211,26 @@ describe("Skim's purpose box takes dictation", () => {
   });
 
   for (const state of ["armed", "transcribing"] as const) {
-    it(`refuses Plan while ${state}`, async () => {
+    /* Since spya-gjcyq3: Plan is live while dictating, and a press stops the
+       microphone and plans once the words land — never from the live words. */
+    it(`plans nothing now while ${state}, and plans once the words land`, async () => {
       type("how they handled missing data");
-      expect(planButton()?.disabled).toBe(false);
       setMic(state);
-      expect(planButton()?.disabled).toBe(true);
+      expect(planButton()?.disabled, "Plan is live while dictating").toBe(false);
       forceClick(planButton());
       forceClick(planButton());
       await settle();
       expect(saves).toEqual([]);
       expect(ensured).toBe(0);
+      await end(" and dropouts");
+      expect(saves, "once, with the words").toEqual(["how they handled missing data and dropouts"]);
     });
   }
+
+  it("an empty box is live while dictating: the words are not in it yet", async () => {
+    setMic("armed");
+    expect(planButton()?.disabled).toBe(false);
+  });
 
   it("lets Plan go once the words have landed", async () => {
     setMic("armed");

@@ -999,7 +999,11 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
 
   /* Both stable (`useCallback` in the hook), so `send` is not remade every render. */
   const { artifact: dictationArtifact, dismiss: dismissDictation } = dictate.dictation;
-  const finishDictationThenSend = dictate.finishThenDone;
+  /* The field's `submit`, reached only while busy (`send` below), where it is
+     `finishThenDone` plus clearing an earlier "Nothing was sent". `send` keeps
+     its own refusals ahead of it, which is why this box calls it from there
+     rather than wiring its button to `submit` directly. spya-gjcyq3. */
+  const finishDictationThenSend = dictate.submit;
 
   /**
    * **What the reader can see of the screen, while this is on it.**
@@ -1581,7 +1585,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
                 the next person to want help text here will reach for a tooltip
                 too. */}
           </div>
-          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} />
 
           {over ? (
             <span className="fb-over">

@@ -39,11 +39,12 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   googleSignInAvailable: false,
 }));
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({
+  useDictationField: (opts: { onDone?(): unknown }) => ({
     dictation: { supported: false, armed: false, transcribing: false, toggle: () => {} },
     readOnly: false,
     busy: false,
     toggle: () => {},
+    submit: () => opts.onDone?.(),
   }),
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({

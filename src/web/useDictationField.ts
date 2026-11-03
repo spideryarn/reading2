@@ -119,8 +119,27 @@ export interface UseDictationField {
    * spya-t9qu3v, spya-exhqqr; plan 261010f).
    */
   finishThenDone(): void;
+  /**
+   * **The box's Send, Enter and form submit, all of them: wire them here.**
+   * Idle, it runs `onDone`; while the microphone is on or its words are on
+   * their way, it is `finishThenDone` — stop, wait for the transcript, send it.
+   * So a box's Send stays live while dictating rather than refusing (Greg,
+   * spya-gjcyq3: *"automatically click the Stop Dictating button + click the
+   * Send button for them in one fell swoop"*). The box keeps its own send as
+   * `onDone`, with its own refusals, `busy` among them. Plan 261103b;
+   * tests/dictation-boxes-send-through-submit.test.ts holds every box to it.
+   */
+  submit(): void;
   /** A double press was taken: the box will send when the words arrive. */
   sendingAfter: boolean;
+  /**
+   * **A press asked for a send, and the dictation ended without one** — the
+   * upload failed, nothing was heard, the words were refused. Hand it to
+   * `DictationStrip` as `unsent`, which adds "Nothing was sent." Cleared when
+   * words land (a Try again), a new dictation starts, Send is pressed again or
+   * the box moves to another `doneKey`.
+   */
+  unsent: boolean;
   /**
    * **This box takes a double press on Stop at all** (it was given an
    * `onDone`), so the button's card can say so before the reader needs it.
@@ -154,9 +173,11 @@ export function useDictationField<C>({
    * calls it, with all its own refusals. Given one, a double press on Stop runs
    * it once the transcript has arrived (Greg, spya-rp8676). It is called from
    * an effect, on the render after the dictation ended, so it sees the box
-   * with the words in it and `busy` false.
+   * with the words in it and `busy` false. **Return `false` when it refuses**
+   * words that did land (too long, nothing changed), so a Send pressed while
+   * dictating is told "Nothing was sent." (`unsent`).
    */
-  onDone?(): void;
+  onDone?(): boolean | void;
   /**
    * **What the box is about, if that can change under it** — the comment's id,
    * the quiz question's. A double press is a wish to send *this* one; if the
@@ -312,6 +333,9 @@ export function useDictationField<C>({
   const wantSend = useRef<{ key: string | undefined; generation: number } | null>(null);
   const delivered = useRef(false);
   const [sendingAfter, setSendingAfter] = useState(false);
+  /* A press asked for a send and the dictation ended without one: say so,
+     until something makes it stale (`unsent` on the result says what). */
+  const [unsent, setUnsent] = useState(false);
   const key = useRef(doneKey);
   key.current = doneKey;
   const keyGeneration = useRef(0);
@@ -329,6 +353,7 @@ export function useDictationField<C>({
     wantSend.current = null;
     delivered.current = false;
     setSendingAfter(false);
+    setUnsent(false);
   }, [doneKey]);
   /* **The send is an effect, not a call.** Every box's send closes over its
      render's value and refuses while `busy`; called from `onEnd` it would see
@@ -354,7 +379,10 @@ export function useDictationField<C>({
       target.key !== key.current ||
       target.generation !== keyGeneration.current
     ) return;
-    done.current?.();
+    /* `false` is the box refusing the words that landed — too long, unchanged —
+       and the reader pressed Send for them, so the strip says nothing went
+       (GPT Sol's code review of 261103b, F1). */
+    if (done.current?.() === false) setUnsent(true);
   }, [sendTick]);
 
   const commit = useRef(onCommit);
@@ -426,7 +454,11 @@ export function useDictationField<C>({
        empty and this is the insertion. One line either way. */
     onTranscript: (text) => {
       const landed = put(text, true);
-      if (landed) delivered.current = true;
+      if (landed) {
+        delivered.current = true;
+        /* Words in the box (a Try again that worked): there is something to send now. */
+        setUnsent(false);
+      }
       return landed;
     },
     onEnd: () => {
@@ -444,6 +476,11 @@ export function useDictationField<C>({
       wantSend.current = null;
       delivered.current = false;
       setSendingAfter(false);
+      /* Only a wish for *this* target: one whose box has moved on was not
+         refused, it was withdrawn, and the box now means something else. */
+      setUnsent(
+        wish !== null && !send && wish.key === key.current && wish.generation === keyGeneration.current,
+      );
       if (send) {
         sendKey.current = wish;
         setSendTick((n) => n + 1);
@@ -513,6 +550,13 @@ export function useDictationField<C>({
     const capped = d.endsAt !== null && Date.now() >= d.endsAt;
     if (d.armed && !capped) d.toggle();
   }, [clearHeld]);
+
+  const submit = useCallback(() => {
+    setUnsent(false);
+    const d = latest.current;
+    if (d.armed || d.transcribing) finishThenDone();
+    else done.current?.();
+  }, [finishThenDone]);
 
   const toggle = useCallback(() => {
     const d = latest.current;
@@ -608,6 +652,7 @@ export function useDictationField<C>({
     spent.current = null;
     wantSend.current = null;
     setSendingAfter(false);
+    setUnsent(false);
   }, [phase]);
   /* `spent`, the old caret and its value proof belong to the retry offer, not
      merely to this mounted field. Discarding that offer — or ending without a
@@ -616,6 +661,30 @@ export function useDictationField<C>({
      retry `canRetry` is false too, but its `transcribing` phase keeps the proof
      alive until the answer arrives. This also prevents a recovered tape from
      an earlier page borrowing the discarded session's replacement span. */
+  /* **A wish still standing at idle was never answered.** The hook goes idle
+     and calls `onEnd` in the same synchronous step on every ending that has
+     one, and `onEnd` consumes the wish — so a wish seen here belongs to an
+     ending without one: a Try again that failed or heard nothing. Left, it
+     would send on the next Try again that worked, which nobody pressed Send
+     for (GPT Sol's plan review of 261103b, P1). */
+  useEffect(() => {
+    if (phase !== "idle" || wantSend.current === null) return;
+    /* A microtask later, not now: a render between going idle and `onEnd` in
+       the same synchronous step (a caller's `flushSync`, a test's stand-in
+       hook) must not take a wish its ending is about to answer. Still idle and
+       still standing then: unanswered. */
+    let live = true;
+    queueMicrotask(() => {
+      const wish = wantSend.current;
+      if (!live || wish === null || latest.current.phase !== "idle") return;
+      wantSend.current = null;
+      setSendingAfter(false);
+      setUnsent(wish.key === key.current && wish.generation === keyGeneration.current);
+    });
+    return () => {
+      live = false;
+    };
+  }, [phase]);
   const canRetry = dictation.canRetry;
   useEffect(() => {
     if (phase !== "idle" || canRetry) return;
@@ -629,7 +698,9 @@ export function useDictationField<C>({
     busy: readOnly || dictation.armed,
     toggle,
     finishThenDone,
+    submit,
     sendingAfter,
+    unsent,
     doubleStop: onDone !== undefined,
   };
 }

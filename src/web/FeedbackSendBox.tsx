@@ -125,7 +125,7 @@ export function FeedbackSendBox({
     if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
     event.preventDefault();
     event.stopPropagation();
-    trySend();
+    dictate.submit();
   };
 
   return (
@@ -160,17 +160,19 @@ export function FeedbackSendBox({
           type="button"
           /* Green: it sends what you wrote (button-tone.css, plan 261020f). */
           className="fb-copy fb-reply-send tone-positive"
-          disabled={sending || held || dictate.busy || over || value.trim() === ""}
+          /* Live while dictating: `dictate.submit` stops the microphone and
+             sends once the words land (spya-gjcyq3). */
+          disabled={sending || held || over || (!dictate.busy && value.trim() === "")}
           /* Working, so drawn at full strength rather than dimmed (plan 261019c). */
           data-working={sending ? "" : undefined}
-          onClick={trySend}
+          onClick={dictate.submit}
         >
           {sending ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
           {sendWord}
         </button>
         {children}
       </div>
-      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} />
       {problems.map((problem, index) =>
         problem === null ? null : (
           // biome-ignore lint/suspicious/noArrayIndexKey: a fixed list of slots, one per kind of failure

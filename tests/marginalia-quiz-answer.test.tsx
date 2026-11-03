@@ -61,7 +61,7 @@ let dictationSupported = false;
 let lastField: { keep?: { box: string }; onChange(text: string): void } | null = null;
 const toggled: { box: string; onChange(text: string): void }[] = [];
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: (opts: { keep?: { box: string }; onChange(text: string): void }) => {
+  useDictationField: (opts: { onDone?(): unknown; keep?: { box: string }; onChange(text: string): void }) => {
     lastField = opts;
     return {
       dictation: { supported: dictationSupported },
@@ -71,6 +71,9 @@ vi.mock("../src/web/useDictationField.js", () => ({
          press (useDictation.ts § `elsewhere`). */
       toggle: () => {
         if (lastField) toggled.push({ box: lastField.keep?.box ?? "", onChange: lastField.onChange });
+      },
+      submit: () => {
+        if (!dictationBusy) opts.onDone?.();
       },
     };
   },

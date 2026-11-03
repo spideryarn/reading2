@@ -209,7 +209,8 @@ export function PurposeLine({ owner, bannerUp, picking }: Props) {
       slug={owner.slug}
       draft={shownDraft}
       setDraft={setShownDraft}
-      canPlan={!busy && !bannerUp && text !== "" && !unchanged}
+      canPlan={!busy && !bannerUp}
+      hasWords={text !== "" && !unchanged}
       plan={() => void plan()}
       micOff={busy}
       cancel={set && (editing || keptDraft !== undefined) ? () => {
@@ -365,7 +366,8 @@ export function BriefLine({
       slug={owner.slug}
       draft={shownDraft}
       setDraft={setShownDraft}
-      canPlan={!busy && !bannerUp && text !== "" && !unchanged}
+      canPlan={!busy && !bannerUp}
+      hasWords={text !== "" && !unchanged}
       plan={() => void plan()}
       micOff={busy}
       cancel={() => {
@@ -438,7 +440,8 @@ export function NewBriefBox({ picking }: { picking: BriefPicking }) {
       slug={picking.slug}
       draft={draft}
       setDraft={setDraft}
-      canPlan={!saving && !pending && !full && text !== ""}
+      canPlan={!saving && !pending && !full}
+      hasWords={text !== ""}
       plan={() => void plan()}
       micOff={saving || pending}
       cancel={() => {
@@ -475,6 +478,7 @@ function PurposeAsk({
   draft,
   setDraft,
   canPlan,
+  hasWords,
   plan,
   micOff,
   cancel,
@@ -489,8 +493,15 @@ function PurposeAsk({
   slug: string;
   draft: string;
   setDraft: (value: string) => void;
-  /** Everything but the microphone allows *Plan* now. */
+  /** Nothing but the draft and the microphone stands in the way of *Plan*: no save, route or banner. */
   canPlan: boolean;
+  /**
+   * The draft is worth planning from — not empty, and not the purpose as it
+   * stands. Apart from `canPlan` because it is no refusal while dictating:
+   * the words are on their way, and on Safari and Firefox not in the box until
+   * they land (Sol's plan review of 261103b, P4).
+   */
+  hasWords: boolean;
   /** `PurposeLine`'s plan, with its own refusals. */
   plan: () => void;
   /** A save or a route is in flight: no new dictation. Stopping one always works. */
@@ -512,9 +523,13 @@ function PurposeAsk({
   const transcribe = useReaderTranscriber();
   /* The hook calls `onDone` from an effect on the render after the words
      land, so this sees that render's `busy`, false by then. */
-  const send = (): void => {
-    if (dictate.busy) return;
+  /* The double press and a Plan pressed while dictating land here. Words
+     that landed and leave nothing to plan from — the purpose as it stands —
+     are refused, and the field says "Nothing was sent." (`unsent`). */
+  const done = (): boolean => {
+    if (dictate.busy || !canPlan || !hasWords) return false;
     plan();
+    return true;
   };
   const dictate = useDictationField({
     value: draft,
@@ -524,7 +539,7 @@ function PurposeAsk({
     transcribe,
     report: dictationReporter("skim"),
     keep: keepDictation(keepAs ?? `skim:purpose:${slug}`),
-    onDone: send,
+    onDone: done,
   });
   const tell = useRef(onBusyChange);
   tell.current = onBusyChange;
@@ -594,14 +609,16 @@ function PurposeAsk({
         readOnly={dictate.readOnly}
         onChange={(e) => setDraft(e.target.value)}
       />
-      <DictationStrip dictation={heldDictation} sendingAfter={dictate.sendingAfter} />
+      <DictationStrip dictation={heldDictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} />
       <div className="skim-purpose-foot">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          disabled={!canPlan || dictate.busy}
-          onClick={send}
+          /* Live while dictating: `dictate.submit` stops the microphone and
+             plans once the words land (spya-gjcyq3). */
+          disabled={!canPlan || (!dictate.busy && !hasWords)}
+          onClick={dictate.submit}
         >
           <Route size={13} />
           {planLabel}

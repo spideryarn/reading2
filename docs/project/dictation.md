@@ -12,6 +12,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ One capture](#one-capture-and-it-is-always-ours) — one microphone track, per-browser differences, the `[mic-offline]` fallback
 - [§ The gap](#what-the-reader-sees-in-the-gap) — readOnly box and the one-span replace
 - [§ A double press on Stop](#a-double-press-on-stop-also-sends) — stop twice and it sends
+- [§ Send while dictating](#send-while-dictating-stops-and-sends) — `submit`: the box's own Send stops the microphone and sends
 - [§ When it hears nothing](#when-it-hears-nothing-and-after) — the quiet warning and dismissing the message
 - [§ Adding it to a box](#adding-it-to-a-box) — the how-to for a new text box
   - [§ A page that leaves by itself](#a-page-that-leaves-by-itself) — the add page, which holds every exit while a box is busy
@@ -456,6 +457,49 @@ Tests: `tests/dictation-double-stop-sends.test.tsx` for the field policy and but
 `tests/dictation-double-stop-sends-real-hook.test.tsx` for the real hook ordering;
 `tests/command-bar-double-stop.test.tsx` for the command bar.
 
+## Send while dictating stops and sends
+
+Greg, 2026-11-03 (`spya-gjcyq3`): *"they tried to click the "Send" button while it was still
+recording. They got some kind of message, but the better thing would have been for it to
+automatically click the Stop Dictating button + click the Send button for them in one fell swoop.
+This should ideally be true for all existing voice dictate buttons (at least where it makes sense)
+and going forwards."*
+
+**A box wires its Send, its Enter and its form's submit to `dictate.submit()`**, never to its own
+send. Idle, `submit` runs the box's `onDone`; while the microphone is on or its words are on their
+way, it is `finishThenDone()` — stop, wait for the transcript, then `onDone`, under every rule of the
+double press above (a real transcript only, the same `doneKey`, the box's own refusals). So **the
+button stays live while dictating**: drop `dictate.busy` from its disabled condition, and make its
+*empty* refusal `!dictate.busy && empty`, because on Safari and Firefox the box is empty until the
+words land. Every other refusal (an answer still arriving, too long, marking) still disables. Until
+this, every box but Feedback and Search refused, and Chat's Send opened its *"Send · Enter to send"*
+card over a press that did nothing. Plan
+[261103b](../plans/261103b-send-while-dictating-stops-and-sends-in-every-box.md).
+
+- **A press that ends with nothing sent says so.** If the upload fails, nothing is heard, the
+  words are refused on the way in, or the box's `onDone` returns **`false`** (words that landed and
+  were turned down: too long, a purpose unchanged), the field's `unsent` is set and the strip adds *"Nothing was sent."* (or
+  *"Nothing was saved."*, *"Enter was not pressed."*, by `done`) after the failure's own sentence.
+  The box keeps what it had. It goes when words land (a Try again that works — which still sends
+  nothing by itself), a new dictation starts, Send is pressed again, or `doneKey` moves.
+- **A wish still standing at idle was never answered.** The hook calls `onEnd` in the same step as
+  going idle on every ending but a failed Try again, so the field clears any wish it finds at idle
+  and treats it as unsent; otherwise a later Try again that worked would send unasked (GPT Sol's
+  plan review, P1).
+- **A second press while finishing** sets the same wish again: one ending, one send.
+- **Stop then Send** is Send during the gap, and sends when the words land; Send inside Stop's
+  300 ms hold takes the hold.
+- **Ask AI in the annotate box is not the done action** (Save is), so it still waits for the words.
+  A row of the command bar clicked while dictating is still refused — it names an action other than
+  the words — but Enter and *Ask what you meant* go through `submit`.
+
+**Which boxes have no done action, and why** is the list in
+[`tests/dictation-boxes-send-through-submit.test.ts`](../../tests/dictation-boxes-send-through-submit.test.ts),
+which fails on a box with an `onDone` that never calls `.submit`, and on one without an `onDone`
+that is not listed: the profile boxes, the add page's two and the comment's own note (no Send; they
+save themselves), and **the Illustrated note**, whose Repaint is a paid run on words the reader has
+not seen and whose double press already waits on Greg's yes (`qi-wd4mg6p6`).
+
 ## When it hears nothing, and after
 
 **While the microphone is on and hears nothing**, the strip says *"No sound detected yet"* — ten seconds
@@ -522,23 +566,24 @@ guesses, or on Safari and Firefox sends nothing that was said at all. GPT Sol fo
 Feedback dialog, 2026-09-02; [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the worked
 example.
 
-**If the box sends, give it the double press**: `onDone: send` on the field (and `doneKey` if the
-box is reused across things), and
+**If the box sends, give it `onDone` and wire its presses to `submit`**: `onDone: send` on the
+field (and `doneKey` if the box is reused across things); the Send button, Enter and the form's
+submit call `dictate.submit()`, and the button is not disabled for `dictate.busy`;
 `sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop}` on the button and
-`sendingAfter={dictate.sendingAfter}` on the strip
-([§ A double press on Stop also sends](#a-double-press-on-stop-also-sends)).
+`sendingAfter={dictate.sendingAfter} unsent={dictate.unsent}` on the strip
+([§ A double press on Stop also sends](#a-double-press-on-stop-also-sends),
+[§ Send while dictating](#send-while-dictating-stops-and-sends)).
 
-**And disable the button too, not only the guard.** A correct guard behind a lit button is a press
-that does nothing and says nothing — the worse half of the pair, because the reader has no way to
-tell it from a broken app. GPT Sol found four boxes in that state on 2026-09-04, when Enter started
+**And keep the button honest.** A correct guard behind a lit button is a press that does nothing
+and says nothing — the worse half of the pair, because the reader has no way to tell it from a
+broken app. Since 2026-11-03 the answer for the microphone is a press that works (`submit`, above)
+rather than a disabled button; what follows is the history, and still the rule for every other
+refusal. GPT Sol found four boxes in that state on 2026-09-04, when Enter started
 promising Send in the chat composer: chat, the comment follow-up, the annotate box and the quiz
-answer all guarded `readOnly` alone or lit a button the guard would refuse. Every box that *sends* now does both —
-chat, the comment follow-up, annotate, quiz and Feedback — and
-`tests/the-enter-key-really-sends.test.tsx` presses two of them while armed. **Feedback, since
-2026-10-10, goes one better than disabled**: its Send stays live while the microphone is busy, and
-a press then calls the field's `finishThenDone()` — stop, and send when the words land — so the
-press does something and the strip says what
-([§ A double press on Stop also sends](#a-double-press-on-stop-also-sends)). The profile boxes are
+answer all guarded `readOnly` alone or lit a button the guard would refuse. Feedback went one
+better on 2026-10-10 — its Send stayed live and stopped the microphone, then sent — and that is
+what every box's `submit` does now; `tests/the-enter-key-really-sends.test.tsx` presses two of them
+while armed and checks they ask to send once the words land. The profile boxes are
 the exception on purpose: ⌘+Enter there saves prose to a field the arriving transcript will overwrite
 a second later, and the next blur saves it again, so there is nothing to lose.
 

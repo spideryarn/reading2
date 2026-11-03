@@ -126,6 +126,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
         toggle: () => {
           addendumMicToggles.push("field");
         },
+        submit: () => options.onDone?.(),
         sendingAfter: false,
       };
     }
@@ -147,6 +148,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
         toggle: () => {
           replyMicToggles.push("field");
         },
+        submit: () => options.onDone?.(),
         sendingAfter: false,
       };
     }
@@ -168,6 +170,11 @@ vi.mock("../src/web/useDictationField.js", () => ({
       },
       finishThenDone: () => {
         micFinishes += 1;
+      },
+      /* The real one finishes while busy and sends at once when idle. */
+      submit: () => {
+        if (mic.transcribing || mic.armed) micFinishes += 1;
+        else options.onDone?.();
       },
     };
   },
@@ -2743,7 +2750,9 @@ describe("the Earlier tab", () => {
         expect(box(item(214))?.value).toBe("");
       });
 
-      it("gives each box its own microphone, named for its report, and Send off while it is busy", async () => {
+      /* Since spya-gjcyq3 (plan 261103b) Send stays live while dictating: it
+         goes to `dictate.submit`, which stops and sends once the words land. */
+      it("gives each box its own microphone, named for its report, and Send live while it is busy", async () => {
         await openAll();
         click(button(item(211), "Add to this report"));
         expect(addendumMicUses.at(-1)).toEqual({
@@ -2758,12 +2767,16 @@ describe("the Earlier tab", () => {
 
         addendumMic.armed = true;
         typeInto(item(211), "a draft, said");
-        expect(button(item(211), "Send addendum").disabled).toBe(true);
+        expect(button(item(211), "Send addendum").disabled).toBe(false);
         addendumMic.armed = false;
         addendumMic.transcribing = true;
         typeInto(item(211), "a draft, said.");
-        expect(button(item(211), "Send addendum").disabled).toBe(true);
+        expect(button(item(211), "Send addendum").disabled).toBe(false);
         expect(box(item(211))?.readOnly).toBe(true);
+        /* Pressed now, it waits for the words: nothing goes yet. */
+        click(button(item(211), "Send addendum"));
+        await settle();
+        expect(posts).toHaveLength(0);
       });
 
       it("stops a box's microphone on the way to Write, with the hook's own toggle", async () => {
@@ -4426,7 +4439,7 @@ describe("the Earlier tab", () => {
         expect(replyBoxes()[0]?.value).toBe("another");
       });
 
-      it("gives the reply box its own microphone: its own keeper, off the article, and Send off while it is busy", async () => {
+      it("gives the reply box its own microphone: its own keeper, off the article, and Send live while it is busy", async () => {
         await openThread();
         expect(thread().querySelector(".mock-mic")).not.toBeNull();
         expect(replyMicUses.at(-1)).toEqual({ keep: "feedback-reply:q-aaaaaa", doneKey: "reply:q-aaaaaa", context: { kind: "profile" } });
@@ -4435,7 +4448,10 @@ describe("the Earlier tab", () => {
 
         replyMic.armed = true;
         typeReply("said out loud.");
-        expect(button(thread(), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(false);
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(posts, "pressed while recording, it waits for the words").toHaveLength(0);
         /* And the guard is the function's too: a double press on Stop asks it directly. */
         act(() => replyMicDone?.());
         await settle();
@@ -4444,7 +4460,7 @@ describe("the Earlier tab", () => {
         replyMic.armed = false;
         replyMic.transcribing = true;
         typeReply("said out loud");
-        expect(button(thread(), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(false);
         expect(replyBoxes()[0]?.readOnly).toBe(true);
 
         /* Not busy: a double press on Stop sends, as the button would. */

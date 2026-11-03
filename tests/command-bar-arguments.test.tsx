@@ -45,7 +45,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 /** The microphone, as booleans — the real hook opens a device. */
 const mic = { supported: true, armed: false, transcribing: false, toggles: 0 };
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({
+  useDictationField: (opts: { onDone?(): unknown }) => ({
     dictation: {
       ...mic,
       toggle: () => {
@@ -56,6 +56,9 @@ vi.mock("../src/web/useDictationField.js", () => ({
     readOnly: mic.transcribing,
     busy: mic.transcribing || mic.armed,
     toggle: () => {},
+    submit: () => {
+      if (!(mic.transcribing || mic.armed)) opts.onDone?.();
+    },
   }),
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({

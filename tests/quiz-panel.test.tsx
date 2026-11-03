@@ -52,11 +52,14 @@ let readOnly = false;
 /** The microphone recording — only the ← / → rule reads it. */
 let armed = false;
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({
+  useDictationField: (opts: { onDone?(): unknown }) => ({
     dictation: { supported: true, armed, transcribing: readOnly },
     readOnly,
     busy: readOnly || armed,
     toggle: () => {},
+    submit: () => {
+      if (!(readOnly || armed)) opts.onDone?.();
+    },
   }),
 }));
 /* The real button opens a Floating UI tooltip and reads devices; neither is

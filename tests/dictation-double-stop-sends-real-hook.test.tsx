@@ -136,7 +136,9 @@ describe("double Stop over the real dictation hook", () => {
       const current = useDictationField({
         value,
         onChange: setValue,
-        onDone: () => sent.push({ value, busy: current.busy }),
+        onDone: (): void => {
+          sent.push({ value, busy: current.busy });
+        },
         box,
         context: { kind: "profile" },
         transcribe,

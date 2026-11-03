@@ -74,7 +74,7 @@ vi.mock("../src/web/useJobs.js", () => ({
 }));
 vi.mock("../src/web/useAutoRun.js", () => ({ useAutoRun: () => {} }));
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({ dictation: { supported: false }, readOnly: false, busy: false, toggle: () => {} }),
+  useDictationField: (opts: { onDone?(): unknown }) => ({ dictation: { supported: false }, readOnly: false, busy: false, toggle: () => {}, submit: () => opts.onDone?.() }),
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({
   DictationButton: () => null, DictationStrip: () => null,

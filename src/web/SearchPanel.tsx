@@ -736,7 +736,7 @@ const Box = forwardRef<
   }, [dictationBusy]);
   /** Enter's and *find*'s press: while the microphone is busy, search once its words land. */
   const press = () => {
-    if (dictate.busy) dictate.finishThenDone();
+    if (dictate.busy) dictate.submit();
     else ask();
   };
   /**
@@ -819,7 +819,7 @@ const Box = forwardRef<
                question (keyboard.md § Enter in a text box; Sol's D9). */
             if (e.key === "Enter" && !isImeComposing(e)) {
               e.preventDefault();
-              if (dictate.busy) dictate.finishThenDone();
+              if (dictate.busy) dictate.submit();
               else if (ready) {
                 ask();
               }
@@ -878,7 +878,7 @@ const Box = forwardRef<
         />
       )}
       </div>
-      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} done="enter" />
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} done="enter" />
 
       <div className="srch-modes">
         {/* A radio group and not two toggles: these are one of two, not two

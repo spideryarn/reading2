@@ -131,8 +131,10 @@ export interface HelpAskState {
   readonly asked: Asked | null;
   /**
    * Sends the question, unless something refuses it: an answer still
-   * arriving, an empty box, `over`, or the microphone (`dictate.busy`). The
-   * one path the Ask button, Enter and a double press on Stop all take.
+   * arriving, an empty box or `over`. While dictating, it stops the
+   * microphone and sends once the words land (`dictate.submit`). The one path
+   * the Ask button, Enter and the form take; a double press on Stop reaches
+   * the same refusals through `onDone`.
    */
   ask(): void;
   stop(): void;
@@ -216,13 +218,16 @@ export function useHelpAsk(): HelpAskState {
 
   /* Every refusal, so the double press's `onDone` — called on the render
      after the words land, with `busy` false — takes the same road. */
-  const ask = () => {
+  const ask = (): boolean => {
     const question = value.trim();
-    if (live.current || question === "" || over || dictate.busy) return;
+    /* `false` to the field: words that landed and were refused are owed a
+       "Nothing was sent." */
+    if (live.current || question === "" || over || dictate.busy) return false;
     void run(question);
     /* The answer arrives under the box: on a phone, out from under the keys
        (touch.md § Once the key has done its thing). */
     putKeyboardAway(box.current);
+    return true;
   };
 
   /* No article in scope, so `profile`: the app's own words and the reader's
@@ -248,7 +253,10 @@ export function useHelpAsk(): HelpAskState {
     over,
     box,
     dictate,
-    ask,
+    /* Every press of Ask, Enter or the form: through the field, so while
+       dictating it stops the microphone and asks once the words land, and idle
+       it is `ask` (the field's `onDone`). spya-gjcyq3. */
+    ask: dictate.submit,
     stop() {
       const controller = live.current;
       if (!controller) return;
@@ -293,7 +301,7 @@ export function HelpBox({
       <MatchStatus query={state.value} matches={matches} offerAsk={signedIn && !answered} />
       {signedIn ? (
         <>
-          <DictationStrip dictation={state.dictate.dictation} sendingAfter={state.dictate.sendingAfter} />
+          <DictationStrip dictation={state.dictate.dictation} sendingAfter={state.dictate.sendingAfter} unsent={state.dictate.unsent} />
           <Answer asked={state.asked} inBox={answered} />
         </>
       ) : (
@@ -486,7 +494,7 @@ function AskBox({ state }: { state: HelpAskState }) {
             Stop
           </Button>
         ) : (
-          <Button key="ask" type="submit" size="sm" disabled={value.trim() === "" || over || dictate.busy}>
+          <Button key="ask" type="submit" size="sm" disabled={(!dictate.busy && value.trim() === "") || over}>
             Ask
           </Button>
         )}
