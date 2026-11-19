@@ -114,7 +114,8 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs) — the committed proof
   the browser stack works. `gjd-remote doctor` copies it up and runs it every time, so it is never a
   stale copy.
-- [`.mcp.json`](../../.mcp.json) — the `supabase`, `vercel` and `sentry` MCP servers, at project
+- [`.mcp.json`](../../.mcp.json) — the `supabase`, `vercel` and `sentry` MCP servers, and the two
+  Spideryarn ones ([mcp.md](mcp.md)), at project
   scope so they arrive with the clone rather than with provisioning. The two OAuth logins, the deny
   list that makes it harder for an agent to buy things (a guard rail, not a wall — an agent that can
   edit the repo can edit the list), and why Supabase needs no credential are in
