@@ -47,11 +47,15 @@ npx tsx scripts/spideryarn-mcp.ts config --site https://www.spideryarn.com
   *Settings → Developer → Edit Config*, i.e. `~/Library/Application Support/Claude/claude_desktop_config.json`,
   then quit and reopen the app. The paths are absolute and `PATH` names `node`'s directory, because
   the app starts servers from no particular directory and with a short `PATH`.
-- **Claude Code**: run the `claude mcp add --scope user …` line it prints. `claude mcp get spideryarn`
-  should then say `✔ Connected`. The line sets the same `PATH` with `--env`; *Connected* checks
+- **Claude Code**: inside this repo there is nothing to run — `spideryarn` (this stdio server,
+  against production) and `spideryarn-remote` (the HTTP route below) are in the repo's
+  [`.mcp.json`](../../.mcp.json), so they appear in every worktree and in no other project (moved
+  from user scope 2026-11-19). The stdio one runs `npx tsx scripts/spideryarn-mcp.ts` from the
+  session's own tree, so a worktree runs its own code. Elsewhere, run the `claude mcp add --scope
+  user …` line it prints. `claude mcp get spideryarn` should then say `✔ Connected`. The line sets the same `PATH` with `--env`; *Connected* checks
   the MCP connection, not whether the saved Spideryarn sign-in works (call `whoami` below).
 
-On Greg's Mac both are set up (2026-10-09) against the primary checkout,
+On Greg's Mac Claude Desktop is set up (2026-10-09) against the primary checkout,
 `/Users/greg/dev/spideryarn/reading2`, and production. Desktop's previous config is beside it as
 `claude_desktop_config.json.bak-261009-spideryarn`.
 

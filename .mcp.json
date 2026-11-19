@@ -11,6 +11,21 @@
     "sentry": {
       "type": "http",
       "url": "https://mcp.sentry.dev/mcp"
+    },
+    "spideryarn": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "tsx",
+        "scripts/spideryarn-mcp.ts",
+        "serve",
+        "--site",
+        "https://www.spideryarn.com"
+      ]
+    },
+    "spideryarn-remote": {
+      "type": "http",
+      "url": "https://www.spideryarn.com/api/mcp"
     }
   }
 }
