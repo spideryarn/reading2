@@ -588,8 +588,11 @@ export function AnnotateDialog({
 
   /* Both microphone states and the list still loading, matching the guards in
      `press` — a lit button over a handler that returns is a press that does
-     nothing and says nothing. */
+     nothing and says nothing. **Save is the exception for the microphone**: it
+     goes through `dictate.submit`, which stops it and saves once the words land
+     (spya-gjcyq3). Ask AI is not the field's done action, so it still waits. */
   const waiting = !loaded || dictate.busy;
+  const saveWaiting = !loaded;
 
   return (
     <aside
@@ -642,7 +645,9 @@ export function AnnotateDialog({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            press(false);
+            /* Save, or while dictating: stop, and save once the words land
+               (`dictate.submit`; spya-gjcyq3). */
+            dictate.submit();
           }}
         >
           <textarea
@@ -668,7 +673,7 @@ export function AnnotateDialog({
               /* The chord is the **free** Save, never Ask AI. */
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                press(false);
+                dictate.submit();
               }
             }}
             placeholder={
@@ -727,11 +732,11 @@ export function AnnotateDialog({
             </button>
             {/* Never disabled for being empty: saving nothing is a bookmark,
                 which is the point. The only submit button in the box. */}
-            <button type="submit" className="annotate-save tone-positive" disabled={waiting}>
+            <button type="submit" className="annotate-save tone-positive" disabled={saveWaiting}>
               Save
             </button>
           </div>
-          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} done="save" />
+          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} done="save" />
         </form>
 
         {/* Said out loud, because the two behaviours this box has replaced both

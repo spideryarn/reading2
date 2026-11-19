@@ -195,6 +195,8 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   /* Citations' and Debate's classes until 2026-10-09: Bibliography's, then
      Reception's and Claims'. */
   sources: [
+    /* Digest's overview, paragraphs and expanded detail. */
+    ".simple-text",
     ".cite-why",
     ".cite-does",
     /* A cited work's note from its abstract (plan 261017h stage 3c), in the

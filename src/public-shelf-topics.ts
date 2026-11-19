@@ -25,7 +25,7 @@
  *   topic (src/public-library-topics.ts).
  *
  * Triggered by the requests that change the listing — share and un-share,
- * archive and restore, delete — after their answer is sent and before the
+ * and delete (archive no longer does, plan 261031c) — after their answer is sent and before the
  * handler returns, so the spend lands inside the request. A stranger's
  * request never comes here.
  *

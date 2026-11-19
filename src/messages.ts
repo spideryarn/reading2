@@ -533,6 +533,17 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-situate-busy": "retry",
   "jb-situate-limited": "blocked",
   "jb-situate-resting": "blocked",
+  /* The sources digest (the `sources-digest` step, plan 261030b). The ways a
+     run stops before its writer — too few usable leads planned, too few
+     searches that ran, every reader failing — are `retry`: another go plans,
+     searches and reads afresh. The allowance's three refusals as Situate's.
+     See `SOURCES_DIGEST_*` below. */
+  "jb-digest-plan": "retry",
+  "jb-digest-searches": "retry",
+  "jb-digest-readers": "retry",
+  "jb-digest-busy": "retry",
+  "jb-digest-limited": "blocked",
+  "jb-digest-resting": "blocked",
   /* A step that reads the structure, on an article still showing the stand-in
      outline it opened with. See `STRUCTURE_NOT_BUILT`. */
   "jb-no-structure": "blocked",
@@ -1790,6 +1801,65 @@ export const SITUATE_RESTING: ReaderFacingFailure = {
   message:
     "Searching the literature is resting for today, because a lot of it has been done, so trying " +
     "again now will not help. It will be back tomorrow. [jb-situate-resting]",
+};
+
+/**
+ * **The sources digest stopped before it searched** (the `sources-digest`
+ * step, plan 261030b): the planner returned fewer than `MIN_LEADS` usable
+ * questions (src/sources-digest.ts; spya-f37ug4, postmortem 261031b).
+ * Nothing was searched, so nothing was paid for beyond the plan.
+ */
+export const SOURCES_DIGEST_TOO_FEW_LEADS: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The AI service did not return enough questions to search for this digest, so no searches " +
+    "were run. Try again: each try starts afresh. [jb-digest-plan]",
+};
+
+/**
+ * **Fewer than half the digest's searches ran.** Said as a failure rather than
+ * stored as "nothing found": a run that read nothing must not look like a run
+ * that found nothing.
+ */
+export const SOURCES_DIGEST_SEARCHES_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Most of the web searches for the digest did not go through this time, so nothing was read " +
+    "and nothing was kept. Try again in a little while. [jb-digest-searches]",
+};
+
+/**
+ * **Every reader failed**: the searches found pages, but not one of the calls
+ * that reads them came back usable, so nothing was written. Said as a failure,
+ * never as an empty digest.
+ */
+export const SOURCES_DIGEST_READERS_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The searches found pages, but reading them did not work this time, so no digest was " +
+    "written. Try again: another go searches and reads afresh. [jb-digest-readers]",
+};
+
+/** The allowance (`SOURCES_DIGEST_RATE_POLICY`): one at a time for each reader. */
+export const SOURCES_DIGEST_BUSY: ReaderFacingFailure = {
+  kind: "retry",
+  message: "A digest is already being written for you. When it has finished, try again. [jb-digest-busy]",
+};
+
+/** The allowance: this reader's hour or day is spent. */
+export const SOURCES_DIGEST_LIMITED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "You have used this hour's or this day's digests, so trying again now will not help. It can " +
+    "run again later. [jb-digest-limited]",
+};
+
+/** The allowance's fuse: everybody's day is spent. */
+export const SOURCES_DIGEST_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Writing digests is resting for today, because a lot of them have been written, so trying " +
+    "again now will not help. It will be back tomorrow. [jb-digest-resting]",
 };
 
 /**
@@ -4379,10 +4449,8 @@ export const SHARING_OFF_LINK_UNKNOWN = "This is not public.";
  *
  * **It stays one short sentence because it is three surfaces**, not one — the
  * sharing card's line, the shelf badge's hover (`SHARING_BADGE`), and the
- * masthead's mark while the article is known to be unarchived. The masthead
- * substitutes `SHARING_MARK_ON_ARCHIVED` or
- * `SHARING_MARK_ON_ARCHIVE_UNKNOWN` when the listing clause cannot be made.
- * So the listing is a clause inside the existing sentence and not a second
+ * masthead's mark — archived or not, since a shared article stays listed when
+ * it is archived (Greg, 2026-10-31; plan 261031c). So the listing is a clause inside the existing sentence and not a second
  * sentence after it: a badge tooltip and a link's description have to read as
  * one voice, and two sentences read as a correction of the first.
  */
@@ -4531,29 +4599,6 @@ export const SHARING_MARK_PRESS_PRIVATE =
 export const SHARING_MARK_HOW_PUBLIC =
   "Stopping sharing refuses the next request for it and takes it off the public list — whatever " +
   "somebody has already read or copied stays with them.";
-
-/**
- * **`SHARING_ON` for an article that is shared and archived**, where its second
- * half is false: archiving takes a public article off the public list while its
- * link keeps working (src/store/public-library.ts § the `archivedAt` clause).
- * A surface that knows both facts draws this: the masthead's mark and the paper
- * card (`PaperCard.tsx`). The sharing card and the shelf badge still say
- * `SHARING_ON` — deferred in
- * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
- */
-export const SHARING_MARK_ON_ARCHIVED =
-  "Anyone with the link can read this without signing in. It's archived, so it isn't listed publicly.";
-
-/**
- * **The public state while the archive question is unknown.** Public visibility
- * still proves that the direct link works (`publicSlug` ignores `archived_at`),
- * but the public listing requires `archived_at is null`, so silence about the
- * archive state cannot honestly promise the listing. `useArchive` reaches this
- * state when the article payload cannot say, or after both a write and its
- * verifying read fail.
- */
-export const SHARING_MARK_ON_ARCHIVE_UNKNOWN =
-  "Anyone can read this without signing in. Whether it's listed publicly couldn't be confirmed.";
 
 /** @see SHARING_MARK_HOW_PUBLIC */
 export const SHARING_MARK_HOW_PRIVATE =

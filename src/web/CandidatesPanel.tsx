@@ -895,7 +895,8 @@ function Composer({
              composition included, which `isSendEnter` refuses. */
           if (isSendEnter(e)) {
             e.preventDefault();
-            send();
+            /* While dictating: stop, and ask once the words land (spya-gjcyq3). */
+            dictate.submit();
           }
           /* A held Enter sends nothing, and adds no blank lines either. */
           if (isHeldSendEnter(e)) e.preventDefault();
@@ -909,8 +910,8 @@ function Composer({
           variant="outline"
           size="sm"
           className="cnd-send"
-          disabled={busy || disabled || dictate.busy || text.trim() === ""}
-          onClick={send}
+          disabled={busy || disabled || (!dictate.busy && text.trim() === "")}
+          onClick={dictate.submit}
         >
           <SendHorizontal size={13} aria-hidden /> Ask
         </Button>
@@ -923,7 +924,7 @@ function Composer({
           />
         )}
       </div>
-      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} />
     </div>
   );
 }

@@ -909,5 +909,46 @@ describe("useSituate", () => {
       await settle();
       expect(seen?.starting).toBe(false);
     });
+
+    /* GPT Sol's SD2-02 on plan 261030b: the queue announces a completion from
+       a passive effect, and *Where it sits*' auto-run effect later in the same
+       commit still holds the render's `none` — the postmortem
+       261030c-a-state-update-in-one-passive-effect-cannot-guard-a-later-effect-from-the-same-render.md.
+       The sibling of tests/sources-digest-panel.test.tsx's Digest regression. */
+    it("does not buy a second search while another tab's completed one is landing", async () => {
+      const { armActivationForSubMode, resetActivations } = await import("../src/web/activation.js");
+      const { useWhereAutoRun } = await import("../src/web/useWhereAutoRun.js");
+      resetActivations();
+      /** *Where it sits*' door as `WhereBand` mounts it, the works cited already listed. */
+      function WhereDoor(): ReactElement {
+        seen = useSituate("a-piece");
+        useWhereAutoRun("a-piece", { status: "ready", ensure: async () => {}, retryRead: async () => {} }, seen);
+        return panel(seen);
+      }
+      const running = { ...doneJob, id: "other-tab", status: "running", steps: [{ name: "situate", status: "running" }] } as Job;
+      /* The first list is the engine's baseline, not news. */
+      await act(async () => jobEngine.receive([running]));
+      armActivationForSubMode("a-piece", { mode: "sources", view: "where" });
+      await act(async () => root.render(createElement(WhereDoor)));
+      await settle();
+      await settle();
+      expect([seen?.status, seen?.job?.id]).toEqual(["none", "other-tab"]);
+      expect(jobPosts(), "a search under way is waited on").toEqual([]);
+
+      let land!: (res: Response) => void;
+      situateReply = new Promise<Response>((resolve) => {
+        land = resolve;
+      });
+      await act(async () => jobEngine.receive([{ ...running, status: "done", steps: [{ name: "situate", status: "done" }] } as Job]));
+      /* The old `none` is not permission to search while the refresh is out. */
+      expect(jobPosts()).toEqual([]);
+
+      const body = { situate: situate(), stale: true, outdated: false, profileChanged: false };
+      await act(async () => land(new Response(JSON.stringify(body), { status: 200 })));
+      await settle();
+      expect(seen?.status).toBe("ready");
+      expect(jobPosts(), "a stored dossier, stale included, consumes the press").toEqual([]);
+      resetActivations();
+    });
   });
 });

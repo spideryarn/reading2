@@ -882,10 +882,11 @@ describe("the test-lane map", () => {
       "the lanes actually used — `unit` is refused here until T-D's projects can route it",
     ).toEqual(["private-postgres", "shared-services"]);
 
-    /* And the four that must be shared, by name. These are the whole argument
-       for two maps rather than one — GPT Sol's counter-example — so a change
-       that quietly moves one into the private lane should have to delete this
-       line and say why. */
+    /* And the five that must be shared, by name. Four are the argument for two
+       maps rather than one — GPT Sol's counter-example — and the fifth must
+       inspect state that only the shared database has. A change that quietly
+       moves one into the private lane should have to delete this line and say
+       why. */
     const shared = Object.entries(TEST_LANES)
       .filter(([, lane]) => lane === "shared-services")
       .map(([file]) => file)
@@ -894,6 +895,9 @@ describe("the test-lane map", () => {
       "tests/admin-store.test.ts",
       "tests/auth-user-seeding.test.ts",
       "tests/db-test-create.test.ts",
+      /* Added 2026-10-31: its subject is the shared ledger itself, and on a
+         private database it would pass by construction. Plan 261031e. */
+      "tests/migration-shared-ledger.test.ts",
       "tests/seed-admin-signin.test.ts",
     ]);
   });

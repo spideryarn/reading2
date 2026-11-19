@@ -38,7 +38,9 @@ Also fixed while there:
   fixed.
 - **Archiving a shared article takes it off the public list** (its link still works), and neither
   card said so; the shared card claimed *"it's listed publicly"* regardless. Both cards now say it.
-  Found by GPT Sol's plan review.
+  Found by GPT Sol's plan review. **Superseded 2026-10-31:** archiving is now one person's shelf
+  only, so a shared article stays listed; see plan
+  [261031c](../plans/261031c-archiving-leaves-a-public-article-on-the-public-list.md).
 - **A visitor saw "Your note on this paragraph"** over the owner's note in the gutter. It now says
   *"A note on this paragraph from whoever added this article"* (C7 from the Help-page review).
 - The glossary card's Hide button's hover text was two instructions in one run; now statements.

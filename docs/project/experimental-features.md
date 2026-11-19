@@ -506,7 +506,7 @@ not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
 
 ## Gated below mode level
 
-Four of Diagram's pictures, Sources' two experiments and *Possible citations* ([§ What is behind it today](#what-is-behind-it-today)). Learn's Explore was gated here from 2026-10-05 until it came out on
+Four of Diagram's pictures, Sources' two experiments, Sources' Digest and *Possible citations* ([§ What is behind it today](#what-is-behind-it-today)). Learn's Explore was gated here from 2026-10-05 until it came out on
 2026-10-11 ([§ What is behind it today](#what-is-behind-it-today) has the history); the flag it
 used, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), is
 still read for Learn by `visibleLearnViews` there and by `subModeRows`
@@ -553,6 +553,14 @@ keeping nothing the reader does. The flag is `experimental: true` on their rows 
 with the switch on: the tools row is their only door. Hidden is still not unreachable: a pasted
 `?sources=guess-first` draws the experiment with the switch off, and its crumb leads back to
 *Where it sits*.
+
+**Sources' Digest, since 2026-10-30**: a fourth chip in Sources, one prose digest of what the
+piece cites and who cites it, about a dollar a press
+([261030b](../plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md);
+[sources.md § Digest](sources.md#digest)). Behind the switch while Greg plays with it and until a
+live run is measured. The flag is `experimental: true` on its row in
+[`sub-modes.ts`](../../src/web/sub-modes.ts), which hides the command-bar row, and the chip row
+filters through `shownBehindTheSwitch`; a pasted `?sources=digest` still draws it, its chip lit.
 
 **Possible citations, since 2026-10-26**: under a *no DOI* or *no sure record* answer in *Papers
 that cite it* and in Reception's *Cited by*, the papers whose full text matched OpenAlex's search

@@ -1,0 +1,1086 @@
+{
+ "slug": "10356-a-path-towards-autonomous-mach-spya-jwqnrf",
+ "style": "author-year",
+ "n": 105,
+ "notes": "Production article, read only. No reference list in the blocks. Henaff:2019 (Henaff et al., model-predictive policy learning) and Hénaff:2019 (Hénaff et al., CPC) are two works, as in the 261027a hand count; both ambiguous.",
+ "works": [
+  {
+   "key": "Craik:1943",
+   "surname": "Craik",
+   "year": "1943",
+   "inList": false,
+   "citedIn": [
+    "spya-g9ssef"
+   ],
+   "citingWords": "Craik, 1943"
+  },
+  {
+   "key": "Bryson:1969",
+   "surname": "Bryson",
+   "year": "1969",
+   "inList": false,
+   "citedIn": [
+    "spya-g9ssef",
+    "spya-v5kq8k",
+    "spya-gy8f6b"
+   ],
+   "citingWords": "Bryson and Ho, 1969"
+  },
+  {
+   "key": "Levine:2021",
+   "surname": "Levine",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-g9ssef",
+    "spya-d99f0y"
+   ],
+   "citingWords": "Levine, 2021"
+  },
+  {
+   "key": "Miller:2016",
+   "surname": "Miller",
+   "year": "2016",
+   "inList": false,
+   "citedIn": [
+    "spya-yt496u",
+    "spya-prfr9u"
+   ],
+   "citingWords": "Miller et al., 2016"
+  },
+  {
+   "key": "Kahneman:2011",
+   "surname": "Kahneman",
+   "year": "2011",
+   "inList": false,
+   "citedIn": [
+    "spya-veu4ph"
+   ],
+   "citingWords": "Kahneman, 2011"
+  },
+  {
+   "key": "Gottlieb:2013",
+   "surname": "Gottlieb",
+   "year": "2013",
+   "inList": false,
+   "citedIn": [
+    "spya-axpgrc",
+    "spya-c42n2h"
+   ],
+   "citingWords": "Gottlieb et al., 2013"
+  },
+  {
+   "key": "Walker:2021",
+   "surname": "Walker",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-bvhday",
+    "spya-jpx05q"
+   ],
+   "citingWords": "Walker et al., 2021"
+  },
+  {
+   "key": "Jing:2020",
+   "surname": "Jing",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-bvhday"
+   ],
+   "citingWords": "Jing et al., 2020"
+  },
+  {
+   "key": "Olshausen:1996",
+   "surname": "Olshausen",
+   "year": "1996",
+   "inList": false,
+   "citedIn": [
+    "spya-bvhday"
+   ],
+   "citingWords": "Olshausen and Field, 1996"
+  },
+  {
+   "key": "Gregor:2010b",
+   "surname": "Gregor",
+   "year": "2010b",
+   "inList": false,
+   "citedIn": [
+    "spya-bvhday"
+   ],
+   "citingWords": "Gregor and LeCun, 2010b",
+   "ambiguous": true
+  },
+  {
+   "key": "Evtimova:2022",
+   "surname": "Evtimova",
+   "year": "2022",
+   "inList": false,
+   "citedIn": [
+    "spya-bvhday"
+   ],
+   "citingWords": "Evtimova and LeCun, 2022"
+  },
+  {
+   "key": "Doi:2007",
+   "surname": "Doi",
+   "year": "2007",
+   "inList": false,
+   "citedIn": [
+    "spya-bvhday"
+   ],
+   "citingWords": "Doi et al., 2007"
+  },
+  {
+   "key": "Kingma:2013",
+   "surname": "Kingma",
+   "year": "2013",
+   "inList": false,
+   "citedIn": [
+    "spya-bvhday",
+    "spya-jpx05q"
+   ],
+   "citingWords": "Kingma and Welling, 2013"
+  },
+  {
+   "key": "Henaff:2019",
+   "surname": "Henaff",
+   "year": "2019",
+   "inList": false,
+   "citedIn": [
+    "spya-bvhday",
+    "spya-jpx05q"
+   ],
+   "citingWords": "Henaff et al., 2019",
+   "ambiguous": true
+  },
+  {
+   "key": "Bardes:2021",
+   "surname": "Bardes",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-uv4s8j",
+    "spya-vp8dmm"
+   ],
+   "citingWords": "Bardes et al., 2021"
+  },
+  {
+   "key": "Vaswani:2017",
+   "surname": "Vaswani",
+   "year": "2017",
+   "inList": false,
+   "citedIn": [
+    "spya-qzs5cw"
+   ],
+   "citingWords": "Vaswani et al., 2017"
+  },
+  {
+   "key": "Carion:2020",
+   "surname": "Carion",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-qzs5cw"
+   ],
+   "citingWords": "Carion et al., 2020"
+  },
+  {
+   "key": "Battaglia:2016",
+   "surname": "Battaglia",
+   "year": "2016",
+   "inList": false,
+   "citedIn": [
+    "spya-qzs5cw"
+   ],
+   "citingWords": "Battaglia et al., 2016"
+  },
+  {
+   "key": "Sobal:2022",
+   "surname": "Sobal",
+   "year": "2022",
+   "inList": false,
+   "citedIn": [
+    "spya-gex5jf"
+   ],
+   "citingWords": "Sobal et al., 2022"
+  },
+  {
+   "key": "Bordes:2015",
+   "surname": "Bordes",
+   "year": "2015",
+   "inList": false,
+   "citedIn": [
+    "spya-prfr9u",
+    "spya-uqfusg"
+   ],
+   "citingWords": "Bordes et al., 2015"
+  },
+  {
+   "key": "Sukhbaatar:2015",
+   "surname": "Sukhbaatar",
+   "year": "2015",
+   "inList": false,
+   "citedIn": [
+    "spya-prfr9u",
+    "spya-uqfusg"
+   ],
+   "citingWords": "Sukhbaatar et al., 2015"
+  },
+  {
+   "key": "Henaff:2017",
+   "surname": "Henaff",
+   "year": "2017",
+   "inList": false,
+   "citedIn": [
+    "spya-prfr9u"
+   ],
+   "citingWords": "Henaff et al., 2017"
+  },
+  {
+   "key": "Janner:2021",
+   "surname": "Janner",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-bqtx73",
+    "spya-qd9uhc"
+   ],
+   "citingWords": "Janner et al., 2021"
+  },
+  {
+   "key": "Morari:1997",
+   "surname": "Morari",
+   "year": "1997",
+   "inList": false,
+   "citedIn": [
+    "spya-gy8f6b"
+   ],
+   "citingWords": "Morari and Lee, 1997"
+  },
+  {
+   "key": "Richalet:1978",
+   "surname": "Richalet",
+   "year": "1978",
+   "inList": false,
+   "citedIn": [
+    "spya-gy8f6b"
+   ],
+   "citingWords": "Richalet et al., 1978"
+  },
+  {
+   "key": "Jordan:1992",
+   "surname": "Jordan",
+   "year": "1992",
+   "inList": false,
+   "citedIn": [
+    "spya-xvww7c"
+   ],
+   "citingWords": "Jordan and Rumelhart, 1992"
+  },
+  {
+   "key": "Narendra:1990",
+   "surname": "Narendra",
+   "year": "1990",
+   "inList": false,
+   "citedIn": [
+    "spya-xvww7c"
+   ],
+   "citingWords": "Narendra and Parthasarathy, 1990"
+  },
+  {
+   "key": "Miller:1995",
+   "surname": "Miller",
+   "year": "1995",
+   "inList": false,
+   "citedIn": [
+    "spya-xvww7c"
+   ],
+   "citingWords": "Miller et al., 1995"
+  },
+  {
+   "key": "Sutton:1991",
+   "surname": "Sutton",
+   "year": "1991",
+   "inList": false,
+   "citedIn": [
+    "spya-k3e6qw"
+   ],
+   "citingWords": "Sutton, 1991"
+  },
+  {
+   "key": "Bertsekas:2019",
+   "surname": "Bertsekas",
+   "year": "2019",
+   "inList": false,
+   "citedIn": [
+    "spya-k3e6qw"
+   ],
+   "citingWords": "Bertsekas, 2019"
+  },
+  {
+   "key": "Ha:2018b",
+   "surname": "Ha",
+   "year": "2018b",
+   "inList": false,
+   "citedIn": [
+    "spya-ff3vfq"
+   ],
+   "citingWords": "Ha and Schmidhuber, 2018b",
+   "ambiguous": true
+  },
+  {
+   "key": "Ha:2018a",
+   "surname": "Ha",
+   "year": "2018a",
+   "inList": false,
+   "citedIn": [
+    "spya-ff3vfq"
+   ],
+   "citingWords": "Ha and Schmidhuber, 2018a",
+   "ambiguous": true
+  },
+  {
+   "key": "Hafner:2018",
+   "surname": "Hafner",
+   "year": "2018",
+   "inList": false,
+   "citedIn": [
+    "spya-ff3vfq"
+   ],
+   "citingWords": "Hafner et al., 2018"
+  },
+  {
+   "key": "Hafner:2020",
+   "surname": "Hafner",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-ff3vfq"
+   ],
+   "citingWords": "Hafner et al., 2020"
+  },
+  {
+   "key": "Moerland:2020",
+   "surname": "Moerland",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-ff3vfq"
+   ],
+   "citingWords": "Moerland et al., 2020"
+  },
+  {
+   "key": "Agrawal:2016",
+   "surname": "Agrawal",
+   "year": "2016",
+   "inList": false,
+   "citedIn": [
+    "spya-d99f0y",
+    "spya-jpx05q"
+   ],
+   "citingWords": "Agrawal et al., 2016"
+  },
+  {
+   "key": "Finn:2017",
+   "surname": "Finn",
+   "year": "2017",
+   "inList": false,
+   "citedIn": [
+    "spya-d99f0y"
+   ],
+   "citingWords": "Finn and Levine, 2017"
+  },
+  {
+   "key": "Chua:2018",
+   "surname": "Chua",
+   "year": "2018",
+   "inList": false,
+   "citedIn": [
+    "spya-d99f0y"
+   ],
+   "citingWords": "Chua et al., 2018"
+  },
+  {
+   "key": "Srinivas:2018",
+   "surname": "Srinivas",
+   "year": "2018",
+   "inList": false,
+   "citedIn": [
+    "spya-d99f0y",
+    "spya-jpx05q"
+   ],
+   "citingWords": "Srinivas et al., 2018"
+  },
+  {
+   "key": "Yu:2020",
+   "surname": "Yu",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-d99f0y"
+   ],
+   "citingWords": "Yu et al., 2020"
+  },
+  {
+   "key": "Yarats:2021",
+   "surname": "Yarats",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-d99f0y"
+   ],
+   "citingWords": "Yarats et al., 2021"
+  },
+  {
+   "key": "Lerer:2016",
+   "surname": "Lerer",
+   "year": "2016",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Lerer et al., 2016"
+  },
+  {
+   "key": "Goodfellow:2014",
+   "surname": "Goodfellow",
+   "year": "2014",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Goodfellow et al., 2014"
+  },
+  {
+   "key": "van den Oord:2017",
+   "surname": "van den Oord",
+   "year": "2017",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "van den Oord et al., 2017"
+  },
+  {
+   "key": "Mathieu:2015",
+   "surname": "Mathieu",
+   "year": "2015",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Mathieu et al., 2015"
+  },
+  {
+   "key": "Luc:2020",
+   "surname": "Luc",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Luc et al., 2020"
+  },
+  {
+   "key": "Babaeizadeh:2017",
+   "surname": "Babaeizadeh",
+   "year": "2017",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Babaeizadeh et al., 2017"
+  },
+  {
+   "key": "Denton:2018",
+   "surname": "Denton",
+   "year": "2018",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Denton and Fergus, 2018"
+  },
+  {
+   "key": "Mercat:2020",
+   "surname": "Mercat",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q",
+    "spya-m2gn5f"
+   ],
+   "citingWords": "Mercat et al., 2020"
+  },
+  {
+   "key": "Oh:2015",
+   "surname": "Oh",
+   "year": "2015",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Oh et al., 2015"
+  },
+  {
+   "key": "Fragkiadaki:2015",
+   "surname": "Fragkiadaki",
+   "year": "2015",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Fragkiadaki et al., 2015"
+  },
+  {
+   "key": "Finn:2016",
+   "surname": "Finn",
+   "year": "2016",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Finn et al., 2016"
+  },
+  {
+   "key": "Nagabandi:2017",
+   "surname": "Nagabandi",
+   "year": "2017",
+   "inList": false,
+   "citedIn": [
+    "spya-jpx05q"
+   ],
+   "citingWords": "Nagabandi et al., 2017"
+  },
+  {
+   "key": "Hénaff:2019",
+   "surname": "Hénaff",
+   "year": "2019",
+   "inList": false,
+   "citedIn": [
+    "spya-fapgtp"
+   ],
+   "citingWords": "Hénaff et al., 2019",
+   "ambiguous": true
+  },
+  {
+   "key": "van den Oord:2018",
+   "surname": "van den Oord",
+   "year": "2018",
+   "inList": false,
+   "citedIn": [
+    "spya-fapgtp"
+   ],
+   "citingWords": "van den Oord et al., 2018"
+  },
+  {
+   "key": "Luc:2017",
+   "surname": "Luc",
+   "year": "2017",
+   "inList": false,
+   "citedIn": [
+    "spya-dw8kj9"
+   ],
+   "citingWords": "Luc et al., 2017"
+  },
+  {
+   "key": "Luc:2018",
+   "surname": "Luc",
+   "year": "2018",
+   "inList": false,
+   "citedIn": [
+    "spya-dw8kj9"
+   ],
+   "citingWords": "Luc et al., 2018"
+  },
+  {
+   "key": "Goroshin:2015a",
+   "surname": "Goroshin",
+   "year": "2015a",
+   "inList": false,
+   "citedIn": [
+    "spya-a9a38m"
+   ],
+   "citingWords": "Goroshin et al., 2015a",
+   "ambiguous": true
+  },
+  {
+   "key": "Srivastava:2015",
+   "surname": "Srivastava",
+   "year": "2015",
+   "inList": false,
+   "citedIn": [
+    "spya-a9a38m"
+   ],
+   "citingWords": "Srivastava et al., 2015"
+  },
+  {
+   "key": "Wiskott:2002",
+   "surname": "Wiskott",
+   "year": "2002",
+   "inList": false,
+   "citedIn": [
+    "spya-a9a38m"
+   ],
+   "citingWords": "Wiskott and Sejnowski, 2002"
+  },
+  {
+   "key": "Gregor:2010a",
+   "surname": "Gregor",
+   "year": "2010a",
+   "inList": false,
+   "citedIn": [
+    "spya-a9a38m"
+   ],
+   "citingWords": "Gregor and LeCun, 2010a",
+   "ambiguous": true
+  },
+  {
+   "key": "Goroshin:2015b",
+   "surname": "Goroshin",
+   "year": "2015b",
+   "inList": false,
+   "citedIn": [
+    "spya-a9a38m"
+   ],
+   "citingWords": "Goroshin et al., 2015b",
+   "ambiguous": true
+  },
+  {
+   "key": "Pari:2021",
+   "surname": "Pari",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-fp80br"
+   ],
+   "citingWords": "Pari et al., 2021"
+  },
+  {
+   "key": "Baevski:2020",
+   "surname": "Baevski",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-pe4hfh"
+   ],
+   "citingWords": "Baevski et al., 2020"
+  },
+  {
+   "key": "Mohamed:2022",
+   "surname": "Mohamed",
+   "year": "2022",
+   "inList": false,
+   "citedIn": [
+    "spya-pe4hfh"
+   ],
+   "citingWords": "Mohamed et al., 2022"
+  },
+  {
+   "key": "Wayne:2014",
+   "surname": "Wayne",
+   "year": "2014",
+   "inList": false,
+   "citedIn": [
+    "spya-pwm06u"
+   ],
+   "citingWords": "Wayne and Abbott, 2014"
+  },
+  {
+   "key": "Gehring:2021",
+   "surname": "Gehring",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-pwm06u"
+   ],
+   "citingWords": "Gehring et al., 2021"
+  },
+  {
+   "key": "Hafner:2022",
+   "surname": "Hafner",
+   "year": "2022",
+   "inList": false,
+   "citedIn": [
+    "spya-pwm06u"
+   ],
+   "citingWords": "Hafner et al., 2022"
+  },
+  {
+   "key": "LeCun:2006",
+   "surname": "LeCun",
+   "year": "2006",
+   "inList": false,
+   "citedIn": [
+    "spya-nt9nsa"
+   ],
+   "citingWords": "LeCun et al., 2006"
+  },
+  {
+   "key": "LeCun:1998",
+   "surname": "LeCun",
+   "year": "1998",
+   "inList": false,
+   "citedIn": [
+    "spya-nt9nsa"
+   ],
+   "citingWords": "LeCun et al., 1998"
+  },
+  {
+   "key": "Hinton:1983",
+   "surname": "Hinton",
+   "year": "1983",
+   "inList": false,
+   "citedIn": [
+    "spya-edwyt3"
+   ],
+   "citingWords": "Hinton and Sejnowski, 1983"
+  },
+  {
+   "key": "Becker:1992",
+   "surname": "Becker",
+   "year": "1992",
+   "inList": false,
+   "citedIn": [
+    "spya-zp37tp"
+   ],
+   "citingWords": "Becker and Hinton, 1992"
+  },
+  {
+   "key": "Bromley:1994",
+   "surname": "Bromley",
+   "year": "1994",
+   "inList": false,
+   "citedIn": [
+    "spya-zp37tp"
+   ],
+   "citingWords": "Bromley et al., 1994"
+  },
+  {
+   "key": "Chopra:2005",
+   "surname": "Chopra",
+   "year": "2005",
+   "inList": false,
+   "citedIn": [
+    "spya-yxn8ts"
+   ],
+   "citingWords": "Chopra et al., 2005"
+  },
+  {
+   "key": "Hadsell:2006",
+   "surname": "Hadsell",
+   "year": "2006",
+   "inList": false,
+   "citedIn": [
+    "spya-yxn8ts"
+   ],
+   "citingWords": "Hadsell et al., 2006"
+  },
+  {
+   "key": "Goldberger:2005",
+   "surname": "Goldberger",
+   "year": "2005",
+   "inList": false,
+   "citedIn": [
+    "spya-yxn8ts"
+   ],
+   "citingWords": "Goldberger et al., 2005"
+  },
+  {
+   "key": "Taigman:2014",
+   "surname": "Taigman",
+   "year": "2014",
+   "inList": false,
+   "citedIn": [
+    "spya-yxn8ts"
+   ],
+   "citingWords": "Taigman et al., 2014"
+  },
+  {
+   "key": "Misra:2020",
+   "surname": "Misra",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-ypc9mu"
+   ],
+   "citingWords": "Misra and Maaten, 2020"
+  },
+  {
+   "key": "He:2020",
+   "surname": "He",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-ypc9mu"
+   ],
+   "citingWords": "He et al., 2020"
+  },
+  {
+   "key": "Chen:2020b",
+   "surname": "Chen",
+   "year": "2020b",
+   "inList": false,
+   "citedIn": [
+    "spya-ypc9mu"
+   ],
+   "citingWords": "Chen et al., 2020b",
+   "ambiguous": true
+  },
+  {
+   "key": "Chen:2020a",
+   "surname": "Chen",
+   "year": "2020a",
+   "inList": false,
+   "citedIn": [
+    "spya-ypc9mu"
+   ],
+   "citingWords": "Chen et al., 2020a",
+   "ambiguous": true
+  },
+  {
+   "key": "Caron:2020",
+   "surname": "Caron",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-je4mcv"
+   ],
+   "citingWords": "Caron et al., 2020"
+  },
+  {
+   "key": "Grill:2020",
+   "surname": "Grill",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-vp8dmm"
+   ],
+   "citingWords": "Grill et al., 2020"
+  },
+  {
+   "key": "Zbontar:2021",
+   "surname": "Zbontar",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-vp8dmm"
+   ],
+   "citingWords": "Zbontar et al., 2021"
+  },
+  {
+   "key": "Ermolov:2021",
+   "surname": "Ermolov",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-vp8dmm"
+   ],
+   "citingWords": "Ermolov et al., 2021"
+  },
+  {
+   "key": "Dai:2022",
+   "surname": "Dai",
+   "year": "2022",
+   "inList": false,
+   "citedIn": [
+    "spya-vp8dmm"
+   ],
+   "citingWords": "Dai et al., 2022"
+  },
+  {
+   "key": "Lake:2017a",
+   "surname": "Lake",
+   "year": "2017a",
+   "inList": false,
+   "citedIn": [
+    "spya-mfrf35"
+   ],
+   "citingWords": "Lake et al., 2017a",
+   "ambiguous": true
+  },
+  {
+   "key": "Zaadnoordijk:2022",
+   "surname": "Zaadnoordijk",
+   "year": "2022",
+   "inList": false,
+   "citedIn": [
+    "spya-mfrf35"
+   ],
+   "citingWords": "Zaadnoordijk et al., 2022"
+  },
+  {
+   "key": "Murphy:2002",
+   "surname": "Murphy",
+   "year": "2002",
+   "inList": false,
+   "citedIn": [
+    "spya-fbszzh"
+   ],
+   "citingWords": "Murphy, 2002"
+  },
+  {
+   "key": "Gopnik:1997",
+   "surname": "Gopnik",
+   "year": "1997",
+   "inList": false,
+   "citedIn": [
+    "spya-fbszzh"
+   ],
+   "citingWords": "Gopnik and Meltzoff, 1997"
+  },
+  {
+   "key": "Spelke:2007",
+   "surname": "Spelke",
+   "year": "2007",
+   "inList": false,
+   "citedIn": [
+    "spya-fbszzh"
+   ],
+   "citingWords": "Spelke and Kinzler, 2007"
+  },
+  {
+   "key": "Carey:2009",
+   "surname": "Carey",
+   "year": "2009",
+   "inList": false,
+   "citedIn": [
+    "spya-fbszzh"
+   ],
+   "citingWords": "Carey, 2009"
+  },
+  {
+   "key": "Gopnik:2001",
+   "surname": "Gopnik",
+   "year": "2001",
+   "inList": false,
+   "citedIn": [
+    "spya-fbszzh"
+   ],
+   "citingWords": "Gopnik et al., 2001"
+  },
+  {
+   "key": "Lake:2017b",
+   "surname": "Lake",
+   "year": "2017b",
+   "inList": false,
+   "citedIn": [
+    "spya-n7jnzn"
+   ],
+   "citingWords": "Lake et al., 2017b",
+   "ambiguous": true
+  },
+  {
+   "key": "Orhan:2020",
+   "surname": "Orhan",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-n7jnzn"
+   ],
+   "citingWords": "Orhan et al., 2020"
+  },
+  {
+   "key": "Riochet:2019",
+   "surname": "Riochet",
+   "year": "2019",
+   "inList": false,
+   "citedIn": [
+    "spya-n7jnzn"
+   ],
+   "citingWords": "Riochet et al., 2019"
+  },
+  {
+   "key": "Mattar:2022",
+   "surname": "Mattar",
+   "year": "2022",
+   "inList": false,
+   "citedIn": [
+    "spya-nt9g2d"
+   ],
+   "citingWords": "Mattar and Lengyel, 2022"
+  },
+  {
+   "key": "Ho:2022",
+   "surname": "Ho",
+   "year": "2022",
+   "inList": false,
+   "citedIn": [
+    "spya-nt9g2d"
+   ],
+   "citingWords": "Ho et al., 2022"
+  },
+  {
+   "key": "Dehaene:2021",
+   "surname": "Dehaene",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-b8fn0k"
+   ],
+   "citingWords": "Dehaene et al., 2021"
+  },
+  {
+   "key": "Brown:2020",
+   "surname": "Brown",
+   "year": "2020",
+   "inList": false,
+   "citedIn": [
+    "spya-g69p3r"
+   ],
+   "citingWords": "Brown et al., 2020"
+  },
+  {
+   "key": "Silver:2021",
+   "surname": "Silver",
+   "year": "2021",
+   "inList": false,
+   "citedIn": [
+    "spya-g69p3r",
+    "spya-q5qgd8"
+   ],
+   "citingWords": "Silver et al., 2021"
+  },
+  {
+   "key": "Marcus:2019",
+   "surname": "Marcus",
+   "year": "2019",
+   "inList": false,
+   "citedIn": [
+    "spya-g69p3r"
+   ],
+   "citingWords": "Marcus and Davis, 2019"
+  },
+  {
+   "key": "Vincent:2010",
+   "surname": "Vincent",
+   "year": "2010",
+   "inList": false,
+   "citedIn": [
+    "spya-ud5m7m"
+   ],
+   "citingWords": "Vincent et al., 2010"
+  },
+  {
+   "key": "Devlin:2018",
+   "surname": "Devlin",
+   "year": "2018",
+   "inList": false,
+   "citedIn": [
+    "spya-ud5m7m"
+   ],
+   "citingWords": "Devlin et al., 2018"
+  },
+  {
+   "key": "Carreira-Perpiñán:2005",
+   "surname": "Carreira-Perpiñán",
+   "year": "2005",
+   "inList": false,
+   "citedIn": [
+    "spya-pf465v"
+   ],
+   "citingWords": "Carreira-Perpiñán and Hinton, 2005"
+  }
+ ]
+}

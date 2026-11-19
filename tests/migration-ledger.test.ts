@@ -15,6 +15,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  appliedFromDifferentSql,
   crossesWatermark,
   hashMigrationFiles,
   matchJournalToLedger,
@@ -121,6 +122,58 @@ describe("reconcileLedger, condition 4 — the hash", () => {
     const rows = [{ hash: "edited-since", created_at: 100 }];
     const state = reconcileLedger(j, hashesFor(j), rows, LAPTOP);
     expect(state.problems.join("\n")).toContain("different SQL");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * Rule 4 alone, for a database other trees also migrate.
+ * docs/postmortems/261031a-a-migration-edited-after-the-shared-database-ran-it.md
+ */
+describe("appliedFromDifferentSql — the shared database ran another version", () => {
+  const sha = (s: string) => createHash("sha256").update(s).digest("hex");
+  const FIRST = "ALTER TABLE chat_threads ADD CONSTRAINT c CHECK (true);";
+  const REVIEWED = `UPDATE chat_threads SET origin_mode = null WHERE origin_mode = 'summary';\n${FIRST}\n`;
+
+  it("names a migration the database ran before a review edited it — the 261031a shape", () => {
+    const j = journal(100, 200);
+    const hashes = new Map([
+      [j[0]!.tag, `h-${j[0]!.tag}`],
+      [j[1]!.tag, sha(REVIEWED)],
+    ]);
+    const rows = [rowFor(j[0]!), { hash: sha(FIRST), created_at: 200 }];
+    const problems = appliedFromDifferentSql(j, hashes, rows);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain(j[1]!.tag);
+  });
+
+  it("says nothing when every row matches its file", () => {
+    const j = journal(100, 200);
+    expect(appliedFromDifferentSql(j, hashesFor(j), j.map(rowFor))).toEqual([]);
+  });
+
+  it("leaves this tree's not-yet-applied migration alone", () => {
+    const j = journal(100, 200, 300);
+    expect(appliedFromDifferentSql(j, hashesFor(j), [rowFor(j[0]!)])).toEqual([]);
+  });
+
+  it("leaves rows from other trees' migrations alone", () => {
+    const j = journal(100);
+    const rows = [rowFor(j[0]!), { hash: "someone-elses", created_at: 150 }];
+    expect(appliedFromDifferentSql(j, hashesFor(j), rows)).toEqual([]);
+  });
+
+  it("catches a mismatch even when the entry was recorded twice", () => {
+    const j = journal(100);
+    const rows = [rowFor(j[0]!), { hash: "older-draft", created_at: 100 }];
+    expect(appliedFromDifferentSql(j, hashesFor(j), rows)).toHaveLength(1);
+  });
+
+  it("compares a created_at that pg hands back as a string", () => {
+    const j = journal(1793397890262);
+    const rows = [{ hash: "edited-since", created_at: "1793397890262" as unknown as number }];
+    expect(appliedFromDifferentSql(j, hashesFor(j), rows)).toHaveLength(1);
   });
 });
 

@@ -103,9 +103,12 @@ while reading your own article, gets you back to it.
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
 you send. It is worth trying even if you type quickly: most people say more out loud than they would
 type, and the more you say about what you want, the better the answer can fit it. A recording stops
-after fifteen minutes, and says so a minute before. Press Stop twice quickly and the box finishes its
-action once the words arrive: it sends here, in Feedback, in a comment follow-up and in a quiz answer;
-it saves when you annotate a passage; and in the command bar it presses Enter. **Live**, beside it,
+after fifteen minutes, and says so a minute before. You can press **Send** while you are still
+talking: the microphone stops and your words are sent once they are in the box. Pressing Stop twice
+quickly does the same. Either way the box finishes its action once the words arrive: it sends here,
+in Feedback, in a comment follow-up and in a quiz answer; it saves when you annotate a passage; and
+in the command bar it presses Enter. If the words do not come through, nothing is sent and the box
+says so. **Live**, beside it,
 is a spoken conversation you can interrupt. Your audio goes
 directly to OpenAI. What is said joins the same conversation, so you can hang up, type for a while,
 and press **Live** again. A call ends after five minutes of quiet, or twenty minutes in all.

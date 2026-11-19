@@ -33,7 +33,7 @@ import { registryIdentifiesCitation } from "./paper-evidence.js";
 import { registryWorkOf } from "./registry-work.js";
 import type { CitationRegistry, Bibliography, CitedWork } from "./types.js";
 
-/** At most this many rows are looked up per run — `MAX_CITATIONS` today, named so a raise there does not raise this. */
+/** At most this many rows are looked up per run — deliberately independent of `MAX_CITATIONS`, so a list-cap raise does not raise this. */
 export const MAX_REGISTRY_LOOKUPS = 80;
 /** Lookups in flight at once. `lookupWork`'s own limiter is global; this only keeps one step from queueing on it. */
 export const REGISTRY_CONCURRENCY = 2;

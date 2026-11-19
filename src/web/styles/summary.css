@@ -161,3 +161,7 @@
   .simple-ask { opacity: 0.8; }
 }
 .simple-job { margin-top: 0.7rem; }
+/* **The ask box under a level, or its chat's mark** (SimplePanel.tsx §
+   `LevelAsk`, plan 261030b): after the last paragraph, a paragraph's gap
+   below it. The box and the mark are origin-chat.css's; this is placement. */
+.simple-ask-box { margin-top: 0.8rem; }

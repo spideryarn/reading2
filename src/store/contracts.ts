@@ -104,9 +104,11 @@ import type {
   QuizFound,
   QuizKeptAnswer,
   QuizQuestionId,
+  QuizVerdict,
   FaqFound,
   SourcesClaimListFound,
   SituateFound,
+  SourcesDigestFound,
   SourcesClaimCheckCounts,
   SourcesClaimCheckResult,
   SourcesClaimCheckTarget,
@@ -364,6 +366,12 @@ export interface ArticleReader {
    * has run. The profile verdict is the route's.
    */
   loadSituate(slug: string): Promise<SituateFound>;
+  /**
+   * The sources digest (plan 261030b) — **owner only**, with no public twin.
+   * Throws `ArtefactNotMadeYet` until the `sources-digest` step has run. The
+   * profile verdict is the route's.
+   */
+  loadSourcesDigest(slug: string): Promise<SourcesDigestFound>;
 
   /**
    * How each paragraph bears on the one before it, plus whether it still
@@ -815,11 +823,9 @@ export interface ShelfStore {
   ): Promise<LibraryEntry | null>;
 
   /**
-   * One more open.
-   *
-   * Returns nothing. This is fire-and-forget from the client's point of view,
-   * and a response body would only invite somebody to render a counter that is
-   * one behind.
+   * One more open — **and, if the article was archived, back on the shelf**
+   * (Greg, spya-h8cda9; plan 261030f). Nothing comes back: a response body
+   * would only invite somebody to render a counter that is one behind.
    */
   recordOpen(slug: string): Promise<void>;
 
@@ -2020,8 +2026,10 @@ export interface ReadingTimeStore {
 export interface QuizAttemptStore {
   /**
    * **Append one finished mark**, and return when the database says it
-   * happened (the row's `created_at`, ISO). Never an upsert: answering again
-   * is a second row.
+   * happened (the row's `created_at`, ISO), and when the question is due again
+   * as of this mark — from the history up to and including it, never a row
+   * that landed after it (GPT Sol's plan review of 261030c, F1). Never an
+   * upsert: answering again is a second row.
    */
   record(
     slug: string,
@@ -2032,9 +2040,15 @@ export interface QuizAttemptStore {
       question: string;
       answer: string;
       reply: string;
+      /** The hidden check's word; absent is stored as `NULL`, never as wrong. */
+      verdict?: QuizVerdict;
     },
-  ): Promise<{ id: string; answeredAt: string }>;
-  /** The latest kept answer to each question of one batch; other batches' rows are not returned. */
+  ): Promise<{ id: string; answeredAt: string; recallAfterDays: number }>;
+  /**
+   * The latest kept answer to each question of one batch, with its schedule,
+   * both from one snapshot of the batch's rows; other batches' rows are not
+   * returned.
+   */
   latestForBatch(slug: string, batchId: string): Promise<QuizKeptAnswer[]>;
   /**
    * **The question one kept mark was about**, as the row copied it in, or
@@ -3561,7 +3575,13 @@ export type RateBucket =
      a press — one Opus chat turn the reader did not click for, so bounded
      (src/cite-check.ts § `CITE_CHECK_RATE_POLICY`, plan 261024m). A press of
      the button takes nothing from it. */
-  | "cite-check";
+  | "cite-check"
+  /* Sources' *Digest* — the `sources-digest` step's planner, up to 33
+     searches, a Haiku reader per lead and an Opus writer, about $0.85 a run
+     and $1.80 at worst (estimated), taken inside the step so every way of
+     starting it passes it (src/sources-digest.ts §
+     `SOURCES_DIGEST_RATE_POLICY`, plan 261030b). */
+  | "sources-digest";
 
 /**
  * **A bucket's old spellings, still counted against it.** Plan

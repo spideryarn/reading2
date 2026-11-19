@@ -491,6 +491,7 @@ export async function exportArticle(
   if (revision.citationBlurbs)
     await put("article_revisions", "citation-blurbs.json", revision.citationBlurbs);
   if (revision.situate) await put("article_revisions", "situate.json", revision.situate);
+  if (revision.sourcesDigest) await put("article_revisions", "sources-digest.json", revision.sourcesDigest);
   if (revision.quiz) await put("article_revisions", "quiz.json", revision.quiz);
   if (revision.faq) await put("article_revisions", "faq.json", revision.faq);
   if (revision.relations) await put("article_revisions", "relations.json", revision.relations);
@@ -1106,6 +1107,9 @@ export async function exportArticle(
         question: row.question,
         answer: row.answer,
         reply: row.reply,
+        /* The hidden check's word, since plan 261030c: `null` when it failed
+           or declined, and on every row from before — never "wrong". */
+        verdict: row.verdict,
         createdAt: row.createdAt.toISOString(),
       })),
     });

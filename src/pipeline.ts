@@ -182,6 +182,16 @@ import {
   type SituateRun,
 } from "./situate.js";
 import { situateCiters } from "./situate-citers.js";
+import {
+  generateSourcesDigest,
+  inputFingerprint as sourcesDigestFingerprint,
+  phasesOutdated as sourcesDigestPhasesOutdated,
+  PROMPT_VERSION as SOURCES_DIGEST_PROMPT_VERSION,
+  SOURCES_DIGEST_RATE_POLICY,
+  SourcesDigestRefused,
+  type SourcesDigestDeps,
+  type SourcesDigestRun,
+} from "./sources-digest.js";
 import type { AllowanceTaken, FetchAllowanceStore } from "./store/contracts.js";
 import { citationEvidenceDeps } from "./citation-evidence.js";
 import { attachReceptionRegistry, receptionRegistryDeps } from "./reception-registry.js";
@@ -269,6 +279,12 @@ import {
   SITUATE_RESTING,
   SITUATE_SEARCHES_FAILED,
   SITUATE_TOO_FEW_SEARCHES,
+  SOURCES_DIGEST_BUSY,
+  SOURCES_DIGEST_LIMITED,
+  SOURCES_DIGEST_READERS_FAILED,
+  SOURCES_DIGEST_RESTING,
+  SOURCES_DIGEST_SEARCHES_FAILED,
+  SOURCES_DIGEST_TOO_FEW_LEADS,
   FETCH_PAPER_MISSING,
   fetchFailed,
   ILLUSTRATE_NO_SKETCH,
@@ -737,6 +753,10 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      over the whole article, which nothing else in the pipeline reads. Forcing
      the Bibliography one step before it must never buy it. Plan 261024o. */
   "situate",
+  /* Situate's reasons, and dearer (about $0.85, $1.80 at worst): web searches,
+     a reader per lead and an Opus write, which nothing else in the pipeline
+     reads. Forcing the Bibliography before it must never buy it. Plan 261030b. */
+  "sources-digest",
   /* The same two reasons as `faq`: it reads the blocks, the tree and the
      metadata, nothing else in the pipeline reads what it writes, so the
      positional cascade would buy a model call for nothing. Its `stamp` compares
@@ -4036,6 +4056,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              block, so it is its own figure rather than a repair.
              src/structure.ts § `collapseRestatedRungs`. */
           collapsedRungs: run.collapsedRungs,
+          /* **Sub-sections made, and author headings swallowed.** The fourth
+             level is optional, so its absence and a prompt that stopped making
+             it look the same on screen. src/structure-depth.ts. */
+          subsections: run.subsections,
+          deepenedSections: run.deepenedSections,
+          swallowedHeadings: run.swallowedHeadings,
           /* **`labelsDropped`, `labelBatches`, `labelsResumed` and `labelCalls`
              were here until 2026-09-06** and are on the `labels` step's own log
              line now. Not dropped: a paragraph the model would not label leaves
@@ -4067,6 +4093,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              docs/reusable/silent-success.md. */
           deepen: run.deepen,
           deepenFailed: run.deepenFailed,
+          /* **Stage 2, the sub-section pass** (src/structure-subsections.ts):
+             how many sections were eligible, how many came back, and why the
+             rest were skipped. Logged at every value, `null` where it did not
+             run. Plan 261101d. */
+          subsectionPass: run.subsectionPass,
+          subsectionPassFailed: run.subsectionPassFailed,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,
@@ -4153,6 +4185,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           : run.deepen && run.deepen.targets > 0
             ? `, ${run.deepen.expanded} of ${run.deepen.targets} sections deepened`
             : "";
+      /* Stage 2 on the card: silent when it found nothing to divide, said when it
+         divided something or failed, as the deepening clause above is. */
+      const divided = run.subsectionPassFailed
+        ? ", sub-sections failed (tree kept)"
+        : run.subsectionPass && run.subsectionPass.made > 0
+          ? `, ${run.subsectionPass.made} divided into sub-sections`
+          : "";
       /* **The "N paragraphs unlabelled" clause left with the labels**
          (2026-09-06). It is on `STEPS.labels`'s `detail` now, which is the card
          the reader is watching while a label run is going; saying it here would
@@ -4163,7 +4202,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
-        detail: `${run.internal} sections over ${run.blocks} blocks${fromHeadings}${deepened}`,
+        detail: `${run.internal} sections over ${run.blocks} blocks${fromHeadings}${deepened}${divided}`,
       };
     },
   },
@@ -6244,7 +6283,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         inputHash: bibliographyFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: BIBLIOGRAPHY_PROMPT_VERSION,
-        model: CAPABLE_MODEL,
+        /* The model that writes it — Haiku at both powers since `citations/8`
+           (plan 261101c, GPT Sol's plan review 1). `CAPABLE_MODEL` here would
+           call every Haiku list not current. Same as src/store/pg.ts. */
+        model: modelFor("bibliography", ctx.power),
       };
     },
     async run(ctx, store) {
@@ -6347,6 +6389,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   /* Where the piece sits in the literature — the owner's press in Sources ›
      Investigate (plan 261024o). See the factory. */
   situate: situateStep(),
+  /* The sources digest — the owner's press in Sources › Digest (plan
+     261030b). See the factory. */
+  "sources-digest": sourcesDigestStep(),
   /* Stage 5q — cross-references: a phrase in one block linked to the block that
      shows it in detail. Off DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED;
      queued after import by the add page's box, or by a press on Metadata.
@@ -6582,6 +6627,172 @@ export function situateStep(deps?: () => Promise<SituateStepDeps>): PipelineStep
           situate.outcome === "nothing-found"
             ? `${situate.searched.queries.length} searches, nothing found`
             : `${n} ${n === 1 ? "finding" : "findings"} from ${situate.searched.pages} pages`,
+      };
+    },
+  };
+}
+
+/** What the `sources-digest` step is handed: the stage's seams, and the allowance it takes before them. */
+export interface SourcesDigestStepDeps extends SourcesDigestDeps {
+  allowance: Pick<FetchAllowanceStore, "take" | "finish">;
+}
+
+/** The reader's sentence for each way the stage stops before its writer. */
+const SOURCES_DIGEST_REFUSALS: Record<SourcesDigestRefused["why"], ReaderFacingFailure> = {
+  "too-few-leads": SOURCES_DIGEST_TOO_FEW_LEADS,
+  "searches-failed": SOURCES_DIGEST_SEARCHES_FAILED,
+  "readers-failed": SOURCES_DIGEST_READERS_FAILED,
+};
+
+/** And for each way the allowance refuses. */
+const SOURCES_DIGEST_ALLOWANCE_REFUSALS: Record<Exclude<AllowanceTaken["kind"], "allowed">, ReaderFacingFailure> = {
+  concurrency: SOURCES_DIGEST_BUSY,
+  rate: SOURCES_DIGEST_LIMITED,
+  global: SOURCES_DIGEST_RESTING,
+};
+
+/**
+ * **The `sources-digest` step** — a planner's leads, their searches, a Haiku
+ * reader per lead and one Opus writer over the readers' checked reports
+ * (src/sources-digest.ts, plan 261030b). `situateStep`'s shape exactly: a
+ * factory so a test can hand it a fake allowance, fake searches and fake
+ * citers and still run the step the pipeline runs.
+ *
+ * **The allowance is taken here, inside the step, before any paid call**: the
+ * press, a command-bar re-run, Metadata and `/api/jobs/:id/retry` all arrive at
+ * this line. `oncePerJob`, so a requeued window of the same job does not buy
+ * the searches twice; the lease covers the whole step's budget, and is freed
+ * however it ends.
+ *
+ * **The stamp** is the article the calls are sent (`inputFingerprint`), the
+ * prompt version, the capable model and the reader's profile (the writer is
+ * given it). The searches are not in it: only a press (forced,
+ * `FORCE_ONLY_WHEN_NAMED`) asks the web again.
+ *
+ * It reads the Bibliography when it is there and never makes it.
+ */
+export function sourcesDigestStep(deps?: () => Promise<SourcesDigestStepDeps>): PipelineStep<"sources-digest"> {
+  const depsFor =
+    deps ??
+    (async (): Promise<SourcesDigestStepDeps> => ({
+      /* The adapter itself, not src/store/index.ts's name for it, for
+         `situateStep`'s reason (an import cycle). */
+      allowance: pgFetchAllowanceStore,
+      search: openRouterJson,
+      citers: (identity) => situateCiters(identity),
+      now: () => new Date(),
+    }));
+  return {
+    name: "sources-digest",
+    label: "Writing the sources digest",
+    produces: ["sources-digest"],
+    /* The searches and the calls are bought and cannot be fetched back if
+       this window dies with them in flight: plan 261009l's rule. */
+    oncePerJob: true,
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      /* The one stamp names one model and the digest has three; a stored
+         digest whose calls `phasesOutdated` calls old is not done, as the
+         metadata page's `isCurrent` arm also asks (src/store/pg.ts). */
+      const stored = await store.read(ctx.slug, "sources-digest", "sources-digest");
+      if (stored && sourcesDigestPhasesOutdated(stored)) return null;
+      return {
+        inputHash: sourcesDigestFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: SOURCES_DIGEST_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+        profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
+      };
+    },
+    async run(ctx, store) {
+      const article = await readArticle(ctx.slug, store);
+      const bibliography = await store.read(ctx.slug, "bibliography", "bibliography");
+      const d = await depsFor();
+
+      const taken = await d.allowance.take("sources-digest", SOURCES_DIGEST_RATE_POLICY);
+      if (taken.kind !== "allowed") {
+        plog.warn(
+          { slug: ctx.slug, step: "sources-digest", why: taken.kind },
+          `sources-digest ${ctx.slug}: allowance spent`,
+        );
+        throw stageFailure(SOURCES_DIGEST_ALLOWANCE_REFUSALS[taken.kind], {
+          authored: `sources-digest allowance: ${taken.kind}`,
+        });
+      }
+      let run: SourcesDigestRun;
+      try {
+        run = await generateSourcesDigest(
+          {
+            article,
+            bibliography,
+            profile: ctx.profile ?? null,
+            power: ctx.power,
+            signal: ctx.signal,
+            onProgress: ctx.report,
+          },
+          d,
+        );
+      } catch (err) {
+        /* The stage's own refusals carry counts only, written here: authored. */
+        if (err instanceof SourcesDigestRefused) {
+          throw stageFailure(SOURCES_DIGEST_REFUSALS[err.why], { authored: err.message });
+        }
+        throw err;
+      } finally {
+        try {
+          await d.allowance.finish(taken.id);
+        } catch {
+          /* The lease runs out on its own. */
+        }
+      }
+
+      const digest = run.sourcesDigest;
+      const searches = [...digest.leads.flatMap((l) => l.searches), ...(digest.pieceSearch ? [digest.pieceSearch] : [])];
+      const outcomes = { failed: 0, "no-search": 0, empty: 0, found: 0 };
+      for (const s of searches) outcomes[s.outcome]++;
+      const paragraphs = Object.values(digest.sections).reduce((n, section) => n + section.length, 0);
+      /* Counts, timings and the model only — never a query, a URL, a quote or
+         anything a model wrote (docs/project/logging.md). `quotesUnchecked`
+         is the one to watch: a reader quoting a page it did not read. */
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "sources-digest",
+          model: run.model,
+          outcome: digest.outcome,
+          leads: digest.leads.length,
+          searchFailed: outcomes.failed,
+          searchNoSearch: outcomes["no-search"],
+          searchEmpty: outcomes.empty,
+          searchFound: outcomes.found,
+          citers: digest.citers,
+          citersSkipped: digest.citersSkipped ?? null,
+          reports: digest.reports.length,
+          evidence: digest.evidence.length,
+          paragraphs,
+          ...digest.counts,
+          readModel: digest.phases.read,
+          writeModel: digest.phases.write,
+          planMs: run.planMs,
+          searchMs: run.searchMs,
+          readMs: run.readMs,
+          writeMs: run.writeMs,
+          ms: digest.elapsedMs,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          /* The profile's LENGTH, never the profile. */
+          profileChars: ctx.profile?.length ?? 0,
+        },
+        `sources-digest ${ctx.slug}: ${paragraphs} paragraphs from ${digest.reports.length} reports`,
+      );
+      return {
+        parts: { "sources-digest": digest },
+        detail:
+          digest.outcome === "nothing-found"
+            ? `${searches.length} searches, nothing found`
+            : `${paragraphs} ${paragraphs === 1 ? "paragraph" : "paragraphs"} from ${digest.reports.length} ${digest.reports.length === 1 ? "report" : "reports"}`,
       };
     },
   };

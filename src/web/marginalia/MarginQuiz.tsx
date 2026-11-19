@@ -135,14 +135,15 @@ function Answerable({
   const tooLong = typed.length > MAX_QUIZ_ANSWER_CHARS;
   const superseded = mine !== null && typed.trim() !== mine.answer;
 
-  const submit = () => {
+  const submit = (): boolean => {
     /* The band's refusals (QuizPanel § `submit`): not while the microphone is
        involved, and not on an empty, long or in-flight answer, or a stale
-       quiz. */
-    if (dictate.busy || !open) return;
+       quiz. `false` tells the field, which says "Nothing was sent." */
+    if (dictate.busy || !open) return false;
     const answer = typed.trim();
-    if (answer === "" || tooLong || marking || stale) return;
+    if (answer === "" || tooLong || marking || stale) return false;
     void mark(open.id, answer);
+    return true;
   };
 
   const transcribe = useReaderTranscriber();
@@ -160,7 +161,9 @@ function Answerable({
     onDone: () => submit(),
     doneKey: openId ?? undefined,
   });
-  const cannotAnswer = !typed.trim() || tooLong || marking || stale || dictate.busy;
+  /* Not the microphone: Answer while dictating stops it and answers once the
+     words land (`dictate.submit`, spya-gjcyq3). */
+  const cannotAnswer = (!dictate.busy && !typed.trim()) || tooLong || marking || stale;
 
   useFitTextarea(box, typed, open !== undefined);
 
@@ -344,7 +347,7 @@ function Answerable({
                     }
                     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                       e.preventDefault();
-                      submit();
+                      dictate.submit();
                     }
                   }}
                 />
@@ -380,7 +383,7 @@ function Answerable({
                       aria-label={marking ? "Marking…" : "Answer"}
                       aria-busy={marking || undefined}
                       aria-disabled={cannotAnswer || undefined}
-                      onClick={cannotAnswer ? undefined : submit}
+                      onClick={cannotAnswer ? undefined : dictate.submit}
                     >
                       {marking ? <LoaderCircle className="cmt-spinner" size={16} /> : <SendHorizontal size={16} />}
                     </button>
@@ -395,7 +398,7 @@ function Answerable({
                 {openLook === "due" && !mine && one && (
                   <RecallLine answeredAt={one.answeredAt} disabled={dictate.busy || marking} onShow={showEarlier} />
                 )}
-                <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+                <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} />
                 {mine && (
                   <QuizMarkText
                     attempt={mine}

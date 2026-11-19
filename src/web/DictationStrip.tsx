@@ -72,20 +72,28 @@ export function deviceUnavailableWords(wanted: string | null, using: string | nu
  * (GPT Sol's review of 261009g, F1, after its card said "send").
  */
 export type DoneAction = "send" | "enter" | "save";
-const DONE_WORDS: Record<DoneAction, { button: string; strip: string }> = {
+const DONE_WORDS: Record<DoneAction, { button: string; strip: string; notDone: string }> = {
   send: {
     button: "Turning your words into text, then sending",
     strip: "Turning that into text, then sending…",
+    notDone: "Nothing was sent.",
   },
   enter: {
     button: "Turning your words into text, then pressing Enter",
     strip: "Turning that into text, then pressing Enter…",
+    notDone: "Enter was not pressed.",
   },
   save: {
     button: "Turning your words into text, then saving",
     strip: "Turning that into text, then saving…",
+    notDone: "Nothing was saved.",
   },
 };
+
+/** Said after a failure when the box's done action was pressed while dictating (`useDictationField().unsent`). */
+export function notDoneWords(done: DoneAction): string {
+  return DONE_WORDS[done].notDone;
+}
 
 /**
  * What the strip says, in one place — because it is also what the live region
@@ -428,6 +436,7 @@ export function DictationStrip({
   dictation,
   id,
   sendingAfter = false,
+  unsent = false,
   done = "send",
 }: {
   dictation: UseDictation;
@@ -437,6 +446,8 @@ export function DictationStrip({
   done?: DoneAction | undefined;
   /** `useDictationField().sendingAfter`: a double press on Stop was taken. */
   sendingAfter?: boolean | undefined;
+  /** `useDictationField().unsent`: a press asked for a send and none happened. */
+  unsent?: boolean | undefined;
 }) {
   const [picking, setPicking] = useState(false);
   const [devices, setDevices] = useState<MicDevice[]>([]);
@@ -449,6 +460,7 @@ export function DictationStrip({
   const left = dictation.armed && dictation.endsAt !== null ? dictation.endsAt - now : null;
   const ending = left !== null && left <= CAP_WARNING_MS;
   const words = dictationWords(dictation, sendingAfter, done, ending);
+  const notDone = notDoneWords(done);
 
   /* **The microphone line outlives Stop, until the words land** (Greg,
      spya-pd9fnc; plan 261008d). In Chat the composer grows upwards from a
@@ -514,7 +526,15 @@ export function DictationStrip({
     <>
       {/* One live region, mounted for the life of the box. See the header. */}
       <p className="sr-only" role="status" aria-atomic="true" id={id}>
-        {dictation.error ?? (busy ? words : "")}
+        {dictation.error
+          ? unsent
+            ? `${dictation.error} ${notDone}`
+            : dictation.error
+          : busy
+            ? words
+            : unsent
+              ? notDone
+              : ""}
       </p>
 
       {busy && (
@@ -642,9 +662,12 @@ export function DictationStrip({
       {/* `aria-hidden`, because the live region above is already carrying this
           sentence. Two copies in the accessibility tree is the error read
           twice. */}
-      {dictation.error && (
+      {(dictation.error || (unsent && !busy)) && (
         <p className="dictation-line prof-box-error" aria-hidden="true">
           <TriangleAlert size={12} /> {dictation.error}
+          {/* Send was pressed while dictating and the words never came: the
+              press did nothing, and the reader is owed that (plan 261103b). */}
+          {unsent && (dictation.error ? ` ${notDone}` : notDone)}
         </p>
       )}
     </>

@@ -2,10 +2,11 @@
  * The `shared-services` lane: assert that this file really is on the stack's own
  * `postgres`, and change nothing else.
  *
- * Four files are here, and each is bound to a Supabase service that reads
- * `postgres` no matter what the SQL does — GoTrue for three of them, and the
- * factory's own suite by contract, because `baseUrl()`'s documented job is to
- * mean *the shared database*. `TEST_LANES` in
+ * Five files are here, and each is bound to the stack's own `postgres` no
+ * matter what the SQL does — GoTrue for three of them, the factory's own suite
+ * by contract, because `baseUrl()`'s documented job is to mean *the shared
+ * database*, and `migration-shared-ledger`, whose subject is that database's
+ * migration ledger (plan 261031e). `TEST_LANES` in
  * [`tests/store-migration-registry.ts`](../store-migration-registry.ts) settles
  * each one and says how it was decided.
  *

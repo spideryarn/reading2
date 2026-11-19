@@ -1,0 +1,24 @@
+{
+  "slug": "synesthesia-spya-xkeccf",
+  "arm": "P",
+  "run": 1,
+  "model": "anthropic/claude-haiku-5.5",
+  "effort": "high",
+  "prompt": "production",
+  "systemSha256": "47bb5b25086038ed27fe0cecf4a2b21d8021b005419a6ec72d8fe85ca57b48f4",
+  "maxTokens": 128000,
+  "at": "2026-11-01T15:01:18.851Z",
+  "referenceList": null,
+  "elapsedMs": 161258,
+  "stopReason": null,
+  "usage": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "answer": null,
+  "error": "Error: terminated",
+  "dollars": 0,
+  "calls": 1
+}

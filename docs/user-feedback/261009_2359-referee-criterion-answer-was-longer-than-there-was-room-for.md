@@ -50,6 +50,8 @@ Plan, measurements and the two GPT Sol reviews:
 
 ## Left for later
 
-- Hidden text's 60-second deadline does not grow with the allowance it is given. That is a timeout,
-  not an overflow, and it is a queue item of its own.
+- Hidden text's 60-second deadline did not grow with the allowance it is given. That is a timeout,
+  not an overflow, and it was a queue item of its own: done on 2026-11-01, the deadline now comes
+  from the ceiling —
+  [261101b](../plans/261101b-referee-hidden-text-deadline-from-its-ceiling.md).
 - Whether a stored Referee error should say *when* it happened is a question for Greg.

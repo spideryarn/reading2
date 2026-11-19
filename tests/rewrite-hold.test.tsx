@@ -768,6 +768,47 @@ const ROWS: Row[] = [
     waiting: "The new search hasn't loaded yet.",
     readAgain: "Try again",
   },
+  /* Sources > Digest (plan 261030b): *Write it again*, on the stale banner
+     or at the digest's foot; `generatedAt` is its identity. A pasted
+     `?sources=digest` draws it whatever the experimental switch says. */
+  {
+    name: "Digest",
+    hook: "useSourcesDigest.ts",
+    step: "sources-digest",
+    path: "/api/sources-digest/",
+    search: "?sources=digest",
+    body: (which, { stale }) => ({
+      sourcesDigest: {
+        ...stamp(which, false),
+        version: "sources-digest/1",
+        phases: { plan: "test", read: "test", write: "test" },
+        year: 2020,
+        outcome: "written",
+        overview: [{ text: `${SAYS[which]}: the rig is still cited, and argued with.`, id: "spya-bbbbbb" }],
+        sections: { cites: [], citedBy: [], missed: [], check: [] },
+        leads: [],
+        pieceSearch: null,
+        citers: 0,
+        reports: [],
+        evidence: [],
+        counts: {
+          leadsWritten: 0, leadsDropped: 0, queriesRefused: 0, searches: 0, readers: 0, readersFailed: 0,
+          offVerdict: 0, quotesWritten: 0, quotesUnknownSource: 0, quotesUnchecked: 0, unknownIds: 0,
+          sentenceIds: 0, unanchored: 0, emptyParagraphs: 0, unknownSources: 0, unknownLeads: 0, overCap: 0,
+        },
+      },
+      stale,
+      outdated: false,
+      profileChanged: false,
+    }),
+    mount: (show) => createElement(SourcesOuter, { show }),
+    verb: "Write it again",
+    shape: ON_THE_BANNER,
+    forced: ["Write it again"],
+    direct: [{ label: "Write it again", stale: true }],
+    waiting: "The new digest hasn't loaded yet.",
+    readAgain: "Try again",
+  },
   /* Claims' list (plan 261008i stage 2): the same band on
      `?sources=claims` (`?debate=claims` until 2026-10-09), whose stale
      banner's *List again* is the forced verb. */

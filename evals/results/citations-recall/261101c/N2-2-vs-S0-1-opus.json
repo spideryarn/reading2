@@ -1,0 +1,434 @@
+[
+ {
+  "id": "10356-a-path:Bryson:1969",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B states the passage's use exactly"
+ },
+ {
+  "id": "10356-a-path:Miller:2016",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B clearer on 'may resemble'"
+ },
+ {
+  "id": "10356-a-path:Kahneman:2011",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A precise; B overstates 'inspires'"
+ },
+ {
+  "id": "10356-a-path:Kingma:2013",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A plain and exact"
+ },
+ {
+  "id": "10356-a-path:Bardes:2021",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B says how the paper uses VICReg"
+ },
+ {
+  "id": "10356-a-path:Vaswani:2017",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B fuller and accurate"
+ },
+ {
+  "id": "10356-a-path:Janner:2021",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B names the trajectory transformer use"
+ },
+ {
+  "id": "10356-a-path:Sutton:1991",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A names Dyna as early case"
+ },
+ {
+  "id": "arxiv-1706-0:#1",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B adds unsupported stability reason"
+ },
+ {
+  "id": "arxiv-1706-0:#2",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B names attention mechanism source"
+ },
+ {
+  "id": "arxiv-1706-0:#3",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B slightly fuller"
+ },
+ {
+  "id": "arxiv-1706-0:#4",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "arxiv-1706-0:#5",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "arxiv-1706-0:#6",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A gives the comparison context"
+ },
+ {
+  "id": "arxiv-1706-0:#7",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "arxiv-1706-0:#8",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "arxiv-2308-0:Block:1995",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B wrongly says no citing passage"
+ },
+ {
+  "id": "arxiv-2308-0:Nagel:1974",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A wrongly says no citing passage"
+ },
+ {
+  "id": "arxiv-2308-0:Schwitzgebel:2016",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B wrongly says no citing passage"
+ },
+ {
+  "id": "arxiv-2308-0:Searle:1980",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A wrongly says no citing passage"
+ },
+ {
+  "id": "arxiv-2308-0:Tononi:2015",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B wrongly says no citing passage"
+ },
+ {
+  "id": "arxiv-2308-0:Birch:2022b",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A ignores the theory-heavy use"
+ },
+ {
+  "id": "arxiv-2308-0:Michel:2021",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A no passage; B wrong claim"
+ },
+ {
+  "id": "arxiv-2308-0:Block:2023",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B wrongly says no citing passage"
+ },
+ {
+  "id": "clark-chalme:McClelland:1986",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "clark-chalme:Clark:1989",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "clark-chalme:Kirsh:1995",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "clark-chalme:Hutchins:1995",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "clark-chalme:Kirsh:1994",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B adds the fit-checking use"
+ },
+ {
+  "id": "clark-chalme:Putnam:1975",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B says paired with Putnam for Putnam"
+ },
+ {
+  "id": "clark-chalme:Burge:1979",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A plainer"
+ },
+ {
+  "id": "clark-chalme:Suchman:1987",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "jmlr-v15-sri:Nowlan:1992",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A slightly clearer"
+ },
+ {
+  "id": "jmlr-v15-sri:Xiong:2011",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B covers both uses"
+ },
+ {
+  "id": "jmlr-v15-sri:Salakhutdinov:2008",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B ties it to Xiong"
+ },
+ {
+  "id": "jmlr-v15-sri:Livnat:2010",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "jmlr-v15-sri:Vincent:2008",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A matches passage's extension point"
+ },
+ {
+  "id": "jmlr-v15-sri:van der Maaten:2013",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A complete, B truncated"
+ },
+ {
+  "id": "jmlr-v15-sri:Wang:2013",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "jmlr-v15-sri:Chen:2012",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "synesthesia-:#2",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both plausible"
+ },
+ {
+  "id": "synesthesia-:#3",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both plausible"
+ },
+ {
+  "id": "synesthesia-:#4",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both plausible"
+ },
+ {
+  "id": "synesthesia-:#5",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A specific, B generic"
+ },
+ {
+  "id": "synesthesia-:#7",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both plausible"
+ },
+ {
+  "id": "synesthesia-:#12",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B matches the passage's use"
+ },
+ {
+  "id": "synesthesia-:#13",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ },
+ {
+  "id": "synesthesia-:#16",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both fine"
+ }
+]

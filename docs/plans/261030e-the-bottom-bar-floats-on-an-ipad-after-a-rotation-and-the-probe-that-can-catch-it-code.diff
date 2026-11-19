@@ -1,0 +1,695 @@
+diff --git a/docs/project/admin.md b/docs/project/admin.md
+index b474d69e7..86f93fd0f 100644
+--- a/docs/project/admin.md
++++ b/docs/project/admin.md
+@@ -1335,8 +1335,8 @@ Since 2026-10-24 the command bar on an article has rows only the administrator s
+ > and add it to the command bar. And if there's a way to do this without leaving the article, that
+ > would be even better.
+ 
+-All typed-only — `admin`, `gift`, `author`, `users`, `costs` bring them up — and none marked
+-`generates`:
++All typed-only — `admin`, `gift`, `author`, `users`, `costs`, `probe` bring them up — and none
++marked `generates`:
+ 
+ - **Gift this to its author** opens a small dialog over the article (`AuthorGiftDialog.tsx`): the
+   Give form's ticked half with the article already chosen — the rights tick, *High-powered AI*
+@@ -1345,6 +1345,11 @@ All typed-only — `admin`, `gift`, `author`, `users`, `costs` bring them up —
+   gift's card on Drafts, in a new tab. Nothing is emailed from it; Send stays on the card. The
+   dialog's code and its first read are fetched on the first press, not before.
+ - **What it cost** opens Metadata's administrator-only section (`?section=what-it-cost`).
++- **Viewport probe**, since 2026-10-30, shows the viewport probe on the reading view as it stands,
++  over a recording that has been running silently since the page loaded. It is for a layout bug on
++  an iPad or a phone that a reload would clear, which `?probe=1` cannot catch
++  ([phone-and-touch.md § Where the code branches](phone-and-touch.md#where-the-code-branches),
++  [261030e](../plans/261030e-the-bottom-bar-floats-on-an-ipad-after-a-rotation-and-the-probe-that-can-catch-it.md)).
+ - **Admin**, **Admin › Users**, **› Feedback**, **› Gift vouchers**, **› Articles**, **› Costs**,
+   **› Mockups** and **Design reference** go to those pages.
+ 
+diff --git a/docs/project/phone-and-touch.md b/docs/project/phone-and-touch.md
+index 2894c4ecb..6b2464e7d 100644
+--- a/docs/project/phone-and-touch.md
++++ b/docs/project/phone-and-touch.md
+@@ -243,7 +243,7 @@ existing question already answers it.
+ | the two size notices | `SmallScreenHint.tsx`, `ShelfPhoneHint.tsx`, `small-screen-hint.ts` | the installation hint is the iOS row above, not one of these two |
+ | long-press and scrollbar fixes | `-webkit-touch-callout` in `styles/dock.css` and `annotations.css`; `scrollbar-color` in `styles/mode-band.css` | the second is for iPadOS, whose scroll indicator was invisible on a band |
+ | one-line order rows | `OrderGroup.tsx`, `styles/glossary.css`, `styles/quotes.css` | |
+-| measuring a real phone | `ViewportProbe.tsx`, opened with `?probe=1` | a diagnostic: it records what the visual viewport does on the device |
++| measuring a real phone | `ViewportProbe.tsx`, opened with `?probe=1`, or by the administrator's *Viewport probe* row in the command bar (`probe-switch.ts`) | a diagnostic: it records what the visual viewport does on the device. On the administrator's reading view it records silently from page load, so the row can show a bug that a reload would clear ([261030e](../plans/261030e-the-bottom-bar-floats-on-an-ipad-after-a-rotation-and-the-probe-that-can-catch-it.md)) |
+ 
+ ## Checking it
+ 
+diff --git a/scripts/viewport-trace.ts b/scripts/viewport-trace.ts
+index 0bb48f603..07ea833e5 100644
+--- a/scripts/viewport-trace.ts
++++ b/scripts/viewport-trace.ts
+@@ -86,6 +86,9 @@ export type VV = readonly [number, number, number, number, number];
+  * events, and the reader re-laying-out), and are listed here so a trace that
+  * contains one still reads —
+  * docs/plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md.
++ * `settled` is 2026-10-30: the same numbers again 300ms and 1000ms after a
++ * rotation or a resize, because they are not final when its event fires —
++ * docs/plans/261030e-the-bottom-bar-floats-on-an-ipad-after-a-rotation-and-the-probe-that-can-catch-it.md.
+  */
+ export const EVENTS = [
+   "start",
+@@ -94,6 +97,7 @@ export const EVENTS = [
+   "window-resize",
+   "orientationchange",
+   "laid-out",
++  "settled",
+   "mark",
+ ] as const;
+ export type Ev = (typeof EVENTS)[number];
+diff --git a/src/web/ViewportProbe.tsx b/src/web/ViewportProbe.tsx
+index a7b3bf88f..c73661977 100644
+--- a/src/web/ViewportProbe.tsx
++++ b/src/web/ViewportProbe.tsx
+@@ -66,19 +66,41 @@
+  * reading as another's value, which is precisely the failure this instrument
+  * exists to rule out.
+  *
+- * ## Off unless asked for
++ * ## Off unless asked for, and three ways to ask
+  *
+  * `?probe=1`, read **once at mount and never subscribed to** — `currentAt()` in
+- * params.ts is the same trick and gives the same reason. Without it this
+- * renders `null`, registers no listener and adds nothing to the DOM. There is
+- * no other way in: an installed iOS web app has no address bar, so the URL has
+- * to be there when the app cold-starts.
++ * params.ts is the same trick and gives the same reason. An installed iOS web
++ * app has no address bar, so that URL has to be there when the app
++ * cold-starts.
++ *
++ * **That was the only way in until 2026-10-30, and it could not catch the bug
++ * it was waiting for.** Greg's iPad leaves the bottom bar partway up the screen
++ * *sometimes* (spya-u0vb0a), and adding the flag reloads the page, which very
++ * probably clears the state. So now:
++ *
++ * - **The administrator's reading view records silently from page load**, the
++ *   newest `RING` samples, with nothing on screen (never a reader's, never
++ *   under *view as*).
++ * - **The command bar's *Viewport probe* row** (admin-commands.ts) shows the
++ *   panel over that recording, through probe-switch.ts. Opening the command
++ *   bar focuses a text field, which on an iPad can bring up the keyboard that
++ *   is itself a suspect — which is why the recording has to have started
++ *   before it (GPT Sol, plan review of 261030e, P1).
++ *
++ * For everybody else, with no flag, this renders `null`, registers no viewport
++ * listener and adds nothing to the DOM; what it costs is one session read and
++ * one subscription to a flag that never changes for them.
++ * docs/plans/261030e-the-bottom-bar-floats-on-an-ipad-after-a-rotation-and-the-probe-that-can-catch-it.md.
+  */
+ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+ 
++import { isAdmin } from "../admin.js";
++import { viewAsNonce } from "./lib/view-as.js";
+ import { currentProbe } from "./params.js";
++import { useProbeMounted, useProbeStarted } from "./probe-switch.js";
+ import { controlsBar } from "./scroll.js";
+ import { useCopy } from "./useCopy.js";
++import { useSession } from "./useSession.js";
+ 
+ /** How many samples are kept before recording stops. */
+ const CAP = 600;
+@@ -94,6 +116,28 @@ function full(count: number): boolean {
+   return count >= CAP;
+ }
+ 
++/**
++ * **Until the panel is shown, the newest samples are kept instead**, and only
++ * this many. The administrator's probe records from page load with nothing on
++ * screen (`record` below), so that the minutes *before* he notices the bar
++ * floating are already in the trace when he opens the command bar to show it
++ * — and opening the command bar focuses a text field, which on an iPad brings
++ * up the keyboard that is one of the suspects (GPT Sol, plan review of 261030e,
++ * P1). A recorder that ran for a whole reading session with the oldest-kept
++ * rule would be full of the first five minutes, so the silent phase is a ring
++ * and the shown phase keeps the rule above.
++ */
++const RING = 200;
++
++/**
++ * **A rotation's numbers are not final when its event fires** (WebKit bug
++ * 237851), so each window resize, orientation change and visual-viewport
++ * resize books a `settled` sample this long afterwards. Coalesced: a later
++ * event moves the booking rather than adding one, or a keyboard's slide would
++ * fill the trace with delayed rows (Sol P4).
++ */
++const SETTLE_MS = [300, 1000] as const;
++
+ type Vis = "gone" | "off" | "on";
+ 
+ /** `[x, y, width, height]`, rounded — a rectangle costs four numbers, not four keys. */
+@@ -119,6 +163,7 @@ interface Sample {
+     | "window-resize"
+     | "orientationchange"
+     | "laid-out"
++    | "settled"
+     | "mark";
+   /** `[innerWidth, innerHeight, scrollX, scrollY]`. */
+   readonly win: Box;
+@@ -145,6 +190,30 @@ interface Sample {
+   readonly dm: string;
+   /** `:root[data-bars]` — the switch that takes `--dock-bottom` to `0px` while you read. */
+   readonly bars: string;
++  /**
++   * **What tells a floating bottom bar's causes apart, as far as script can**
++   * (plan 261030e § Diagnosis, from spya-u0vb0a). Traces taken before
++   * 2026-10-30 have none of it, which scripts/viewport-trace.ts tolerates.
++   *
++   * - `rect.floor` (above, in `rect`) is an untransformed, invisible
++   *   `position: fixed; bottom: 0` box beside the dock: where `bottom: 0`
++   *   really lands, apart from the dock's own slide. Its bottom against
++   *   `vv.offsetTop + vv.height` is the gap a stale pan or a stale height
++   *   leaves.
++   * - `root`: `[documentElement.clientHeight, scrollHeight, scrollingElement.scrollTop]`,
++   *   the layout viewport's height beside `win`'s visual one.
++   * - `vvp`: `visualViewport.[pageTop, pageLeft]`, a pan in page coordinates.
++   * - `dockT`: the dock's computed `transform`, so a bar mid-slide is not
++   *   read as a misplaced one.
++   * - `hit`: what `elementFromPoint` finds at the middle of the dock's
++   *   rectangle. **A comparison of hit-testing with the CSSOM, not with where
++   *   the pixels are**: something covering the dock fails it too, and only a
++   *   screenshot shows painting (Sol P3).
++   */
++  readonly root: [number, number, number];
++  readonly vvp: [number, number] | null;
++  readonly dockT: string | null;
++  readonly hit: { readonly at: [number, number]; readonly sig: string | null; readonly inDock: boolean } | null;
+ }
+ 
+ const round = (n: number): number => Math.round(n * 10) / 10;
+@@ -238,6 +307,31 @@ const SPAN_B: CSSProperties = {
+   paddingBottom: "var(--safe-top, 0px)",
+ };
+ 
++/**
++ * **Where `bottom: 0` lands**, with no transform of its own — `Sample.rect.floor`.
++ * A box rather than a zero-height line so every engine reports a rectangle.
++ */
++const FLOOR: CSSProperties = {
++  position: "fixed",
++  bottom: 0,
++  left: 0,
++  width: 1,
++  height: 1,
++  visibility: "hidden",
++  pointerEvents: "none",
++};
++
++/** The silent recorder's wrapper: laid out, invisible, untouchable. */
++const SILENT: CSSProperties = {
++  position: "fixed",
++  top: 0,
++  left: 0,
++  width: 0,
++  height: 0,
++  visibility: "hidden",
++  pointerEvents: "none",
++};
++
+ const TOKENS_A = ["--bar-bottom", "--dock-bottom", "--safe-bottom", "--hint-h"] as const;
+ const TOKENS_B = ["--mode-w", "--spine-w", "--kb-inset", "--safe-top"] as const;
+ 
+@@ -294,6 +388,7 @@ function take(
+   spanA: HTMLElement | null,
+   spanB: HTMLElement | null,
+   laidOutWidth: number | null,
++  floor: HTMLElement | null,
+ ): Sample {
+   const vv = window.visualViewport ?? null;
+   const band = document.querySelector(".mode-band");
+@@ -337,14 +432,38 @@ function take(
+       body: box(body),
+       composer: box(composer),
+       focus: box(focused),
++      floor: box(floor),
++      root: box(document.documentElement),
++      /* `body` is taken, by the band's scroller, in traces older than this. */
++      page: box(document.body),
+     },
+     of: { body: sig(body), composer: sig(composer), focus: sig(focused) },
+     vis: { dock: visible(dock), hint: visible(hint), band: visible(band) },
+     dm: displayMode(),
+     bars: document.documentElement.dataset.bars ?? "",
++    root: [
++      round(document.documentElement.clientHeight),
++      round(document.documentElement.scrollHeight),
++      round(document.scrollingElement?.scrollTop ?? 0),
++    ],
++    vvp: vv ? [round(vv.pageTop), round(vv.pageLeft)] : null,
++    dockT: dock ? getComputedStyle(dock).transform : null,
++    hit: hitTest(dock),
+   };
+ }
+ 
++/**
++ * What a tap at the middle of the dock's rectangle would land on — see
++ * `Sample.hit` for what this can and cannot show.
++ */
++function hitTest(dock: Element | null): Sample["hit"] {
++  if (!dock || typeof document.elementFromPoint !== "function") return null;
++  const r = dock.getBoundingClientRect();
++  const at: [number, number] = [round(r.x + r.width / 2), round(r.y + r.height / 2)];
++  const el = document.elementFromPoint(at[0], at[1]);
++  return { at, sig: sig(el), inDock: el !== null && dock.contains(el) };
++}
++
+ /**
+  * The trace, as one line per sample so a human can scroll it and a machine can
+  * still parse it. `JSON.stringify` of the whole array would be one 200KB line;
+@@ -370,14 +489,29 @@ export function ViewportProbe({
+   /** `useWindowWidth`'s answer — the width the reader actually laid out for. */
+   laidOutWidth?: number;
+ }) {
+-  const [on] = useState(currentProbe);
+-  if (!on) return null;
+-  return <ProbePanel laidOutWidth={laidOutWidth ?? null} />;
++  const [fromAddress] = useState(currentProbe);
++  /* The command bar's way in (probe-switch.ts): a subscription to one module
++     flag that changes at most once, not to the address. */
++  const started = useProbeStarted();
++  useProbeMounted();
++  const shown = fromAddress || started;
++  /* **The administrator's reading view records from page load with nothing on
++     screen**, never a reader's, and never under *view as* (CommandBar's own
++     test for its admin rows). Then the *Viewport probe* row shows a trace that
++     already holds the moments before the command bar was opened. See `RING`. */
++  const { user } = useSession();
++  const silently = isAdmin(user?.id) && viewAsNonce() === null;
++  if (!shown && !silently) return null;
++  return <ProbePanel laidOutWidth={laidOutWidth ?? null} shown={shown} />;
+ }
+ 
+-function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
++function ProbePanel({ laidOutWidth, shown }: { laidOutWidth: number | null; shown: boolean }) {
+   const spanA = useRef<HTMLSpanElement>(null);
+   const spanB = useRef<HTMLSpanElement>(null);
++  const floor = useRef<HTMLSpanElement>(null);
++  /* Read by `record`, which is stable, so through a ref like `laidOut`. */
++  const showing = useRef(shown);
++  showing.current = shown;
+   /* **The samples live in a ref and only the count is state.** iOS fires
+      visual-viewport `scroll` continuously while the keyboard slides, and this
+      panel is on screen at the time: re-rendering an array of six hundred
+@@ -400,18 +534,31 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
+     copyState === "copied" ? "copied" : copyState === "failed" ? "copy refused — select the box" : "";
+ 
+   const record = useCallback((ev: Sample["ev"]) => {
+-    if (full(samples.current.length)) return;
++    /* A `mark` is always taken, even into a full trace: it is the one row
++       somebody asked for by hand, usually at the moment that matters (Sol P4). */
++    if (showing.current && ev !== "mark" && full(samples.current.length)) return;
+     /* One reading of the clock, used both to start it and to stamp the row, so
+        the first sample is `t: 0` rather than however long a first `take()`
+        happened to run for. A trace is read as an offset from the tap. */
+     const now = performance.now();
+     if (since.current === 0) since.current = now;
+     samples.current.push(
+-      take(ev, now - since.current, spanA.current, spanB.current, laidOut.current),
++      take(ev, now - since.current, spanA.current, spanB.current, laidOut.current, floor.current),
+     );
++    /* Silent, the newest `RING` are kept and nothing re-renders: there is no
++       count on screen to update. */
++    if (!showing.current) {
++      if (samples.current.length > RING) samples.current.splice(0, samples.current.length - RING);
++      return;
++    }
+     setCount(samples.current.length);
+   }, []);
+ 
++  /* The count catches up when the panel appears over a silent recording. */
++  useEffect(() => {
++    if (shown) setCount(samples.current.length);
++  }, [shown]);
++
+   /* **The reader's width, through a ref**, so `record` can stay stable. A
+      window event's row therefore carries the width *before* the reader has
+      re-rendered for it, and the `laid-out` row below carries the width after —
+@@ -420,17 +567,33 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
+ 
+   useEffect(() => {
+     /* One sample before anything moves, so every trace has a keyboard-closed
+-       row to compare the rest against. */
+-    record("start");
++       row to compare the rest against. Once: Strict Mode runs this effect
++       twice, and a second `start` would read as a second page load (Sol P4). */
++    if (samples.current.length === 0) record("start");
++    /* The `settled` bookings — see `SETTLE_MS`. One pair at a time. */
++    let timers: ReturnType<typeof setTimeout>[] = [];
++    const settle = () => {
++      for (const id of timers) clearTimeout(id);
++      timers = SETTLE_MS.map((ms) => setTimeout(() => record("settled"), ms));
++    };
+     /* **The window's events, installed whether or not there is a visual
+        viewport** — a rotation is the window's news, and an early return for a
+        missing `visualViewport` would drop it (Sol F4). */
+-    const onWindowResize = () => record("window-resize");
+-    const onOrientation = () => record("orientationchange");
++    const onWindowResize = () => {
++      record("window-resize");
++      settle();
++    };
++    const onOrientation = () => {
++      record("orientationchange");
++      settle();
++    };
+     window.addEventListener("resize", onWindowResize);
+     window.addEventListener("orientationchange", onOrientation);
+     const vv = window.visualViewport;
+-    const onResize = () => record("resize");
++    const onResize = () => {
++      record("resize");
++      settle();
++    };
+     const onScroll = () => record("scroll");
+     vv?.addEventListener("resize", onResize);
+     vv?.addEventListener("scroll", onScroll);
+@@ -439,6 +602,7 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
+       window.removeEventListener("orientationchange", onOrientation);
+       vv?.removeEventListener("resize", onResize);
+       vv?.removeEventListener("scroll", onScroll);
++      for (const id of timers) clearTimeout(id);
+     };
+   }, [record]);
+ 
+@@ -497,6 +661,28 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
+     write(t);
+   };
+ 
++  /* The two lengths-in-disguise, and the floor. Inside the panel, which is
++     inside `.reader`, so both the `:root` tokens and the two `.reader` ones
++     resolve here — and the floor has the dock's own ancestry, so a containing
++     block some later ancestor makes would move both (Sol P5). */
++  const instruments = (
++    <>
++      <span ref={spanA} style={SPAN_A} aria-hidden="true" />
++      <span ref={spanB} style={SPAN_B} aria-hidden="true" />
++      <span ref={floor} style={FLOOR} aria-hidden="true" />
++    </>
++  );
++
++  /* Recording with nothing on screen: the instruments need a layout to be
++     measured in, so they are hidden rather than not drawn. */
++  if (!shown) {
++    return (
++      <div aria-hidden="true" style={SILENT}>
++        {instruments}
++      </div>
++    );
++  }
++
+   return (
+     <div
+       /* Inline styles rather than a stylesheet rule on purpose: this is an
+@@ -519,11 +705,7 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
+         padding: 3,
+       }}
+     >
+-      {/* The two lengths-in-disguise. Inside the panel, which is inside
+-          `.reader`, so both the `:root` tokens and the two `.reader` ones
+-          resolve here. */}
+-      <span ref={spanA} style={SPAN_A} aria-hidden="true" />
+-      <span ref={spanB} style={SPAN_B} aria-hidden="true" />
++      {instruments}
+ 
+       <button
+         type="button"
+diff --git a/src/web/admin-commands.ts b/src/web/admin-commands.ts
+index ee5fde4a4..9dba24711 100644
+--- a/src/web/admin-commands.ts
++++ b/src/web/admin-commands.ts
+@@ -13,7 +13,8 @@
+  * docs/plans/261024n-admin-commands-in-the-command-bar-and-an-author-gift-without-leaving-the-article.md.
+  * In short: the author gift for this article (a dialog over the page, so the
+  * article stays put), this article's *What it cost* section, and the admin
+- * pages and `/design` as places to go.
++ * pages and `/design` as places to go. Since 2026-10-30 also the viewport
++ * probe, started on the page as it stands (plan 261030e).
+  *
+  * ## A courtesy, not a gate
+  *
+@@ -35,12 +36,13 @@
+  *
+  * ## All typed-only
+  *
+- * The empty list stays the reader's; typing `admin`, `gift`, `author`, `users`
+- * or `costs` brings these up. Last in the list, so on a tie every reader's
++ * The empty list stays the reader's; typing `admin`, `gift`, `author`, `users`,
++ * `costs` or `probe` brings these up. Last in the list, so on a tie every reader's
+  * row wins — `feedback` is the Feedback dialog before it is the admin page.
+  */
+ import type { ActionOutcome, Command } from "./command-match.js";
+ import { type SectionRow, sectionCommand } from "./article-commands.js";
++import { startProbe } from "./probe-switch.js";
+ import {
+   ADMIN_ARTICLES_HREF,
+   ADMIN_COSTS_HREF,
+@@ -71,6 +73,31 @@ export const COST_SECTION_ROW: SectionRow = {
+   aliases: ["spend", "article cost", "cost of this article", "how much did it cost", "ai cost"],
+ };
+ 
++export const VIEWPORT_PROBE_ROW_ID = "admin-viewport-probe";
++
++/**
++ * **The viewport probe, on the page as it stands** — the way to record a
++ * layout bug on a phone or an iPad *while it is happening*, which `?probe=1`
++ * could not do because adding it reloads the page (probe-switch.ts, plan
++ * 261030e). Only with an article, because the probe is drawn by the reading
++ * view.
++ */
++const VIEWPORT_PROBE_ROW: Command = {
++  kind: "action",
++  id: VIEWPORT_PROBE_ROW_ID,
++  label: "Viewport probe",
++  description:
++    "Start recording what the screen's viewport is doing, for a layout bug on a phone or an iPad. Mark, then copy the trace into Feedback.",
++  aliases: ["probe", "viewport", "viewport trace", "layout trace", "debug the layout", "bar partway up"],
++  generates: false,
++  typedOnly: true,
++  opensOnly: true,
++  run: () =>
++    startProbe()
++      ? { kind: "close" }
++      : { kind: "stay", message: "The viewport probe is drawn by an article's reading view, not this page." },
++};
++
+ /** The admin pages and `/design`, in the `/admin` index's own order. */
+ const ADMIN_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
+   {
+@@ -148,8 +175,8 @@ const ADMIN_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
+ ];
+ 
+ /**
+- * **The administrator's rows for where the bar was opened.** The two about
+- * this article only with `article`; the pages always.
++ * **The administrator's rows for where the bar was opened.** The three that need
++ * the reading view only with `article`; the pages always.
+  *
+  * `openAuthorGift` opens `AuthorGiftDialog` over the page. The row only opens
+  * it — `generates: false`, `opensOnly: true` — and the dialog's *Draft* button,
+@@ -177,6 +204,7 @@ export function adminRows({
+             run: article.openAuthorGift,
+           } as const,
+           sectionCommand(COST_SECTION_ROW, article.goToCost),
++          VIEWPORT_PROBE_ROW,
+         ]),
+     ...ADMIN_PAGES,
+   ];
+diff --git a/src/web/params.ts b/src/web/params.ts
+index efd3e27ec..4679bb6c7 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -154,6 +154,11 @@ export function currentAt(): string | null {
+  * renders `null`. A diagnostic switched on by a link has no reason to react to
+  * the URL changing under it either.
+  *
++ * **One way in of three since 2026-10-30**, and the only one that needs a
++ * reload: the administrator's command bar starts the probe on the page as it
++ * stands (probe-switch.ts), and ViewportProbe.tsx § Off unless asked for says
++ * why that had to exist.
++ *
+  * `parseAsBit` rather than `=== "1"` so the spelling is the app's — `probe=0`
+  * means off rather than "some string I did not recognise", the same as `text`
+  * and `spine`.
+diff --git a/tests/viewport-probe.test.tsx b/tests/viewport-probe.test.tsx
+index 1ad9b8c79..8f0676923 100644
+--- a/tests/viewport-probe.test.tsx
++++ b/tests/viewport-probe.test.tsx
+@@ -27,7 +27,17 @@ import { act, createElement, StrictMode } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ 
++import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
++
++/** Who `useSession` says is here: nobody, unless a case says the administrator. */
++const session: { user: { id: string } | null } = { user: null };
++vi.mock("../src/web/useSession.js", () => ({
++  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
++}));
++
+ const { ViewportProbe } = await import("../src/web/ViewportProbe.js");
++const { resetProbeSwitchForTests, startProbe } = await import("../src/web/probe-switch.js");
++const { adminRows, VIEWPORT_PROBE_ROW_ID } = await import("../src/web/admin-commands.js");
+ 
+ class FakeViewport extends EventTarget {
+   width = 390;
+@@ -106,6 +116,9 @@ beforeEach(() => {
+ afterEach(() => {
+   act(() => root.unmount());
+   host.remove();
++  session.user = null;
++  resetProbeSwitchForTests();
++  vi.useRealTimers();
+   noViewport();
+   setWidths(1024, 0);
+   address("");
+@@ -379,9 +392,12 @@ describe("what it survives", () => {
+       "composer",
+       "controls",
+       "dock",
++      "floor",
+       "focus",
+       "head",
+       "hint",
++      "page",
++      "root",
+     ]);
+   });
+ 
+@@ -580,3 +596,135 @@ describe("what it survives", () => {
+     root = createRoot(host);
+   });
+ });
++
++/**
++ * **The probe without a reload** — plan 261030e, from spya-u0vb0a. Greg's
++ * iPad leaves the bottom bar partway up *sometimes*, and adding `?probe=1`
++ * reloads the page, which very probably clears what needed recording. So the
++ * administrator's reading view records silently from page load, and the
++ * command bar's *Viewport probe* row shows the panel over that recording.
++ */
++describe("the probe started on the page as it stands", () => {
++  /** The command bar's row, run as the bar runs it. */
++  function runRow(): unknown {
++    const rows = adminRows({
++      article: { openAuthorGift: () => ({ kind: "close" }), goToCost: () => ({ kind: "close" }) },
++    });
++    const row = rows.find((c) => c.kind === "action" && c.id === VIEWPORT_PROBE_ROW_ID);
++    if (row?.kind !== "action") throw new Error("no Viewport probe row");
++    let outcome: unknown;
++    act(() => {
++      outcome = row.run();
++    });
++    return outcome;
++  }
++
++  it("the row shows the panel on a page loaded without ?probe", () => {
++    fakeViewport();
++    address("");
++    show();
++    expect(host.querySelector("button")).toBe(null);
++
++    expect(runRow()).toEqual({ kind: "close" });
++    expect(host.textContent).toContain("probe");
++    expect(trace().samples[0]?.ev).toBe("start");
++  });
++
++  it("the row says so, and starts nothing, where no probe is drawn", () => {
++    expect(runRow()).toEqual({ kind: "stay", message: expect.stringContaining("reading view") });
++    fakeViewport();
++    address("");
++    show();
++    expect(host.innerHTML).toBe("");
++  });
++
++  /**
++   * **A reader still gets nothing**: no element and no viewport listener. The
++   * silent recording is the administrator's alone.
++   */
++  it("records nothing and draws nothing for a reader", () => {
++    const vv = fakeViewport();
++    address("");
++    show();
++    expect(host.innerHTML).toBe("");
++    expect(vv.open).toBe(0);
++  });
++
++  it("records silently for the administrator, and nothing can be seen or pressed", () => {
++    session.user = { id: ADMIN_USER_ID_LOCAL };
++    const vv = fakeViewport();
++    address("");
++    show();
++
++    expect(vv.listening.get("resize")).toBe(1);
++    expect(host.querySelectorAll("button").length).toBe(0);
++    expect(host.textContent).toBe("");
++  });
++
++  /**
++   * **The moments before the panel was asked for are in the trace**, which is
++   * the reason for recording silently: opening the command bar focuses a text
++   * field, and on an iPad the keyboard is itself a suspect (Sol P1). Silent,
++   * the newest are kept, so a long session does not fill up on its first
++   * minutes.
++   */
++  it("keeps the newest silent samples, and shows them when the row is run", () => {
++    session.user = { id: ADMIN_USER_ID_LOCAL };
++    const vv = fakeViewport();
++    address("");
++    show();
++
++    for (let i = 0; i < 250; i += 1) vv.move(500, i, "scroll");
++    runRow();
++
++    const samples = trace().samples as unknown as { ev: string; vv: number[] }[];
++    expect(samples.length).toBe(200);
++    expect(samples.at(-1)?.vv[2]).toBe(249);
++  });
++
++  it("records the opening sample once under Strict Mode", () => {
++    fakeViewport();
++    address("?probe=1");
++    act(() => {
++      root.render(createElement(StrictMode, null, createElement(ViewportProbe)));
++    });
++    expect(trace().samples.filter((s) => s.ev === "start").length).toBe(1);
++  });
++
++  /**
++   * **A rotation's numbers are taken again once they have settled**, and a
++   * stream of resizes books one pair, not one pair each (Sol P4).
++   */
++  it("books one coalesced pair of settled samples after a burst of resizes", () => {
++    vi.useFakeTimers();
++    const vv = fakeViewport();
++    address("?probe=1");
++    show();
++
++    for (let i = 0; i < 10; i += 1) vv.move(500 - i, 0, "resize");
++    act(() => {
++      vi.advanceTimersByTime(1500);
++    });
++
++    expect(trace().samples.filter((s) => s.ev === "settled").length).toBe(2);
++  });
++
++  it("takes a mark into a full trace", () => {
++    const vv = fakeViewport();
++    address("?probe=1");
++    show();
++    for (let i = 0; i < 700; i += 1) vv.move(500, i, "scroll");
++
++    expand();
++    press("mark");
++    const samples = trace().samples;
++    expect(samples.length).toBe(601);
++    expect(samples.at(-1)?.ev).toBe("mark");
++  });
++});
++
++describe("the switch", () => {
++  it("starts nothing with no probe mounted", () => {
++    expect(startProbe()).toBe(false);
++  });
++});

@@ -742,10 +742,8 @@ function NewCriterion({
      every writer there will ever be. `loaded` is a fourth condition and a
      different kind — not about the criterion, about the order of two requests —
      and it is here so the one `ready` guards the submit as well as the look. */
-  const ready =
-    loaded &&
-    text.trim() !== "" &&
-    (kind !== "diverging" || (against.trim() !== "" && favour.trim() !== ""));
+  const poles = kind !== "diverging" || (against.trim() !== "" && favour.trim() !== "");
+  const ready = loaded && text.trim() !== "" && poles;
 
   /* **The one submit path** — the form's (the Run press, and Enter in a pole)
      and a double press on Stop alike. Refused while the microphone is
@@ -771,15 +769,21 @@ function NewCriterion({
     /* A double press on Stop runs the criterion once the words are in. */
     onDone: () => submit(),
   });
-  /* Run's dead look and the submit's refusal are one condition. */
-  const canRun = ready && !dictate.busy;
+  /* Run's dead look and the submit's refusal are one condition — **except the
+     microphone**: Run while dictating goes through `dictate.submit`, which
+     stops it and runs once the words land (spya-gjcyq3), and an empty
+     criterion is no refusal while its words are on their way. */
+  const canRun = loaded && poles && (dictate.busy || text.trim() !== "");
 
   return (
     <form
       className="crit-new"
       onSubmit={(e) => {
         e.preventDefault();
-        submit();
+        /* `aria-disabled` does not stop a press: a dead-looking Run must not
+           stop the microphone either. */
+        if (!canRun) return;
+        dictate.submit();
       }}
     >
       <div className="crit-label-row">
@@ -808,7 +812,7 @@ function NewCriterion({
         readOnly={dictate.readOnly}
         onChange={(e) => setText(e.target.value)}
       />
-      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} />
 
       {/* The part-switcher every mode shares (mode-band.css § the
           part-switcher): a choice of one kind, not an action. */}

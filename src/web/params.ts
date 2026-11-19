@@ -154,6 +154,11 @@ export function currentAt(): string | null {
  * renders `null`. A diagnostic switched on by a link has no reason to react to
  * the URL changing under it either.
  *
+ * **One way in of three since 2026-10-30**, and the only one that needs a
+ * reload: the administrator's command bar starts the probe on the page as it
+ * stands (probe-switch.ts), and ViewportProbe.tsx § Off unless asked for says
+ * why that had to exist.
+ *
  * `parseAsBit` rather than `=== "1"` so the spelling is the app's — `probe=0`
  * means off rather than "some string I did not recognise", the same as `text`
  * and `spine`.
@@ -369,7 +374,7 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
 
 /**
  * **Which conversations Chat's list is narrowed to, by where they came from**
- * — `?chatfrom=chats`, a mode (`sources`, `glossary`, `ideas`), `learn` or
+ * — `?chatfrom=chats`, a mode (`sources`, `glossary`, `ideas`, `summary`), `learn` or
  * `passage`. Since 2026-10-05
  * the list shows every conversation about the article (report `spya-hyfqkq`,
  * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md
@@ -393,7 +398,7 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
  * anything reads them (router.ts § `liftLegacySources`), as GPT Sol's F5 on plan
  * 261009l asked.
  */
-export const CHAT_FROM_WORDS = ["chats", "sources", "glossary", "ideas", "learn", "passage"] as const;
+export const CHAT_FROM_WORDS = ["chats", "sources", "glossary", "ideas", "summary", "learn", "passage"] as const;
 export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
 
 export const chatFromParam = createParser<ChatFrom>({
@@ -1514,7 +1519,7 @@ export function learnInSearch(search: string): LearnView {
 /* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Sources' nine sub-mode addresses the band draws** — `?sources=`,
+ * **Which of Sources' ten sub-mode addresses the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
@@ -1524,6 +1529,9 @@ export function learnInSearch(search: string): LearnView {
  * docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md,
  * decision 7): the papers that came after the piece, the works it leans on,
  * and the literature search;
+ * `digest` is the sources digest, one text on what the piece cites and who
+ * cites it, for the owner only and behind the experimental switch (since
+ * 2026-10-30, plan 261030b);
  * `bibliography` is what the piece cites (the Citations mode until 2026-10-09);
  * `not-cited` is papers close to it that its bibliography does not list, from
  * OpenAlex, for the owner only (since 2026-10-11, plan 261011ac);
@@ -1541,7 +1549,7 @@ export function learnInSearch(search: string): LearnView {
  * Back should undo.
  *
  * **These are the addresses, not the chips.** Since plan 261025h the owner's
- * chip row is three (`SOURCES_CHIPS`), and Reception, Claims, Not cited and
+ * chip row is four (`SOURCES_CHIPS`), and Reception, Claims, Not cited and
  * Investigate are tools reached from inside *Where it sits*, at the addresses
  * they always had; `chipOf` says which chip each address lights.
  *
@@ -1572,6 +1580,7 @@ export function learnInSearch(search: string): LearnView {
  */
 export const SOURCES_VIEWS = [
   "where",
+  "digest",
   "bibliography",
   "not-cited",
   "links",
@@ -1598,11 +1607,13 @@ export function isSourcesExperiment(view: SourcesView): view is SourcesExperimen
   return (SOURCES_EXPERIMENTS as readonly SourcesView[]).includes(view);
 }
 /**
- * **The owner's chip row** (plan 261025h, decision 7 and GPT Sol's F2): three
- * chips, *Where it sits* first because it is the default. The other four
+ * **The owner's chip row** (plan 261025h, decision 7 and GPT Sol's F2): four
+ * chips, *Where it sits* first because it is the default, and since plan
+ * 261030b *Digest* beside it, drawn only with the experimental switch on or on
+ * its own address (SourcesMode.tsx § `SourcesViews`). The other four
  * addresses are tools inside *Where it sits* (`chipOf`).
  */
-export const SOURCES_CHIPS = ["where", "bibliography", "links"] as const satisfies readonly SourcesView[];
+export const SOURCES_CHIPS = ["where", "digest", "bibliography", "links"] as const satisfies readonly SourcesView[];
 export type SourcesChip = (typeof SOURCES_CHIPS)[number];
 /**
  * **Which chip an address lights** — one exhaustive answer for the chip row's
@@ -1622,6 +1633,8 @@ export function chipOf(view: SourcesView): SourcesChip {
     case "guess-first":
     case "evidence-first":
       return "where";
+    case "digest":
+      return "digest";
     case "bibliography":
       return "bibliography";
     case "links":
@@ -1633,8 +1646,10 @@ export function chipOf(view: SourcesView): SourcesChip {
   }
 }
 /**
- * **The sub-modes a visitor's band draws**: all but *Where it sits*, Not cited and
- * Investigate, which are the owner's. *Where it sits* reads the owner's citer
+ * **The sub-modes a visitor's band draws**: all but *Where it sits*, the
+ * Digest, Not cited and Investigate, which are the owner's. The Digest is
+ * written with the owner's profile and quotes strangers' pages their press
+ * fetched (plan 261030b, F3), so it has no public projection. *Where it sits* reads the owner's citer
  * list, which has no public projection yet (plan 261025h, GPT Sol's F3); Not
  * cited's route is owner-only, and a visitor's search would spend our OpenAlex
  * allowance (plan 261011ac § Who sees it); Investigate's every row hands a
@@ -1643,7 +1658,7 @@ export function chipOf(view: SourcesView): SourcesChip {
  * experiments read the owner's dossier, which has no public projection either.
  */
 export const VISITOR_SOURCES_VIEWS: readonly SourcesView[] = SOURCES_VIEWS.filter(
-  (v) => v !== "where" && v !== "not-cited" && v !== "investigate" && !isSourcesExperiment(v),
+  (v) => v !== "where" && v !== "digest" && v !== "not-cited" && v !== "investigate" && !isSourcesExperiment(v),
 );
 /**
  * **What a visitor's band draws for `?sources=`**: the view it names, or

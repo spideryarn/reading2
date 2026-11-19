@@ -1,0 +1,395 @@
+{
+ "slug": "jmlr-v15-srivastava14a-spya-sd3uzs",
+ "style": "author-year",
+ "n": 36,
+ "notes": "No reference list in the blocks. Cites inside tables (media blocks) count. Hinton:2006/Salakhutdinov (Hinton and Salakhutdinov, 2006) and Hinton:2006/et-al (Hinton et al., 2006) are two works, as in the hand count.",
+ "works": [
+  {
+   "key": "Nowlan:1992",
+   "surname": "Nowlan",
+   "year": "1992",
+   "inList": false,
+   "citedIn": [
+    "spya-qnbgwu"
+   ],
+   "citingWords": "Nowlan and Hinton, 1992"
+  },
+  {
+   "key": "Xiong:2011",
+   "surname": "Xiong",
+   "year": "2011",
+   "inList": false,
+   "citedIn": [
+    "spya-k9tfne",
+    "spya-a86qth",
+    "spya-k7qny0",
+    "spya-eccrkz",
+    "spya-yek3wg",
+    "spya-rg7rkq"
+   ],
+   "citingWords": "Xiong et al., 2011"
+  },
+  {
+   "key": "Salakhutdinov:2008",
+   "surname": "Salakhutdinov",
+   "year": "2008",
+   "inList": false,
+   "citedIn": [
+    "spya-k9tfne"
+   ],
+   "citingWords": "Salakhutdinov and Mnih, 2008"
+  },
+  {
+   "key": "Livnat:2010",
+   "surname": "Livnat",
+   "year": "2010",
+   "inList": false,
+   "citedIn": [
+    "spya-ckr2js"
+   ],
+   "citingWords": "Livnat et al., 2010"
+  },
+  {
+   "key": "Vincent:2008",
+   "surname": "Vincent",
+   "year": "2008",
+   "inList": false,
+   "citedIn": [
+    "spya-usbejh"
+   ],
+   "citingWords": "Vincent et al. (2008, 2010"
+  },
+  {
+   "key": "Vincent:2010",
+   "surname": "Vincent",
+   "year": "2010",
+   "inList": false,
+   "citedIn": [
+    "spya-usbejh",
+    "spya-h8sr02"
+   ],
+   "citingWords": "Vincent et al. (2008, 2010"
+  },
+  {
+   "key": "van der Maaten:2013",
+   "surname": "van der Maaten",
+   "year": "2013",
+   "inList": false,
+   "citedIn": [
+    "spya-t2a94n",
+    "spya-fgh0z8"
+   ],
+   "citingWords": "van der Maaten et al. (2013"
+  },
+  {
+   "key": "Wang:2013",
+   "surname": "Wang",
+   "year": "2013",
+   "inList": false,
+   "citedIn": [
+    "spya-t2a94n",
+    "spya-fgh0z8"
+   ],
+   "citingWords": "Wang and Manning (2013"
+  },
+  {
+   "key": "Chen:2012",
+   "surname": "Chen",
+   "year": "2012",
+   "inList": false,
+   "citedIn": [
+    "spya-t2a94n",
+    "spya-fgh0z8"
+   ],
+   "citingWords": "Chen et al. (2012"
+  },
+  {
+   "key": "Globerson:2006",
+   "surname": "Globerson",
+   "year": "2006",
+   "inList": false,
+   "citedIn": [
+    "spya-g4pmgd",
+    "spya-fgh0z8"
+   ],
+   "citingWords": "Globerson and Roweis (2006"
+  },
+  {
+   "key": "Dekel:2010",
+   "surname": "Dekel",
+   "year": "2010",
+   "inList": false,
+   "citedIn": [
+    "spya-g4pmgd"
+   ],
+   "citingWords": "Dekel et al. (2010"
+  },
+  {
+   "key": "Srebro:2005",
+   "surname": "Srebro",
+   "year": "2005",
+   "inList": false,
+   "citedIn": [
+    "spya-aujv5t"
+   ],
+   "citingWords": "Srebro and Shraibman, 2005"
+  },
+  {
+   "key": "Hinton:2006/Salakhutdinov",
+   "surname": "Hinton",
+   "year": "2006",
+   "inList": false,
+   "citedIn": [
+    "spya-h8sr02",
+    "spya-c6dqty"
+   ],
+   "citingWords": "Hinton and Salakhutdinov, 2006",
+   "ambiguous": true
+  },
+  {
+   "key": "Salakhutdinov:2009",
+   "surname": "Salakhutdinov",
+   "year": "2009",
+   "inList": false,
+   "citedIn": [
+    "spya-h8sr02",
+    "spya-c6dqty"
+   ],
+   "citingWords": "Salakhutdinov and Hinton, 2009"
+  },
+  {
+   "key": "Krizhevsky:2009",
+   "surname": "Krizhevsky",
+   "year": "2009",
+   "inList": false,
+   "citedIn": [
+    "spya-yz7yrc"
+   ],
+   "citingWords": "Krizhevsky, 2009"
+  },
+  {
+   "key": "Netzer:2011",
+   "surname": "Netzer",
+   "year": "2011",
+   "inList": false,
+   "citedIn": [
+    "spya-rm7ynz",
+    "spya-fqx4ud",
+    "spya-eaz95d"
+   ],
+   "citingWords": "Netzer et al., 2011"
+  },
+  {
+   "key": "Simard:2003",
+   "surname": "Simard",
+   "year": "2003",
+   "inList": false,
+   "citedIn": [
+    "spya-c6dqty",
+    "spya-ujw3t8"
+   ],
+   "citingWords": "Simard et al., 2003"
+  },
+  {
+   "key": "Goodfellow:2013",
+   "surname": "Goodfellow",
+   "year": "2013",
+   "inList": false,
+   "citedIn": [
+    "spya-c6dqty",
+    "spya-ujw3t8",
+    "spya-eaz95d",
+    "spya-r5fx4a",
+    "spya-cgchxh"
+   ],
+   "citingWords": "Goodfellow et al., 2013"
+  },
+  {
+   "key": "Jarrett:2009",
+   "surname": "Jarrett",
+   "year": "2009",
+   "inList": false,
+   "citedIn": [
+    "spya-ujw3t8"
+   ],
+   "citingWords": "Jarrett et al., 2009"
+  },
+  {
+   "key": "LeCun:1989",
+   "surname": "LeCun",
+   "year": "1989",
+   "inList": false,
+   "citedIn": [
+    "spya-y4ktr9"
+   ],
+   "citingWords": "LeCun et al., 1989"
+  },
+  {
+   "key": "Sermanet:2012",
+   "surname": "Sermanet",
+   "year": "2012",
+   "inList": false,
+   "citedIn": [
+    "spya-eaz95d",
+    "spya-jpydqm"
+   ],
+   "citingWords": "Sermanet et al., 2012"
+  },
+  {
+   "key": "Zeiler:2013",
+   "surname": "Zeiler",
+   "year": "2013",
+   "inList": false,
+   "citedIn": [
+    "spya-eaz95d",
+    "spya-cgchxh"
+   ],
+   "citingWords": "Zeiler and Fergus, 2013"
+  },
+  {
+   "key": "Snoek:2012",
+   "surname": "Snoek",
+   "year": "2012",
+   "inList": false,
+   "citedIn": [
+    "spya-r5fx4a",
+    "spya-cgchxh"
+   ],
+   "citingWords": "Snoek et al. (2012"
+  },
+  {
+   "key": "Krizhevsky:2012",
+   "surname": "Krizhevsky",
+   "year": "2012",
+   "inList": false,
+   "citedIn": [
+    "spya-e6r7sj",
+    "spya-tza5zf",
+    "spya-cqd58a",
+    "spya-zdfmme"
+   ],
+   "citingWords": "Krizhevsky et al. (2012"
+  },
+  {
+   "key": "Lin:2010",
+   "surname": "Lin",
+   "year": "2010",
+   "inList": false,
+   "citedIn": [
+    "spya-tza5zf"
+   ],
+   "citingWords": "Lin et al., 2010"
+  },
+  {
+   "key": "Sanchez:2011",
+   "surname": "Sanchez",
+   "year": "2011",
+   "inList": false,
+   "citedIn": [
+    "spya-tza5zf"
+   ],
+   "citingWords": "Sanchez and Perronnin, 2011"
+  },
+  {
+   "key": "Mohamed:2010",
+   "surname": "Mohamed",
+   "year": "2010",
+   "inList": false,
+   "citedIn": [
+    "spya-v7aayz"
+   ],
+   "citingWords": "Mohamed et al., 2010"
+  },
+  {
+   "key": "Dahl:2010",
+   "surname": "Dahl",
+   "year": "2010",
+   "inList": false,
+   "citedIn": [
+    "spya-v7aayz"
+   ],
+   "citingWords": "Dahl et al., 2010"
+  },
+  {
+   "key": "Neal:1996",
+   "surname": "Neal",
+   "year": "1996",
+   "inList": false,
+   "citedIn": [
+    "spya-nx277y"
+   ],
+   "citingWords": "Neal, 1996"
+  },
+  {
+   "key": "Tikhonov:1943",
+   "surname": "Tikhonov",
+   "year": "1943",
+   "inList": false,
+   "citedIn": [
+    "spya-u00a8f"
+   ],
+   "citingWords": "Tikhonov, 1943"
+  },
+  {
+   "key": "Tibshirani:1996",
+   "surname": "Tibshirani",
+   "year": "1996",
+   "inList": false,
+   "citedIn": [
+    "spya-u00a8f"
+   ],
+   "citingWords": "Tibshirani, 1996"
+  },
+  {
+   "key": "Hinton:2006/et-al",
+   "surname": "Hinton",
+   "year": "2006",
+   "inList": false,
+   "citedIn": [
+    "spya-f55kkk"
+   ],
+   "citingWords": "Hinton et al., 2006",
+   "ambiguous": true
+  },
+  {
+   "key": "Srivastava:2013",
+   "surname": "Srivastava",
+   "year": "2013",
+   "inList": false,
+   "citedIn": [
+    "spya-fgh0z8"
+   ],
+   "citingWords": "Srivastava (2013"
+  },
+  {
+   "key": "Wager:2013",
+   "surname": "Wager",
+   "year": "2013",
+   "inList": false,
+   "citedIn": [
+    "spya-fgh0z8"
+   ],
+   "citingWords": "Wager et al. (2013"
+  },
+  {
+   "key": "Mnih:2009",
+   "surname": "Mnih",
+   "year": "2009",
+   "inList": false,
+   "citedIn": [
+    "spya-zdfmme"
+   ],
+   "citingWords": "Mnih, 2009"
+  },
+  {
+   "key": "Povey:2011",
+   "surname": "Povey",
+   "year": "2011",
+   "inList": false,
+   "citedIn": [
+    "spya-nntv77"
+   ],
+   "citingWords": "Povey et al., 2011"
+  }
+ ]
+}

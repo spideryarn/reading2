@@ -41,7 +41,6 @@ import {
   SHARING_MARK_PRESS_PUBLIC,
   SHARING_MARK_NAME_PRIVATE,
   SHARING_MARK_NAME_PUBLIC,
-  SHARING_MARK_ON_ARCHIVED,
   SHARING_OFF,
   SHARING_OFF_WITH_LINK,
   SHARING_OFF_LINK_UNKNOWN,
@@ -309,34 +308,28 @@ describe("the sharing mark beside the title", () => {
   });
 
   /**
-   * **Shared and archived is not "listed publicly".** Archiving takes a public
-   * article off the public list while its link keeps working
-   * (src/store/public-library.ts § the `archivedAt` clause), so both marks have
-   * to say so. GPT Sol, plan review of 261002e, finding 1.
+   * **Shared and archived is still listed publicly.** Archiving is the owner's
+   * shelf alone; sharing alone decides the public list. Greg, 2026-10-31
+   * (spya-zyh56c): *"if the article's public, it stays public the whole time."*
+   * Plan 261031c — before it, this said the opposite.
    */
-  it("does not promise a public listing for a shared article that is archived", async () => {
-    await mount("public", true, "2026-09-30T10:00:00Z");
-    const link = host.querySelector<HTMLAnchorElement>(`a[href^="${METADATA}"]`);
-    if (!link) throw new Error("no sharing mark");
-    const sharing = await cardOf(link);
-    expect(sharing.querySelector(".tip-soon-what")?.textContent).toBe(SHARING_MARK_ON_ARCHIVED);
-    expect(sharing.textContent).not.toContain("it's listed publicly");
-  });
+  it.each(["2026-09-30T10:00:00Z", "unknown", null] as const)(
+    "promises the public listing for a shared article whether or not it is archived (%s)",
+    async (archived) => {
+      await mount("public", true, archived);
+      const link = host.querySelector<HTMLAnchorElement>(`a[href^="${METADATA}"]`);
+      if (!link) throw new Error("no sharing mark");
+      const sharing = await cardOf(link);
+      expect(sharing.querySelector(".tip-soon-what")?.textContent).toBe(SHARING_ON);
+    },
+  );
 
-  it("does not promise a public listing when the archive state is unknown", async () => {
-    await mount("public", true, "unknown");
-    const link = host.querySelector<HTMLAnchorElement>(`a[href^="${METADATA}"]`);
-    if (!link) throw new Error("no sharing mark");
-    const sharing = await cardOf(link);
-    expect(sharing.querySelector(".tip-soon-what")?.textContent).toMatch(/couldn't be confirmed/i);
-    expect(sharing.querySelector(".tip-soon-what")?.textContent).not.toBe(SHARING_ON);
-  });
-
-  it("says archiving a shared article takes it off the public list", async () => {
+  it("says archiving a shared article leaves it on the public list", async () => {
     await mount("public", true);
     const button = host.querySelector('[data-testid="masthead-archive"]');
     if (!button) throw new Error("no archive mark");
     const card = await cardOf(button);
-    expect(card.querySelector(".tip-soon-how")?.textContent).toMatch(/off the public list/);
+    expect(card.querySelector(".tip-soon-how")?.textContent).toMatch(/stays on the public list/);
+    expect(card.querySelector(".tip-soon-how")?.textContent).not.toMatch(/off the public list/);
   });
 });

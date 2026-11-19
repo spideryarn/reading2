@@ -178,6 +178,7 @@ const SAYS = {
   illustrated: "The rig, painted",
   sketch: "The calibrated rig",
   situate: SAYS_SITUATE,
+  "sources-digest": "The rig is still cited by those who replicated it.",
   explanations: "The rig was trusted before anyone could say why it worked.",
 } as const;
 
@@ -506,6 +507,33 @@ const BODIES: Record<string, unknown> = {
     outdated: false,
     profileChanged: false,
   },
+  /* Sources > Digest (plan 261030b): the owner's. One overview sentence,
+     which is what the band draws. */
+  "sources-digest": {
+    sourcesDigest: {
+      ...STAMP,
+      version: "sources-digest/1",
+      profileHash: null,
+      phases: { plan: "test", read: "test", write: "test" },
+      year: 2020,
+      outcome: "written",
+      overview: [{ text: "The rig is still cited by those who replicated it.", id: "spya-bbbbbb" }],
+      sections: { cites: [], citedBy: [], missed: [], check: [] },
+      leads: [],
+      pieceSearch: null,
+      citers: 0,
+      reports: [],
+      evidence: [],
+      counts: {
+        leadsWritten: 0, leadsDropped: 0, queriesRefused: 0, searches: 0, readers: 0, readersFailed: 0,
+        offVerdict: 0, quotesWritten: 0, quotesUnknownSource: 0, quotesUnchecked: 0, unknownIds: 0,
+        sentenceIds: 0, unanchored: 0, emptyParagraphs: 0, unknownSources: 0, unknownLeads: 0, overCap: 0,
+      },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  },
 };
 
 /* ------------------------------------------------------------ the network -- */
@@ -576,10 +604,10 @@ async function reply(url: string, method: string, body: string | null): Promise<
   /* Claims's claim checks (plan 261008i stage 3): a second read beside the list, never the row under test. */
   if (/^\/api\/sources-claims\/[^/]+\/checks$/.test(url)) return json({ checks: [] });
   /* `sources-claims` by name: a general `[a-z-]+` would turn reading-time and the like from `{}` into a 404. */
-  const other = /^\/api\/(sources-claims|[a-z]+)\/([^/]+)$/.exec(url);
+  const other = /^\/api\/(sources-claims|sources-digest|[a-z]+)\/([^/]+)$/.exec(url);
   const there = other?.[2] === undefined ? undefined : elsewhere[other[2]];
   if (there && other?.[1] && other[1] in there) return artefactResponse(other[1], there[other[1]] as Answer);
-  const kind = new RegExp(`^/api/(sources-claims|[a-z]+)/${SLUG}$`).exec(url)?.[1];
+  const kind = new RegExp(`^/api/(sources-claims|sources-digest|[a-z]+)/${SLUG}$`).exec(url)?.[1];
   if (kind && kind in BODIES) {
     gets[kind] = (gets[kind] ?? 0) + 1;
     /* The arc is there unless a test says otherwise: `useArc` asks for one the
@@ -615,6 +643,7 @@ const { useSourcesClaims } = await import("../src/web/useSourcesClaims.js");
 const { useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useSimple } = await import("../src/web/useSimple.js");
 const { useSituateRead } = await import("../src/web/useSituate.js");
+const { useSourcesDigestRead } = await import("../src/web/useSourcesDigest.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -753,6 +782,9 @@ const ROWS: readonly Row[] = [
      every owner since plan 261025h (at the top of Investigate, behind the
      switch, before). */
   { hook: "useSituate.ts", kind: "situate", search: "?mode=sources", where: ".mode-band.where" },
+  /* Sources > Digest, the owner's (plan 261030b). A pasted address draws it
+     whatever the experimental switch says. */
+  { hook: "useSourcesDigest.ts", kind: "sources-digest", search: "?mode=sources&sources=digest", where: ".mode-band.digest" },
 ];
 
 /**
@@ -1486,6 +1518,7 @@ const AFTER_NONE_READS: readonly { kind: string; use: (slug: string) => Artefact
   { kind: "illustrated", use: (slug) => useIllustrated(slug, BLOCKS) },
   { kind: "sketch", use: (slug) => useSketch(slug, BLOCKS.map((b) => b.id)) },
   { kind: "situate", use: useSituateRead },
+  { kind: "sources-digest", use: useSourcesDigestRead },
 ];
 
 it("the reads alone are the same twelve as the bands", () => {

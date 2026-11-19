@@ -336,8 +336,8 @@ Plan [261029c](../plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md).
   opens a small answer box under the question, with the microphone first and *Open in Quiz* (the
   old press, `openQuizAt`) at the end of its row; the mark streams in under it. A microphone on
   the question line opens the box listening, in one press. An answered question is ticked and sits
-  on a pale green ground; deeper when this visit's check said right, faded with a clock once it is
-  three days old and worth recalling, when its box opens empty. [quiz.md § Answered in the margin](quiz.md#answered-in-the-margin-and-a-quiet-green)
+  on a pale green ground; deeper when the check said right, faded with a clock once it is due to
+  be recalled (a day after a wrong, a week or more after a right), when its box opens empty. [quiz.md § Answered in the margin](quiz.md#answered-in-the-margin-and-a-quiet-green)
   has the rules; [`marginalia/MarginQuiz.tsx`](../../src/web/marginalia/MarginQuiz.tsx) the code,
   reaching the column through `MarginQuizContext` so `memo(TableView)` does not hear it;
   `tests/marginalia-quiz-answer.test.tsx`.

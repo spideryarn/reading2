@@ -208,7 +208,7 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "29 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "31 October 2026"');
   });
 
   it("says what Search the literature sends, and to whom", () => {
@@ -222,6 +222,17 @@ describe("the privacy page", () => {
     expect(prose).not.toContain("Investigate (an experimental feature)");
     expect(prose).toContain(
       "When you open Sources’ Where it sits with the Sources button or its tab, or press Search the literature there, your article is searched for in the wider literature. Its title, headings, opening and details of works it cites go through OpenRouter to an AI that writes a dozen or so short searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is sent the article’s DOI, or the words of its title, to find papers that cite it. The whole article, the search results, public abstracts, and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.",
+    );
+  });
+
+  it("says what Sources' Digest sends, and to whom", () => {
+    /* Plan 261030b: the digest's planner and writer see the article through
+       OpenRouter, its searches go to Exa through OpenRouter, OpenAlex gets the
+       DOI or title, the readers see passages and results, and the profile
+       reaches only the writer. Owner-only, so not on a shared article. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "When you open Sources’ Digest (an experimental feature) with its tab, or press Write the digest there, the same is done in more depth. The whole article and details of works it cites go through OpenRouter to an AI that writes questions and short searches, and those searches go through OpenRouter to Exa. OpenAlex is sent the article’s DOI, or the words of its title, to find papers that cite it. Smaller AIs, through OpenRouter, are each shown some passages of the article and what the searches found for them. The whole article, what those AIs reported, and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the digest. It is kept with your article, and is not shown to anybody reading an article you have shared.",
     );
   });
 
@@ -379,6 +390,18 @@ describe("the privacy page", () => {
     expect(prose).toContain("your answers to quiz questions, with what the AI wrote back about each");
     const schema = readFileSync(path.join(ROOT, "src/db/schema.ts"), "utf8");
     expect(schema).toContain('"quiz_attempts"');
+  });
+
+  it("says the quiz check's right or wrong is kept, that it can be mistaken, and what it is for", () => {
+    /* Plan 261030c (Greg's option B on q-m9zkx3): `quiz_attempts.verdict`.
+       Until then the page listed it nowhere because it was not kept. Held to
+       the column, so the claim goes if the column does. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "When an automatic check can decide, we also keep whether it judged a quiz answer right or wrong. It can be mistaken; we use it to colour the question, to decide when to ask it again, and to adapt the help around it.",
+    );
+    const schema = readFileSync(path.join(ROOT, "src/db/schema.ts"), "utf8");
+    expect(schema).toContain('verdict: text("verdict")');
   });
 
   it("says the command bar's suggestions are made from the profile, and where a pressed one goes", () => {

@@ -46,6 +46,11 @@ const SHARED = new Set([
      two cannot disagree. Imports only types. See src/next-steps.ts and plan
      261009u. */
   "next-steps.js",
+  /* When a Quiz question comes back: the server works the schedule out from
+     the question's history, and the client reads its wire value with the
+     same bounds (`parseRecallAfterDays`) and falls back to the same three
+     days. Imports only types. See src/quiz-spacing.ts and plan 261030c. */
+  "quiz-spacing.js",
   /* The fixed list of modes the guide may get ready, with their display
      names: next-steps.js checks a prepare step against it, and the page draws
      the button from it. Imports only types. See src/preparable-modes.ts and

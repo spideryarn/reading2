@@ -23,9 +23,10 @@
  *
  * and the same table for one picture's bytes. Then: a public article reads
  * with any of those (public wins) and says `"public"`; an unreadable revision
- * is a 404 with the right key, as its public twin is; an archived article
- * reads by its link and is not listed, as its public twin is; no private
- * article with a link is ever in `/api/public/library`; and a second signed-in
+ * is a 404 with the right key, as its public twin is; an archived private-link
+ * article reads by its link and is not listed, while an archived public twin
+ * is listed (plan 261031c); no private article with a link is ever in
+ * `/api/public/library`; and a second signed-in
  * person can neither read, make nor turn off somebody else's link.
  *
  * **"The same 404" is compared whole**: status, headers and body, against a
@@ -718,7 +719,7 @@ describe("a private link", { timeout: 60_000 }, () => {
     }
   });
 
-  it("reads an archived article by its link, as an archived public one reads, and lists neither", async () => {
+  it("reads an archived article by its link, as an archived public one reads, and does not list it", async () => {
     const r = await article(ARCHIVED, KEYS.archived);
     expect(r.status).toBe(200);
     expect(r.body.sharedBy).toBe("link");

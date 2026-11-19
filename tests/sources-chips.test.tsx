@@ -66,16 +66,17 @@ const checked = () => radios().filter((r) => r.getAttribute("aria-checked") === 
 const lit = () => radios().filter((r) => r.classList.contains("on"));
 
 describe("the addresses and the chips", () => {
-  it("has nine addresses and three owner chips, Where it sits first", () => {
+  it("has ten addresses and four owner chips, Where it sits first and Digest beside it", () => {
     expect([...SOURCES_VIEWS]).toEqual([
-      "where", "bibliography", "not-cited", "links", "reception", "claims", "investigate", "guess-first", "evidence-first",
+      "where", "digest", "bibliography", "not-cited", "links", "reception", "claims", "investigate", "guess-first", "evidence-first",
     ]);
-    expect([...SOURCES_CHIPS]).toEqual(["where", "bibliography", "links"]);
+    expect([...SOURCES_CHIPS]).toEqual(["where", "digest", "bibliography", "links"]);
   });
 
   it("lights Where it sits for each of the four tools and the two experiments, and each chip for itself", () => {
     const expected: Record<SourcesView, SourcesView> = {
       where: "where",
+      digest: "digest",
       bibliography: "bibliography",
       links: "links",
       reception: "where",
@@ -99,6 +100,8 @@ describe("the addresses and the chips", () => {
 
   it("gives a visitor Bibliography for the bare address and the experiments, and the four chips they had", () => {
     expect(visitorSourcesView("where")).toBe("bibliography");
+    /* The digest is the owner's (plan 261030b, F3): a shared address draws Bibliography. */
+    expect(visitorSourcesView("digest")).toBe("bibliography");
     expect(visitorSourcesView("guess-first")).toBe("bibliography");
     expect(visitorSourcesView("evidence-first")).toBe("bibliography");
     expect([...VISITOR_SOURCES_VIEWS]).toEqual(["bibliography", "links", "reception", "claims"]);
@@ -108,11 +111,15 @@ describe("the addresses and the chips", () => {
 describe("the owner's chip row", () => {
   it.each(SOURCES_VIEWS.map((v) => [v]))("checks exactly one radio on ?sources=%s, the one chipOf names", (view) => {
     draw(view, "a-piece");
-    expect(labels()).toEqual(["Where it sits", "Bibliography", "Links"]);
+    /* The switch is off here, so Digest is drawn only on its own address. */
+    expect(labels()).toEqual(
+      view === "digest" ? ["Where it sits", "Digest", "Bibliography", "Links"] : ["Where it sits", "Bibliography", "Links"],
+    );
     expect(checked()).toHaveLength(1);
     expect(lit()).toHaveLength(1);
     /* Written out, not read from chipOf, so a wrong mapping turns this red too. */
-    const lights = view === "bibliography" ? "Bibliography" : view === "links" ? "Links" : "Where it sits";
+    const lights =
+      view === "bibliography" ? "Bibliography" : view === "links" ? "Links" : view === "digest" ? "Digest" : "Where it sits";
     expect(checked()[0]?.firstChild?.textContent).toBe(lights);
     expect(lit()[0]).toBe(checked()[0]);
   });
@@ -121,6 +128,38 @@ describe("the owner's chip row", () => {
     draw("claims", "a-piece");
     act(() => radios()[0]?.click());
     expect(moved).toEqual(["where"]);
+  });
+});
+
+describe("the Digest chip, behind the experimental switch (plan 261030b, F7)", () => {
+  const drawWith = (view: SourcesView, experimental: boolean) =>
+    act(() => root.render(sourcesHead({ view, onView: (v) => moved.push(v), ownerSlug: "a-piece", experimental })));
+
+  it("is hidden with the switch off, on every address but its own", () => {
+    drawWith("where", false);
+    expect(labels()).not.toContain("Digest");
+    drawWith("links", false);
+    expect(labels()).not.toContain("Digest");
+  });
+
+  it("is drawn and lit on a pasted ?sources=digest with the switch off", () => {
+    drawWith("digest", false);
+    expect(labels()).toContain("Digest");
+    expect(checked().map((r) => r.firstChild?.textContent)).toEqual(["Digest"]);
+  });
+
+  it("is drawn second with the switch on, and its press arms the digest's own step and nothing else", () => {
+    drawWith("where", true);
+    expect(labels()).toEqual(["Where it sits", "Digest", "Bibliography", "Links"]);
+    act(() => radios()[1]?.click());
+    expect(moved).toEqual(["digest"]);
+    expect(pendingActivation("a-piece", "sources-digest")).not.toBeNull();
+    expect(pendingActivation("a-piece", "sources-where")).toBeNull();
+    expect(pendingActivation("a-piece", "bibliography")).toBeNull();
+  });
+
+  it("is behind the switch in the command bar too", () => {
+    expect(SOURCES_SUB_MODES.digest.experimental).toBe(true);
   });
 });
 
@@ -138,6 +177,8 @@ describe("what a press arms (decisions 6 and 8)", () => {
     const arms: Record<SourcesView, string | null> = {
       /* The works cited and the search of the literature, behind one token (plan 261026g § Stage 4). */
       where: "sources-where",
+      /* Its own step, on the press (plan 261030b). */
+      digest: "sources-digest",
       bibliography: "bibliography",
       links: null,
       "not-cited": null,

@@ -12,7 +12,7 @@
  *
  * **No new ownerless read.** The candidates are Bibliography's
  * (src/store/pg-cited-in-spideryarn.ts § `citedCandidatesQuery`), whose `where`
- * is the whole defence: public and not archived, openable, a stranger's title
+ * is the whole defence: public (archived or not, plan 261031c), openable, a stranger's title
  * only as extracted, and a stranger's address only as `publicSourceUrl` passes
  * it. This file only matches among them, by `urlKey` — the rule a repeat paste
  * uses — and only among the ones that are not the reader's own.

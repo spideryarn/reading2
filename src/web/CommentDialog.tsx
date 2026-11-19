@@ -876,15 +876,11 @@ export function CommentDialog({
           className="cmt-followup"
           onSubmit={(e) => {
             e.preventDefault();
-            /* Not while a transcript is on its way: `readOnly` stops typing and
-               not Enter, and sending here would hand chat the rough guess a
-               moment before the good words landed. GPT Sol's plan review. */
-            /* **And not while the microphone is still on.** `readOnly` is the
-               two seconds after the reader presses stop; `armed` is the
-               microphone actually recording, and Enter arrives from a soft
-               keyboard as readily as from a hard one. dictation.md § Adding it
-               to a box calls this the guard everybody forgets. */
-            askFollowUp();
+            /* Never the rough live guess: while the microphone is on or its
+               words are on their way, `submit` stops it and asks once the
+               transcript lands; idle, it is `askFollowUp` (the field's
+               `onDone`, which still refuses while busy). spya-gjcyq3. */
+            dictate.submit();
           }}
         >
           <input
@@ -923,15 +919,15 @@ export function CommentDialog({
           <button
             type="submit"
             className="linky"
-            /* **`armed` as well as `readOnly`**, or the button stays lit over a
-               submit handler that returns without doing anything — the guard
-               above is correct and silent, which is the worse half of the two.
-               GPT Sol, 2026-09-04. */
-            disabled={dictate.busy || !followUp.trim()}
+            /* **Live while dictating**: the form's submit goes through
+               `dictate.submit`, which stops the microphone and asks once the
+               words land (spya-gjcyq3). Empty is a refusal only when no words
+               are on their way. */
+            disabled={!dictate.busy && !followUp.trim()}
           >
             Ask in chat
           </button>
-          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} />
         </form>
       )}
 

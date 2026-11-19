@@ -35,7 +35,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { QuotesPanel } = await import("../src/web/QuotesPanel.js");
-const { BibliographyPanel, CAPPED_NOTE, cappedNote, INFLUENCE_NOTE } = await import("../src/web/BibliographyPanel.js");
+const { BibliographyPanel, CAPPED_NOTE_OPENING, cappedNote, INFLUENCE_NOTE } = await import("../src/web/BibliographyPanel.js");
 
 const noop = () => {};
 const BLOCK = "spya-k3m9qt" as BlockId;
@@ -313,7 +313,7 @@ describe("the Bibliography band's top and foot", () => {
     expect(about, "no (i) in the band's corner").not.toBeNull();
     await act(async () => about?.click());
     expect(tip()).toContain(INFLUENCE_NOTE);
-    /* A capped list of fewer than 80 says how many it holds (plan 261027b). */
+    /* A capped list says how many it holds (plan 261027b). */
     expect(tip()).toContain(cappedNote(WORKS.length, 0));
     await act(async () => about?.click());
   });
@@ -323,7 +323,7 @@ describe("the Bibliography band's top and foot", () => {
     const about = host.querySelector<HTMLButtonElement>(ABOUT);
     await act(async () => about?.click());
     expect(tip()).toContain(INFLUENCE_NOTE);
-    expect(tip()).not.toContain(CAPPED_NOTE);
+    expect(tip()).not.toContain(CAPPED_NOTE_OPENING);
     await act(async () => about?.click());
   });
 

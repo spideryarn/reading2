@@ -1,0 +1,362 @@
+[
+  {
+    "id": "10356-a-path:Bryson:1969",
+    "work": "Bryson 1969 — Optimal control (Applied Optimal Control)",
+    "citingPassage": "The idea that humans, animals, and intelligent systems use world models goes back a long time in psychology (Craik, 1943). The use of forward models that predict the next state of the world as a function of the current state and the action being considered has been standard procedure in optimal control since the 1950s (Bryson and Ho, 1969) and bears the name model-predictive control. The use of differentiable world models in reinforcement learning has long been neglected but is making a comeback (see for example (Levine, 2021))",
+    "A": {
+      "why": "Source for model-predictive control, which the paper's planning mode (Mode-2) is modelled on.",
+      "relevance": 0.5,
+      "influence": 0.6
+    },
+    "B": {
+      "why": "Cited for predicting future states in optimal control, the root of the model-predictive planning method used here.",
+      "relevance": 0.4,
+      "influence": 0.5
+    }
+  },
+  {
+    "id": "10356-a-path:Miller:2016",
+    "work": "Miller 2016 — Key-Value Memory Networks",
+    "citingPassage": "The short-term memory module stores relevant information about the past, current, and future states of the world, as well as the corresponding value of the intrinsic cost. The world model accesses and updates the short-term memory while temporally predicting future (or past) states of the world, and while spatially completing missing information or correcting inconsistent information about the current world state. The world model can send queries to the short-term memory and receive retrieved values, or store new values of states. The critic module can be trained by retrieving past states and associated intrinsic costs from the memory. The architecture may be similar to that of Key-Value Memory Networks (Miller et al., 2016) This module can be seen as playing some of same roles as the hippocampus in vertebrates.",
+    "A": {
+      "why": "Model for the short-term memory module.",
+      "relevance": 0.3,
+      "influence": 0.4
+    },
+    "B": {
+      "why": "Cited as a design the short-term memory may resemble: a store that looks up values by matching keys.",
+      "relevance": 0.3,
+      "influence": 0.5
+    }
+  },
+  {
+    "id": "10356-a-path:Kahneman:2011",
+    "work": "Kahneman 2011 — Thinking, Fast and Slow",
+    "citingPassage": "The actor may comprise two components: (1) a policy module that directly produces an action from the world state estimate produced by the perception and retrieved from the short-term memory, and (2) the action optimizer, as described above, for model-predictive control. The first mode is similar to Daniel Kahneman’s “System 1”, while the second mode is similar to “System 2” (Kahneman, 2011)",
+    "A": {
+      "why": "Cited for the fast, reflexive versus slow, deliberate thinking labels the paper borrows for its two action modes.",
+      "relevance": 0.5,
+      "influence": 0.9
+    },
+    "B": {
+      "why": "Inspires the paper's two modes of acting: fast reactive (System 1) and slow planned (System 2).",
+      "relevance": 0.4,
+      "influence": 0.8
+    }
+  },
+  {
+    "id": "10356-a-path:Kingma:2013",
+    "work": "Kingma 2013 — Variational Auto-Encoders (Auto-encoding variational Bayes)",
+    "citingPassage": "A more complete discussion of regularizers that can minimize the information content of latent variables is beyond the scope of this paper. For now, we can mention four classes of methods: discretization/quantification (e.g. as in VQ-VAE (Walker et al., 2021), dimensionality/rank minimization (e.g. as in Implicit Rank-Minimizing AE (Jing et al., 2020), sparsification (as in linear sparse modeling (Olshausen and Field, 1996), LISTA (Gregor and LeCun, 2010b), and non-linear sparse modeling (Evtimova and LeCun, 2022)), and fuzzyfication (as in noisy AE (Doi et al., 2007), VAE (Kingma and Welling, 2013), and variants used in control problems (Henaff et al., 2019)).",
+    "A": {
+      "why": "Example of regularizing a latent variable by making it noisy.",
+      "relevance": 0.2,
+      "influence": 0.95
+    },
+    "B": {
+      "why": "Cited as the variational autoencoder, which limits latent information by adding noise to the latent code.",
+      "relevance": 0.3,
+      "influence": 0.95
+    }
+  },
+  {
+    "id": "arxiv-1706-0:#1",
+    "work": "Ba 2016 — Layer normalization",
+    "citingPassage": "The encoder is composed of a stack of \\(N=6\\) identical layers. Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network. We employ a residual connection [11] around each of the two sub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is \\(\\mathrm{LayerNorm}(x+\\mathrm{Sublayer}(x))\\), where \\(\\mathrm{Sublayer}(x)\\) is the function implemented by the sub-layer itself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding layers, produce outputs of dimension \\(d_{\\text{model}}=512\\).",
+    "A": {
+      "why": "Layer normalization is applied after each residual sub-layer in the encoder and decoder.",
+      "relevance": 0.4,
+      "influence": 0.8
+    },
+    "B": {
+      "why": "Used to normalize each sub-layer's output after its residual connection, so training stays stable.",
+      "relevance": 0.5,
+      "influence": 0.7
+    }
+  },
+  {
+    "id": "arxiv-1706-0:#2",
+    "work": "Bahdanau 2014 — Neural machine translation by jointly learning to align and translate",
+    "citingPassage": "Recurrent neural networks, long short-term memory [13] and gated recurrent [7] neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation [35, 2, 5]. Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures [38, 24, 15].",
+    "A": {
+      "why": "Source of additive attention and of the encoder-decoder attention mechanism that the Transformer mimics.",
+      "relevance": 0.6,
+      "influence": 1
+    },
+    "B": {
+      "why": "Introduced additive attention, the rival attention method that the paper compares its dot-product attention against.",
+      "relevance": 0.4,
+      "influence": 0.95
+    }
+  },
+  {
+    "id": "arxiv-1706-0:#3",
+    "work": "Britz 2017 — Massive exploration of neural machine translation architectures",
+    "citingPassage": "While for small values of \\(d_{k}\\) the two mechanisms perform similarly, additive attention outperforms dot product attention without scaling for larger values of \\(d_{k}\\) [3]. We suspect that for large values of \\(d_{k}\\), the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients 11 1 To illustrate why the dot products get large, assume that the components of \\(q\\) and \\(k\\) are independent random variables with mean \\(0\\) and variance \\(1\\). Then their dot product, \\(q\\cdot k=\\sum_{i=1}^{d_{k}}q_{i}k_{i}\\), has mean \\(0\\) and variance \\(d_{k}\\).. To counteract this effect, we scale the dot products by \\(\\frac{1}{\\sqrt{d_{k}}}\\).",
+    "A": {
+      "why": "Cited for the finding that unscaled additive attention beats dot-product attention at large key sizes, and also for byte-pair encoding.",
+      "relevance": 0.3,
+      "influence": null
+    },
+    "B": {
+      "why": "Shows additive attention beats unscaled dot-product attention at large key sizes, motivating the scaling factor.",
+      "relevance": 0.4,
+      "influence": 0.4
+    }
+  },
+  {
+    "id": "arxiv-1706-0:#4",
+    "work": "Cheng 2016 — Long short-term memory-networks for machine reading",
+    "citingPassage": "Self-attention, sometimes called intra-attention is an attention mechanism relating different positions of a single sequence in order to compute a representation of the sequence. Self-attention has been used successfully in a variety of tasks including reading comprehension, abstractive summarization, textual entailment and learning task-independent sentence representations [4, 27, 28, 22].",
+    "A": {
+      "why": "Example of self-attention used successfully in other tasks.",
+      "relevance": 0.2,
+      "influence": 0.5
+    },
+    "B": {
+      "why": "Cited as an example of self-attention being used to learn general sentence representations.",
+      "relevance": 0.2,
+      "influence": 0.3
+    }
+  },
+  {
+    "id": "arxiv-2308-0:Block:1995",
+    "work": "Block 1995 — On a confusion about a function of consciousness",
+    "citingPassage": "What do we mean by “conscious” in this report? To say that a person, animal or AI system is conscious is to say either that they are currently having a conscious experience or that they are capable of having conscious experiences. We use “consciousness” and cognate terms to refer to what is sometimes called “phenomenal consciousness” (Block 1995). Another synonym for “consciousness”, in our terminology, is “subjective experience”. This report is, therefore, about whether AI systems might be phenomenally conscious, or in other words, whether they might be capable of having conscious or subjective experiences.",
+    "A": {
+      "why": "Distinguishes phenomenal from access consciousness, fixing the report's topic.",
+      "relevance": 0.5,
+      "influence": 0.95
+    },
+    "B": {
+      "why": "Distinguishes phenomenal from access consciousness; the report's basic definition of consciousness.",
+      "relevance": 1,
+      "influence": 0.9
+    }
+  },
+  {
+    "id": "arxiv-2308-0:Nagel:1974",
+    "work": "Nagel 1974 — What is it like to be a bat?",
+    "citingPassage": "What does it mean to say that a person, animal or AI system is having (phenomenally) conscious experiences? One helpful way of putting things is that a system is having a conscious experience when there is “something it is like” for the system to be the subject of that experience (Nagel 1974). Beyond this, however, it is difficult to define “conscious experience” or “consciousness” by giving a synonymous phrase or expression, so we prefer to use examples to explain how we use these terms. Following Schwitzgebel (2016), we will mention both positive and negative examples—that is, both examples of cognitive processes that are conscious experiences, and examples that are not. By “consciousness”, we mean the phenomenon which most obviously distinguishes between the positive and negative examples.",
+    "A": {
+      "why": "Source of the 'something it is like' description of consciousness.",
+      "relevance": 0.3,
+      "influence": 1
+    },
+    "B": {
+      "why": "What Is It Like to Be a Bat, the source of the 'something it is like' description of consciousness.",
+      "relevance": 0.8,
+      "influence": 0.9
+    }
+  },
+  {
+    "id": "arxiv-2308-0:Schwitzgebel:2016",
+    "work": "Schwitzgebel 2016 — Phenomenal consciousness, defined and defended as innocently as I can manage",
+    "citingPassage": "What does it mean to say that a person, animal or AI system is having (phenomenally) conscious experiences? One helpful way of putting things is that a system is having a conscious experience when there is “something it is like” for the system to be the subject of that experience (Nagel 1974). Beyond this, however, it is difficult to define “conscious experience” or “consciousness” by giving a synonymous phrase or expression, so we prefer to use examples to explain how we use these terms. Following Schwitzgebel (2016), we will mention both positive and negative examples—that is, both examples of cognitive processes that are conscious experiences, and examples that are not. By “consciousness”, we mean the phenomenon which most obviously distinguishes between the positive and negative examples.",
+    "A": {
+      "why": "Defines phenomenal consciousness by positive and negative examples, the method the report follows.",
+      "relevance": 0.5,
+      "influence": null
+    },
+    "B": {
+      "why": "Method of defining consciousness through positive and negative examples.",
+      "relevance": 0.3,
+      "influence": 0.4
+    }
+  },
+  {
+    "id": "arxiv-2308-0:Searle:1980",
+    "work": "Searle 1980 — Minds, brains, and programs",
+    "citingPassage": "These ideas inform our investigation in different ways. We adopt computational functionalism as a working hypothesis because this assumption makes it relatively straightforward to draw inferences from neuroscientific theories of consciousness to claims about AI. Some researchers in this area reject computational functionalism (e.g. Searle 1980, Tononi & Koch 2015) but our view is that it is worth exploring its implications. We accept the relevance and value of some scientific theories of consciousness because they describe functions that could be implemented in AI and we judge that they are supported by good experimental evidence. And, our view is that, although this may not be so in other cases, a theory-heavy approach is necessary for AI. A theory-heavy approach is one that focuses on how systems work, rather than on whether they display forms of outward behaviour that might be taken to be characteristic of conscious beings (Birch 2022b). We explain these three ideas in more detail in this section.",
+    "A": {
+      "why": "Minds, brains and programs, the classic critic of computational functionalism.",
+      "relevance": 0.5,
+      "influence": 0.9
+    },
+    "B": {
+      "why": "Cited as a rejection of computational functionalism.",
+      "relevance": 0.3,
+      "influence": 1
+    }
+  },
+  {
+    "id": "clark-chalme:McClelland:1986",
+    "work": "McClelland 1986 — McClelland et al. (1986)",
+    "citingPassage": "The kind of case just described is by no means as exotic as it may at first appear. It is not just the presence of advanced external computing resources which raises the issue, but rather the general tendency of human reasoners to lean heavily on environmental supports. Thus consider the use of pen and paper to perform long multiplication (McClelland et al. 1986, Clark 1989), the use of physical re-arrangements of letter tiles to prompt word recall in Scrabble (Kirsh 1995), the use of instruments such as the nautical slide rule (Hutchins 1995), and the general paraphernalia of language, books, diagrams, and culture. In all these cases the individual brain performs some operations, while others are delegated to manipulations of external media. Had our brains been different, this distribution of tasks would doubtless have varied.",
+    "A": {
+      "why": "Cited for the example of people using pen and paper for long multiplication, where outside tools take over part of the thinking.",
+      "relevance": 0.3,
+      "influence": null
+    },
+    "B": {
+      "why": "Cited for using pen and paper to do long multiplication, an example of delegating steps to the environment.",
+      "relevance": 0.2,
+      "influence": 0.8
+    }
+  },
+  {
+    "id": "clark-chalme:Clark:1989",
+    "work": "Clark 1989 — Clark (1989)",
+    "citingPassage": "The kind of case just described is by no means as exotic as it may at first appear. It is not just the presence of advanced external computing resources which raises the issue, but rather the general tendency of human reasoners to lean heavily on environmental supports. Thus consider the use of pen and paper to perform long multiplication (McClelland et al. 1986, Clark 1989), the use of physical re-arrangements of letter tiles to prompt word recall in Scrabble (Kirsh 1995), the use of instruments such as the nautical slide rule (Hutchins 1995), and the general paraphernalia of language, books, diagrams, and culture. In all these cases the individual brain performs some operations, while others are delegated to manipulations of external media. Had our brains been different, this distribution of tasks would doubtless have varied.",
+    "A": {
+      "why": "Cited alongside McClelland et al. for pen-and-paper multiplication as an environmental support for reasoning.",
+      "relevance": 0.2,
+      "influence": 0.5
+    },
+    "B": {
+      "why": "Cited alongside McClelland et al. for the same pen-and-paper multiplication example of outside tools doing part of the thinking.",
+      "relevance": 0.3,
+      "influence": null
+    }
+  },
+  {
+    "id": "clark-chalme:Kirsh:1995",
+    "work": "Kirsh 1995 — Kirsh (1995)",
+    "citingPassage": "The kind of case just described is by no means as exotic as it may at first appear. It is not just the presence of advanced external computing resources which raises the issue, but rather the general tendency of human reasoners to lean heavily on environmental supports. Thus consider the use of pen and paper to perform long multiplication (McClelland et al. 1986, Clark 1989), the use of physical re-arrangements of letter tiles to prompt word recall in Scrabble (Kirsh 1995), the use of instruments such as the nautical slide rule (Hutchins 1995), and the general paraphernalia of language, books, diagrams, and culture. In all these cases the individual brain performs some operations, while others are delegated to manipulations of external media. Had our brains been different, this distribution of tasks would doubtless have varied.",
+    "A": {
+      "why": "Cited for players rearranging letter tiles to prompt word recall in Scrabble, an example of thinking aided by the outside world.",
+      "relevance": 0.3,
+      "influence": null
+    },
+    "B": {
+      "why": "Cited for rearranging Scrabble tiles to prompt word recall, an example of using the environment in thinking.",
+      "relevance": 0.3,
+      "influence": 0.5
+    }
+  },
+  {
+    "id": "clark-chalme:Hutchins:1995",
+    "work": "Hutchins 1995 — Hutchins (1995)",
+    "citingPassage": "The kind of case just described is by no means as exotic as it may at first appear. It is not just the presence of advanced external computing resources which raises the issue, but rather the general tendency of human reasoners to lean heavily on environmental supports. Thus consider the use of pen and paper to perform long multiplication (McClelland et al. 1986, Clark 1989), the use of physical re-arrangements of letter tiles to prompt word recall in Scrabble (Kirsh 1995), the use of instruments such as the nautical slide rule (Hutchins 1995), and the general paraphernalia of language, books, diagrams, and culture. In all these cases the individual brain performs some operations, while others are delegated to manipulations of external media. Had our brains been different, this distribution of tasks would doubtless have varied.",
+    "A": {
+      "why": "Cited for the nautical slide rule as an outside tool, and for groups of agents whose thinking is spread across them.",
+      "relevance": 0.4,
+      "influence": 0.8
+    },
+    "B": {
+      "why": "Cited for the nautical slide rule and for research on cognition spread across groups of agents.",
+      "relevance": 0.3,
+      "influence": 0.7
+    }
+  },
+  {
+    "id": "jmlr-v15-sri:Nowlan:1992",
+    "work": "Nowlan 1992 — Soft weight sharing (Nowlan and Hinton, 1992)",
+    "citingPassage": "Deep neural networks contain multiple non-linear hidden layers and this makes them very expressive models that can learn very complicated relationships between their inputs and outputs. With limited training data, however, many of these complicated relationships will be the result of sampling noise, so they will exist in the training set but not in real test data even if it is drawn from the same distribution. This leads to overfitting and many methods have been developed for reducing it. These include stopping the training as soon as performance on a validation set starts to get worse, introducing weight penalties of various kinds such as L1 and L2 regularization and soft weight sharing (Nowlan and Hinton, 1992).",
+    "A": {
+      "why": "Cited as one of the older ways to fight overfitting, alongside early stopping and weight penalties.",
+      "relevance": 0.2,
+      "influence": 0.5
+    },
+    "B": {
+      "why": "Named as one existing way to reduce overfitting, alongside early stopping and weight penalties.",
+      "relevance": 0.1,
+      "influence": 0.5
+    }
+  },
+  {
+    "id": "jmlr-v15-sri:Xiong:2011",
+    "work": "Xiong 2011 — Xiong et al. (2011) alternative splicing work",
+    "citingPassage": "With unlimited computation, the best way to “regularize” a fixed-sized model is to average the predictions of all possible settings of the parameters, weighting each setting by its posterior probability given the training data. This can sometimes be approximated quite well for simple or small models (Xiong et al., 2011; Salakhutdinov and Mnih, 2008), but we would like to approach the performance of the Bayesian gold standard using considerably less computation. We propose to do this by approximating an equally weighted geometric mean of the predictions of an exponential number of learned models that share parameters.",
+    "A": {
+      "why": "Supplies the alternative splicing data set, and its Bayesian neural network result is the benchmark dropout is compared against.",
+      "relevance": 0.9,
+      "influence": 0.2
+    },
+    "B": {
+      "why": "Supplies the alternative splicing data set and the Bayesian neural network results that dropout is compared against.",
+      "relevance": 0.6,
+      "influence": null
+    }
+  },
+  {
+    "id": "jmlr-v15-sri:Salakhutdinov:2008",
+    "work": "Salakhutdinov 2008 — Salakhutdinov and Mnih (2008)",
+    "citingPassage": "With unlimited computation, the best way to “regularize” a fixed-sized model is to average the predictions of all possible settings of the parameters, weighting each setting by its posterior probability given the training data. This can sometimes be approximated quite well for simple or small models (Xiong et al., 2011; Salakhutdinov and Mnih, 2008), but we would like to approach the performance of the Bayesian gold standard using considerably less computation. We propose to do this by approximating an equally weighted geometric mean of the predictions of an exponential number of learned models that share parameters.",
+    "A": {
+      "why": "Cited as an example where averaging over model settings is approximated well for small models.",
+      "relevance": 0.1,
+      "influence": null
+    },
+    "B": {
+      "why": "Example of Bayesian model averaging working well for simple or small models.",
+      "relevance": 0.1,
+      "influence": null
+    }
+  },
+  {
+    "id": "jmlr-v15-sri:Livnat:2010",
+    "work": "Livnat 2010 — Livnat et al. (2010) theory of the role of sex in evolution",
+    "citingPassage": "A motivation for dropout comes from a theory of the role of sex in evolution (Livnat et al., 2010). Sexual reproduction involves taking half the genes of one parent and half of the other, adding a very small amount of random mutation, and combining them to produce an offspring. The asexual alternative is to create an offspring with a slightly mutated copy of the parent’s genes. It seems plausible that asexual reproduction should be a better way to optimize individual fitness because a good set of genes that have come to work well together can be passed on directly to the offspring. On the other hand, sexual reproduction is likely to break up these co-adapted sets of genes, especially if these sets are large and, intuitively, this should decrease the fitness of organisms that have already evolved complicated co-adaptations. However, sexual reproduction is the way most advanced organisms evolved.",
+    "A": {
+      "why": "Source of the evolutionary idea that motivates dropout: genes must work with random partners, so co-adaptations get broken up.",
+      "relevance": 0.4,
+      "influence": null
+    },
+    "B": {
+      "why": "Gives a theory of sexual reproduction that the paper uses as an analogy for why dropout should help.",
+      "relevance": 0.5,
+      "influence": 0.1
+    }
+  },
+  {
+    "id": "synesthesia-:#2",
+    "work": "Cytowic 2002 — Synesthesia: A Union of the Senses (2nd ed.)",
+    "citingPassage": "Synesthesia (American English) or synaesthesia (British English) is a perceptual phenomenon in which stimulation of one sensory or cognitive pathway leads to involuntary experiences in other sensory or cognitive pathways.[2][3][4][5][6] Synesthesia can manifest as a bridge between the five traditional senses, though it can also include other perceptions, such as nociception, thermoception, chronoception, and interoception.[7] People with synesthesia are referred to as synesthetes.[8]",
+    "A": {
+      "why": "Source for the definition, diagnostic criteria, test reliability and the projector/associator contrast in the article.",
+      "relevance": 0.6,
+      "influence": 0.7
+    },
+    "B": {
+      "why": "Cytowic's book, a key source for synesthesia's diagnostic criteria and types.",
+      "relevance": 0.6,
+      "influence": 0.6
+    }
+  },
+  {
+    "id": "synesthesia-:#3",
+    "work": "Cytowic 2003 — The Man Who Tasted Shapes",
+    "citingPassage": "Synesthesia (American English) or synaesthesia (British English) is a perceptual phenomenon in which stimulation of one sensory or cognitive pathway leads to involuntary experiences in other sensory or cognitive pathways.[2][3][4][5][6] Synesthesia can manifest as a bridge between the five traditional senses, though it can also include other perceptions, such as nociception, thermoception, chronoception, and interoception.[7] People with synesthesia are referred to as synesthetes.[8]",
+    "A": {
+      "why": "Cytowic's popular book on synesthesia, cited for his case material.",
+      "relevance": 0.3,
+      "influence": 0.4
+    },
+    "B": {
+      "why": "Cited for the definition of synesthesia and Cytowic's diagnostic criteria.",
+      "relevance": 0.3,
+      "influence": 0.5
+    }
+  },
+  {
+    "id": "synesthesia-:#4",
+    "work": "Cytowic 2009 — Wednesday is Indigo Blue: Discovering the Brain of Synesthesia",
+    "citingPassage": "Synesthesia (American English) or synaesthesia (British English) is a perceptual phenomenon in which stimulation of one sensory or cognitive pathway leads to involuntary experiences in other sensory or cognitive pathways.[2][3][4][5][6] Synesthesia can manifest as a bridge between the five traditional senses, though it can also include other perceptions, such as nociception, thermoception, chronoception, and interoception.[7] People with synesthesia are referred to as synesthetes.[8]",
+    "A": {
+      "why": "A book by Cytowic and Eagleman on the brain and synesthesia, cited for the localizer distinction and disinhibition idea.",
+      "relevance": 0.6,
+      "influence": 0.4
+    },
+    "B": {
+      "why": "Supports claims on chromesthesia, acquired synesthesia, the disinhibited feedback idea and localizers versus non-localizers.",
+      "relevance": 0.6,
+      "influence": 0.6
+    }
+  },
+  {
+    "id": "synesthesia-:#5",
+    "work": "Harrison 1996 — Synaesthesia: classic and contemporary readings",
+    "citingPassage": "Synesthesia (American English) or synaesthesia (British English) is a perceptual phenomenon in which stimulation of one sensory or cognitive pathway leads to involuntary experiences in other sensory or cognitive pathways.[2][3][4][5][6] Synesthesia can manifest as a bridge between the five traditional senses, though it can also include other perceptions, such as nociception, thermoception, chronoception, and interoception.[7] People with synesthesia are referred to as synesthetes.[8]",
+    "A": {
+      "why": "Cited for the definition of synesthesia and the diagnostic criteria.",
+      "relevance": 0.25,
+      "influence": 0.5
+    },
+    "B": {
+      "why": "A collected volume of classic and modern synesthesia readings.",
+      "relevance": 0.2,
+      "influence": 0.3
+    }
+  }
+]

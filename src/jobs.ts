@@ -1079,8 +1079,14 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      19,421 output tokens — about 126 tokens a second. The answer budget allows
      ~28,400 for 80 works, which at that rate is ~225 s before the prompt, so
      240 s was a timeout waiting for the first full-cap article. 360 s leaves
-     the headroom. docs/plans/260911g-citations-mode.md § Progress. */
-  bibliography: 360_000,
+     the headroom. docs/plans/260911g-citations-mode.md § Progress.
+
+     **Re-measured for `citations/8`** (Haiku 5.5 at high effort, every work
+     up to 300; investigation 261101a, arm H2, cold): 70–115 s for the short
+     articles, 100–234 s for the long ones, the longest writing 67K output
+     tokens, about 290 a second. The call's ceiling is the model's 128K, about
+     450 s at that rate. 480 s, rounded up. Plan 261101c. */
+  bibliography: 480_000,
   /* **NOT MEASURED** — the design's budget (plan 261017h stage 3, § 3): at most
      120 s of registry lookups (`LOOKUP_BUDGET_MS`, src/citation-evidence.ts),
      then batches of twenty works two at a time, each aborted at 120 s, and a
@@ -1097,6 +1103,26 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      half minutes. 360 s holds all of it; the allowance's lease is sized from
      this number. Replace with a measurement once it has run on real articles. */
   situate: 360_000,
+  /* **NOT MEASURED — derived pessimistically from the step's own clocks**
+     (src/sources-digest.ts, plan 261030b F5), each phase at its ceiling and
+     the phases in sequence:
+
+       plan      one call, aborted at PLAN_TIMEOUT_MS                   90 s
+       search    up to 33 queries, 8 in flight = 5 waves, each search
+                 aborted at SEARCH_TIMEOUT_MS (40 s); OpenAlex's citers
+                 run beside them under their own 40 s clock             200 s
+       read      up to 16 readers, 6 in flight = 3 waves, each aborted
+                 at READ_TIMEOUT_MS (75 s)                              225 s
+       write     one Opus call, aborted at WRITE_TIMEOUT_MS             180 s
+                                                                       ------
+                                                                        695 s
+
+     700 s, under the claim's 740 s (`LEASE_MS - DEADLINE_MARGIN_MS`), so a
+     run that hits every ceiling still finishes inside one claim; the
+     allowance's `leaseMs` covers it (tests/sources-digest.test.ts holds both).
+     `DIGEST_STEP_BUDGET_MS` in src/sources-digest.ts is the same sum, computed;
+     replace with a measurement once it has run on real articles. */
+  "sources-digest": 700_000,
 };
 
 /**

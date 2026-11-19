@@ -9,7 +9,7 @@
  * that missed one would offer Archive over an archived article.
  * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
  */
-import { useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { ArticleMetadata } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -135,6 +135,8 @@ export function useArchive(
   /** Distinguishes an unanswered request from an answered body missing its required field. */
   answered: boolean,
   failed: boolean,
+  /** The owner's page records an open; local metadata/test controllers do not. */
+  openOnMount = false,
 ): ArchiveControl {
   /* What the reader has just done, if anything — `null` means they have not
      touched it, and the server's answer stands. A sentinel object rather than
@@ -151,10 +153,70 @@ export function useArchive(
      smaller window before that render, when the two controls can both dispatch
      their click and would otherwise send the same PATCH twice. */
   const inFlight = useRef(false);
+  /* The open, while it is out — and after, already settled. `set` awaits it;
+     it never rejects. */
+  const opening = useRef<Promise<void> | null>(null);
+  /* A ref rather than effect cleanup: StrictMode rehearses a remount, and that
+     must not count or un-archive the same arrival twice. */
+  const opened = useRef<string | null>(null);
 
   const fromServer = archiveAt(archivedAt);
   const unreadable = answered && fromServer === undefined;
   const at = acted ? acted.at : failed || unreadable ? undefined : fromServer;
+
+  /** Ask the server where things stand, or say we no longer know. */
+  const reread = useCallback(async (): Promise<void> => {
+    try {
+      const m = await readJson<ArticleMetadata>(
+        await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
+      );
+      setActed({ at: archiveAt(m.archivedAt) });
+    } catch {
+      setActed({ at: undefined });
+    }
+  }, [slug]);
+
+  /**
+   * **One more open, for the shelf's tooltip to count — and, for an archived
+   * article, back on the shelf** (Greg, spya-h8cda9; plan 261030f). It moved
+   * here from `OwnedArticle` because it is now an archive write too, and two
+   * writes to one field from two places is the race this hook exists to
+   * prevent: `set` waits for it.
+   *
+   * **From the client, not from inside `GET /api/article/:slug`.** A GET that
+   * writes is a GET that a prefetch, a retry or a health check inflates without
+   * anybody deciding to. **And never from a visitor**: only `OwnedArticle`
+   * passes `openOnMount`, and not while viewing as another reader, since the
+   * subject did not open it (plan 261019n § Part 3, Client 3). The acceptance
+   * test for public reading is that a signed-out browser issues no POST.
+   *
+   * **The `opened` ref is not belt-and-braces; without it the number is simply
+   * wrong.** `<StrictMode>` runs every effect twice in development, and the
+   * tooltip once said "opened 19 times" to somebody who had opened it nine.
+   * docs/reusable/silent-success.md.
+   *
+   * The payload this page was drawn from was read before the open, so success
+   * means *on the shelf* whatever it said; a failure is not proof nothing was
+   * written, and gets `set`'s answer to the same doubt — a fresh read.
+   */
+  useLayoutEffect(() => {
+    if (!openOnMount || opened.current === slug) return;
+    opened.current = slug;
+    /* A layout effect closes the commit-to-passive-effect window: once an
+       Archive button can be pressed, `opening.current` already names the open
+       it must wait for. View-as passes `false`, so its controller deliberately
+       keeps `null` here and a refused press never waits for a request that will
+       not exist. Plan 261030f. */
+    opening.current = (async () => {
+      try {
+        const r = await apiFetch(`/api/library/${encodeURIComponent(slug)}/open`, { method: "POST" });
+        if (!r.ok) throw new Error(`open answered ${r.status}`);
+        setActed({ at: null });
+      } catch {
+        await reread();
+      }
+    })();
+  }, [slug, openOnMount, reread]);
 
   /* One function for both directions, because they are one PATCH with one
      boolean in it — exactly as `useShelf.undo` and `useShelf.restore` are
@@ -166,6 +228,8 @@ export function useArchive(
     setBusy(true);
     setError(null);
     try {
+      /* After the open, never beside it — see the layout effect above. */
+      await opening.current;
       const r = await apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -199,14 +263,7 @@ export function useArchive(
          lost, and `at: undefined` says so by taking the button away. */
       const message = (e as Error).message;
       setError(message);
-      try {
-        const m = await readJson<ArticleMetadata>(
-          await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
-        );
-        setActed({ at: archiveAt(m.archivedAt) });
-      } catch {
-        setActed({ at: undefined });
-      }
+      await reread();
       return { kind: "failed", message };
     } finally {
       inFlight.current = false;

@@ -46,6 +46,7 @@ import type {
   Block,
   Bibliography,
   Situate,
+  SourcesDigest,
   CitationBlurbs,
   Crossrefs,
   Matter,
@@ -119,6 +120,7 @@ export type ArtifactKind =
   | "bibliography"
   | "citation-blurbs"
   | "situate"
+  | "sources-digest"
   | "crossrefs"
   | "matter"
   | "simple";
@@ -266,6 +268,11 @@ export interface ArtifactMap {
    * by the `situate` step. Owner only. Plan 261024o.
    */
   situate: Situate;
+  /**
+   * The sources digest — `SourcesDigest`, src/types.ts, written by the
+   * `sources-digest` step. Owner only. Plan 261030b.
+   */
+  "sources-digest": SourcesDigest;
   /**
    * Links between the article's own blocks — `Crossrefs`, src/types.ts,
    * written by the `crossrefs` step.
@@ -534,6 +541,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      found nothing (`outcome: "nothing-found"`), or the read found nothing the
      checks kept. Both are real answers, said as such and never as "all clear". */
   situate: { field: "findings", ok: isArray },
+  /* A `leads` array, and **an EMPTY digest is usable**: `nothing-found` has no
+     sections' paragraphs, and is a real answer, said as such and never as "all
+     clear". The leads are always there, since a run with none fails first. */
+  "sources-digest": { field: "leads", ok: isArray },
   /* A `links` array, and **an EMPTY one is usable**, as `faq`'s is: a piece
      with nothing worth linking is a real answer. `buildCrossrefs` throws on a
      missing list and on one validation empties, so neither reaches here. */
@@ -1120,6 +1131,9 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      source URL (src/situate.ts § `findingId`), so a re-run that finds the same
      thing keeps it without reading the last run. */
   situate: "situate",
+  /* No `BASELINE` row: nothing addresses a paragraph of the digest across
+     runs yet, so a re-run simply replaces it. */
+  "sources-digest": "sources-digest",
   /* **And deliberately NO `BASELINE` row**: nothing addresses a link, so a
      re-run simply replaces the list. */
   crossrefs: "crossrefs",

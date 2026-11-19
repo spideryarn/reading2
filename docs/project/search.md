@@ -113,7 +113,7 @@ function doing the same job.
 
 - [§ The one decision](#the-one-decision-everything-else-follows-from) — why two matchers share one downstream
 - [§ Quick search](#quick-search-a-meaning-search-in-about-a-second) — the meaning button's first answer (Jev, ~1 s), how it hands over to thorough, and why the toggle has two buttons since 2026-10-12
-- [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar) — the bottom-bar box, the command bar, the cross
+- [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar) — the bottom-bar box, the command bar, the cross, the microphone
 - [§ Why this is on the augment side](#why-this-is-on-the-augment-side-of-the-line) — the intent: finding, not answering
 - [§ The mode band](#the-mode-band) and [§ The bottom bar](#the-bottom-bar) — where search sits in the chrome
 - [§ Drawing the marks](#drawing-the-marks-and-the-wall-that-wasnt-there) — overlapping washes, and the wall that was not there
@@ -638,6 +638,28 @@ It is Escape's clear (one `clear` in `Box`,
 alone, and puts the cursor in the box. `.srch-clear` in
 [`search.css`](../../src/web/styles/search.css); its finger target is 40px wide but only as tall
 as the field, because the matcher buttons sit just below and nothing clips it.
+
+### A microphone in the panel's own box
+
+> Search should have a microphone dictation button
+>
+> — Greg, 2026-11-02 (`spya-ubbygh`)
+
+Since 2026-11-03 the box has the shared microphone, to the right of the field, in both matchers
+(plan [261103a](../plans/261103a-microphone-in-the-search-box.md)). It is the one search box with
+one: the rule gives the microphone to prose, *not a search*, and a meaning search's
+*"describe what to look for…"* is prose; the shelf's filter and the bar's box stay without
+([dictation.md](dictation.md) has the list).
+
+**Half-heard words never ask a search.** The typing session asks a paid quick search after a pause,
+so while the microphone is on — Chromium's live guesses, and keys typed meanwhile — nothing reaches
+the session. When the words land, the session gets them once and they are typed words from there:
+the quick search after the pause. Only an accepted transcript hands over; rough words left by an
+empty or refused transcript wait for an edit or Retry. Enter or *find* while the microphone is busy
+stop it and search when the words land, and so does a double press on Stop. Changing matcher
+withdraws both the queued Enter (`doneKey`) and automatic submission, since a words-mode dictation
+must not become a paid search because the toggle moved. The words still arrive in the box. Tests:
+[`search-box-dictation.test.tsx`](../../tests/search-box-dictation.test.tsx).
 
 ## Why this is on the augment side of the line
 

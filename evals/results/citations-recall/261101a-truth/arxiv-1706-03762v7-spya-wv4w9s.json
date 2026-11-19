@@ -1,0 +1,521 @@
+{
+ "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+ "style": "numbered [n]",
+ "n": 40,
+ "notes": "Reference list in the blocks after the References heading, one block per entry; surname/year parsed from the entry (entry 37 reads 'Vinyals & Kaiser, ...').",
+ "works": [
+  {
+   "key": "#1",
+   "number": 1,
+   "surname": "Ba",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-kdnmwd",
+   "citedIn": [
+    "spya-gnbx7s"
+   ],
+   "citingWords": "layers, followed by layer normalization [1]"
+  },
+  {
+   "key": "#2",
+   "number": 2,
+   "surname": "Bahdanau",
+   "year": "2014",
+   "inList": true,
+   "refBlock": "spya-kmw9wg",
+   "citedIn": [
+    "spya-dew452",
+    "spya-mjbtbe",
+    "spya-a9gx0t",
+    "spya-huyx5u",
+    "spya-wweup3"
+   ],
+   "citingWords": "nguage modeling and machine translation [35, 2, 5]"
+  },
+  {
+   "key": "#3",
+   "number": 3,
+   "surname": "Britz",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-sqf464",
+   "citedIn": [
+    "spya-g2md22",
+    "spya-dxjbcd"
+   ],
+   "citingWords": " scaling for larger values of \\(d_{k}\\) [3]"
+  },
+  {
+   "key": "#4",
+   "number": 4,
+   "surname": "Cheng",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-c5sgqu",
+   "citedIn": [
+    "spya-vvwv4r"
+   ],
+   "citingWords": "sk-independent sentence representations [4, 27, 28, 22]"
+  },
+  {
+   "key": "#5",
+   "number": 5,
+   "surname": "Cho",
+   "year": "2014",
+   "inList": true,
+   "refBlock": "spya-eg7vff",
+   "citedIn": [
+    "spya-dew452",
+    "spya-a9gx0t"
+   ],
+   "citingWords": "nguage modeling and machine translation [35, 2, 5]"
+  },
+  {
+   "key": "#6",
+   "number": 6,
+   "surname": "Chollet",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-ff7r72",
+   "citedIn": [
+    "spya-fnrjku"
+   ],
+   "citingWords": "factor of \\(k\\). Separable convolutions [6]"
+  },
+  {
+   "key": "#7",
+   "number": 7,
+   "surname": "Chung",
+   "year": "2014",
+   "inList": true,
+   "refBlock": "spya-ff7equ",
+   "citedIn": [
+    "spya-dew452"
+   ],
+   "citingWords": "rt-term memory [13] and gated recurrent [7]"
+  },
+  {
+   "key": "#8",
+   "number": 8,
+   "surname": "Dyer",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-zmq7kj",
+   "citedIn": [
+    "spya-t0jjcb",
+    "spya-h9v7az"
+   ],
+   "citingWords": " discriminative 90.4 Dyer et al. (2016) [8]"
+  },
+  {
+   "key": "#9",
+   "number": 9,
+   "surname": "Gehring",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-rn6mbw",
+   "citedIn": [
+    "spya-dyxt29",
+    "spya-vr7tsj",
+    "spya-wweup3",
+    "spya-n0acqb",
+    "spya-a9hsvs",
+    "spya-p9uqvv",
+    "spya-gbqhxf"
+   ],
+   "citingWords": "ural GPU [16], ByteNet [18] and ConvS2S [9]"
+  },
+  {
+   "key": "#10",
+   "number": 10,
+   "surname": "Graves",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-vn8qgu",
+   "citedIn": [
+    "spya-a9gx0t"
+   ],
+   "citingWords": " each step the model is auto-regressive [10]"
+  },
+  {
+   "key": "#11",
+   "number": 11,
+   "surname": "He",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-b3ukqp",
+   "citedIn": [
+    "spya-gnbx7s"
+   ],
+   "citingWords": "etwork. We employ a residual connection [11]"
+  },
+  {
+   "key": "#12",
+   "number": 12,
+   "surname": "Hochreiter",
+   "year": "2001",
+   "inList": true,
+   "refBlock": "spya-mvjsg2",
+   "citedIn": [
+    "spya-dyxt29",
+    "spya-d92nsg"
+   ],
+   "citingWords": " dependencies between distant positions [12]"
+  },
+  {
+   "key": "#13",
+   "number": 13,
+   "surname": "Hochreiter",
+   "year": "1997",
+   "inList": true,
+   "refBlock": "spya-afxeg6",
+   "citedIn": [
+    "spya-dew452"
+   ],
+   "citingWords": "neural networks, long short-term memory [13]"
+  },
+  {
+   "key": "#14",
+   "number": 14,
+   "surname": "Huang",
+   "year": "2009",
+   "inList": true,
+   "refBlock": "spya-x3kru2",
+   "citedIn": [
+    "spya-t0jjcb"
+   ],
+   "citingWords": "i-supervised 91.3 Huang & Harper (2009) [14]"
+  },
+  {
+   "key": "#15",
+   "number": 15,
+   "surname": "Jozefowicz",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-shfwx0",
+   "citedIn": [
+    "spya-dew452"
+   ],
+   "citingWords": "odels and encoder-decoder architectures [38, 24, 15]"
+  },
+  {
+   "key": "#16",
+   "number": 16,
+   "surname": "Kaiser",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-q03zpc",
+   "citedIn": [
+    "spya-dyxt29"
+   ],
+   "citingWords": "e foundation of the Extended Neural GPU [16]",
+   "ambiguous": true
+  },
+  {
+   "key": "#17",
+   "number": 17,
+   "surname": "Kaiser",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-z3v24t",
+   "citedIn": [
+    "spya-vr7tsj"
+   ],
+   "citingWords": "cuss its advantages over models such as [17, 18]",
+   "ambiguous": true
+  },
+  {
+   "key": "#18",
+   "number": 18,
+   "surname": "Kalchbrenner",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-cgxwr6",
+   "citedIn": [
+    "spya-dyxt29",
+    "spya-vr7tsj",
+    "spya-fnrjku",
+    "spya-p9uqvv"
+   ],
+   "citingWords": "f the Extended Neural GPU [16], ByteNet [18]"
+  },
+  {
+   "key": "#19",
+   "number": 19,
+   "surname": "Kim",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-n9pp9b",
+   "citedIn": [
+    "spya-mjbtbe"
+   ],
+   "citingWords": "stance in the input or output sequences [2, 19]"
+  },
+  {
+   "key": "#20",
+   "number": 20,
+   "surname": "Kingma",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-hvwfdp",
+   "citedIn": [
+    "spya-a6aadn"
+   ],
+   "citingWords": "We used the Adam optimizer [20]"
+  },
+  {
+   "key": "#21",
+   "number": 21,
+   "surname": "Kuchaiev",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-yn3qvh",
+   "citedIn": [
+    "spya-ev2yj8"
+   ],
+   "citingWords": "efficiency through factorization tricks [21]"
+  },
+  {
+   "key": "#22",
+   "number": 22,
+   "surname": "Lin",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-egjrfy",
+   "citedIn": [
+    "spya-vvwv4r"
+   ],
+   "citingWords": "sk-independent sentence representations [4, 27, 28, 22]"
+  },
+  {
+   "key": "#23",
+   "number": 23,
+   "surname": "Luong",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-q3hu9n",
+   "citedIn": [
+    "spya-t0jjcb"
+   ],
+   "citingWords": "emi-supervised 92.7 Luong et al. (2015) [23]",
+   "ambiguous": true
+  },
+  {
+   "key": "#24",
+   "number": 24,
+   "surname": "Luong",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-hvzzvu",
+   "citedIn": [
+    "spya-dew452"
+   ],
+   "citingWords": "odels and encoder-decoder architectures [38, 24, 15]",
+   "ambiguous": true
+  },
+  {
+   "key": "#25",
+   "number": 25,
+   "surname": "Marcus",
+   "year": "1993",
+   "inList": true,
+   "refBlock": "spya-rwcvfw",
+   "citedIn": [
+    "spya-vk44tx"
+   ],
+   "citingWords": "rnal (WSJ) portion of the Penn Treebank [25]"
+  },
+  {
+   "key": "#26",
+   "number": 26,
+   "surname": "McClosky",
+   "year": "2006",
+   "inList": true,
+   "refBlock": "spya-nxugkg",
+   "citedIn": [
+    "spya-t0jjcb"
+   ],
+   "citingWords": "-supervised 91.3 McClosky et al. (2006) [26]"
+  },
+  {
+   "key": "#27",
+   "number": 27,
+   "surname": "Parikh",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-xfcpjy",
+   "citedIn": [
+    "spya-mjbtbe",
+    "spya-vvwv4r"
+   ],
+   "citingWords": "quences [2, 19]. In all but a few cases [27]"
+  },
+  {
+   "key": "#28",
+   "number": 28,
+   "surname": "Paulus",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-rd8b47",
+   "citedIn": [
+    "spya-vvwv4r"
+   ],
+   "citingWords": "sk-independent sentence representations [4, 27, 28, 22]"
+  },
+  {
+   "key": "#29",
+   "number": 29,
+   "surname": "Petrov",
+   "year": "2006",
+   "inList": true,
+   "refBlock": "spya-dphn7w",
+   "citedIn": [
+    "spya-t0jjcb",
+    "spya-mf70sp"
+   ],
+   "citingWords": "iscriminative 88.3 Petrov et al. (2006) [29]"
+  },
+  {
+   "key": "#30",
+   "number": 30,
+   "surname": "Press",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-ycrw7a",
+   "citedIn": [
+    "spya-qpgfqr"
+   ],
+   "citingWords": "ftmax linear transformation, similar to [30]"
+  },
+  {
+   "key": "#31",
+   "number": 31,
+   "surname": "Sennrich",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-dhcjs8",
+   "citedIn": [
+    "spya-chaduw"
+   ],
+   "citingWords": ", such as word-piece [38] and byte-pair [31]"
+  },
+  {
+   "key": "#32",
+   "number": 32,
+   "surname": "Shazeer",
+   "year": "2017",
+   "inList": true,
+   "refBlock": "spya-d785ka",
+   "citedIn": [
+    "spya-ev2yj8",
+    "spya-p9uqvv"
+   ],
+   "citingWords": "tricks [21] and conditional computation [32]"
+  },
+  {
+   "key": "#33",
+   "number": 33,
+   "surname": "Srivastava",
+   "year": "2014",
+   "inList": true,
+   "refBlock": "spya-rsagaf",
+   "citedIn": [
+    "spya-u2deud"
+   ],
+   "citingWords": "We apply dropout [33]"
+  },
+  {
+   "key": "#34",
+   "number": 34,
+   "surname": "Sukhbaatar",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-nv9fs5",
+   "citedIn": [
+    "spya-d3ekax"
+   ],
+   "citingWords": "n answering and language modeling tasks [34]"
+  },
+  {
+   "key": "#35",
+   "number": 35,
+   "surname": "Sutskever",
+   "year": "2014",
+   "inList": true,
+   "refBlock": "spya-t7y7xt",
+   "citedIn": [
+    "spya-dew452",
+    "spya-a9gx0t"
+   ],
+   "citingWords": "nguage modeling and machine translation [35, 2, 5]"
+  },
+  {
+   "key": "#36",
+   "number": 36,
+   "surname": "Szegedy",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-bwmryq",
+   "citedIn": [
+    "spya-xrgnfj"
+   ],
+   "citingWords": "moothing of value \\(\\epsilon_{ls}=0.1\\) [36]"
+  },
+  {
+   "key": "#37",
+   "number": 37,
+   "surname": "Vinyals",
+   "year": "2015",
+   "inList": true,
+   "refBlock": "spya-w4hd2v",
+   "citedIn": [
+    "spya-t0jjcb",
+    "spya-dmsc7m",
+    "spya-vk44tx",
+    "spya-mf70sp"
+   ],
+   "citingWords": "SJ 23 F1 Vinyals & Kaiser el al. (2014) [37]"
+  },
+  {
+   "key": "#38",
+   "number": 38,
+   "surname": "Wu",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-azqjsw",
+   "citedIn": [
+    "spya-dew452",
+    "spya-wweup3",
+    "spya-chaduw",
+    "spya-dxjbcd",
+    "spya-p9uqvv",
+    "spya-ec7kep"
+   ],
+   "citingWords": "odels and encoder-decoder architectures [38, 24, 15]"
+  },
+  {
+   "key": "#39",
+   "number": 39,
+   "surname": "Zhou",
+   "year": "2016",
+   "inList": true,
+   "refBlock": "spya-nbcs9u",
+   "citedIn": [
+    "spya-p9uqvv"
+   ],
+   "citingWords": "FR ByteNet [18] 23.75 Deep-Att + PosUnk [39]"
+  },
+  {
+   "key": "#40",
+   "number": 40,
+   "surname": "Zhu",
+   "year": "2013",
+   "inList": true,
+   "refBlock": "spya-dn3fx0",
+   "citedIn": [
+    "spya-t0jjcb"
+   ],
+   "citingWords": ", discriminative 90.4 Zhu et al. (2013) [40]"
+  }
+ ]
+}

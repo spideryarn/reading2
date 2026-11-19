@@ -141,8 +141,8 @@ afterEach(() => {
   host.remove();
 });
 
-const box = () => host.querySelector<HTMLInputElement>("form.investigate-box-row input");
-const send = () => host.querySelector<HTMLButtonElement>('form.investigate-box-row button[type="submit"]');
+const box = () => host.querySelector<HTMLInputElement>(".investigate-box form.ask-box-row input");
+const send = () => host.querySelector<HTMLButtonElement>('.investigate-box form.ask-box-row button[type="submit"]');
 const section = (cls: string) => host.querySelector<HTMLElement>(`.investigate-section.${cls}`);
 const rowsIn = (el: Element | null) => [...(el?.querySelectorAll<HTMLButtonElement>("button.investigate-q") ?? [])];
 const yours = () => [...host.querySelectorAll<HTMLButtonElement>(".investigate-yours button.investigate-yours-line")];

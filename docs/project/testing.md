@@ -217,8 +217,8 @@ consumed by `vitest.config.ts` rather than copied into it.
 
 | lane | who is in it | where it runs |
 |---|---|---|
-| `private-postgres` | every test file that reaches a database or the Storage bucket, bar the four below — most of them by opening a Postgres connection of their own, a handful (`LANES_BEYOND_THE_SCAN`) through application code or over HTTP | a database minted for **this run alone**, migrated, seeded, and dropped at the end. The bucket is **not** minted — see below |
-| `shared-services` | four files bound to the stack's own `postgres`: GoTrue over HTTP for `auth-user-seeding`, `seed-admin-signin` and `admin-store`, and `db-test-create` by contract, since its job is to clone that database | the stack's own `postgres`, exactly as before |
+| `private-postgres` | every test file that reaches a database or the Storage bucket, bar the five below — most of them by opening a Postgres connection of their own, a handful (`LANES_BEYOND_THE_SCAN`) through application code or over HTTP | a database minted for **this run alone**, migrated, seeded, and dropped at the end. The bucket is **not** minted — see below |
+| `shared-services` | five files bound to the stack's own `postgres`: GoTrue over HTTP for `auth-user-seeding`, `seed-admin-signin` and `admin-store`; `db-test-create` by contract, since its job is to clone that database; and `migration-shared-ledger`, whose subject is that database's migration ledger ([database.md § Rule 4](database.md#rule-4-on-a-laptop-the-draft-that-ran-and-the-file-that-was-committed)) | the stack's own `postgres`, exactly as before |
 | `unit` | everything else | nowhere. `DATABASE_URL` **and** `SUPABASE_URL` are poisoned to refused ports, so neither Postgres nor Storage is reachable |
 
 ```bash
@@ -346,7 +346,7 @@ vitest` does not.
 
 If a job suite fails with that banner, the run is **not a product verdict**: something outside the
 suite held the queue singleton. It should be rare now — that is what the private lane is for — and it
-still fires for the four `shared-services` files and for anything running against `postgres` by hand.
+can still fire in the `shared-services` lane and for anything running against `postgres` by hand.
 No retry, ever: a retried contended run is a green that conceals a real queue regression.
 [`tests/helpers/expect-claimed.ts`](../../tests/helpers/expect-claimed.ts) names the four reasons.
 

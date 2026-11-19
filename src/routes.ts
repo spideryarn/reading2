@@ -68,6 +68,7 @@ import {
   loadFaq,
   loadSourcesClaims,
   loadSituate,
+  loadSourcesDigest,
   loadRelations,
   loadExplanations,
   loadCrossrefs,
@@ -536,6 +537,7 @@ import type {
   IdeasResponse,
   ExplanationsResponse,
   SituateResponse,
+  SourcesDigestResponse,
   QuizFound,
   QuizResponse,
   QuotesResponse,
@@ -586,6 +588,8 @@ import {
   ORIGIN_MODES,
   SITUATE_FINDING_ID,
   SITUATE_OVERVIEW_ID,
+  SOURCES_DIGEST_ITEM_ID,
+  SUMMARY_ITEM_ID,
   currentOriginMode,
   sameAnchor,
   sameOrigin,
@@ -2702,8 +2706,11 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  * - **A save that fails does not fail the mark.** The reader has watched it
  *   arrive. It is reported, and `done` goes with `kept: false` and no
  *   `answeredAt`, so the panel can say the answer will not be there later.
- * - **The verdict is not stored**, and neither the answer nor the mark is
- *   logged — from here or from the store.
+ * - **The verdict is stored with the row since 2026-10-30** (Greg's option B
+ *   on q-m9zkx3, plan 261030c): `NULL` when the check failed or declined,
+ *   never "wrong". With it the store works out when the question is due
+ *   again, which `done` carries as `recallAfterDays`. Neither the verdict,
+ *   the answer nor the mark is logged — from here or from the store.
  */
 async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const { batchId, questionId, answer } = (body ?? {}) as Record<string, unknown>;
@@ -2820,16 +2827,16 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
 
          `verdict` rides here and only here — never on a `delta` — so the word
          that decides how hard the next question is cannot reach the reader's
-         screen even by accident, because nothing renders this frame's fields
-         except the tick. It is often absent, which is normal: the ladder reads
-         absence as *hold the band*. docs/plans/260907d-make-the-quiz-adaptive.md. */
+         screen even by accident: the client draws it only as the deeper green
+         of plan 261029m. It is often absent, which is normal: the walk reads
+         absence as *show the premise*. docs/plans/260907d-make-the-quiz-adaptive.md. */
       /* **Kept first, then told.** In this order so that `answeredAt` is the
          row's own time, and so that a `done` the reader receives without
          `kept: false` is a mark that really is in the table. Not gated on
          `alive()`: a mark that finished is kept whether or not anybody is
          still there to hear so. The catch reports the failure and nothing
          else — `captureFailure` gets the slug and the phase, never the words. */
-      let kept: { id: string; answeredAt: string } | null = null;
+      let kept: { id: string; answeredAt: string; recallAfterDays: number } | null = null;
       try {
         kept = await quizAttemptStore.record(slug, {
           batchId: found.quiz.batchId,
@@ -2837,6 +2844,7 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
           question: question.question,
           answer: written,
           reply: event.reply,
+          ...(event.verdict ? { verdict: event.verdict } : {}),
         });
       } catch (keepErr) {
         captureFailure(keepErr, { route: "quiz-mark", slug, phase: "keep-answer" });
@@ -2847,7 +2855,9 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
         ...(event.verdict ? { verdict: event.verdict } : {}),
         /* The row's id beside its time: what *Discuss this in chat* names
            the mark by (`QuizOrigin`, plan 261024i stage 2). */
-        ...(kept ? { answeredAt: kept.answeredAt, attemptId: kept.id } : { kept: false }),
+        ...(kept
+          ? { answeredAt: kept.answeredAt, attemptId: kept.id, recallAfterDays: kept.recallAfterDays }
+          : { kept: false }),
       });
     }
   } catch (err) {
@@ -5639,7 +5649,26 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
     case "quiz":
       return parseQuizOrigin(origin as Record<string, unknown>);
     case "situate":
-      return parseSituateOrigin(origin as Record<string, unknown>);
+      return parseShapedItemOrigin(
+        built,
+        (id) => SITUATE_FINDING_ID.test(id) || SITUATE_OVERVIEW_ID.test(id),
+        "a finding id or an overview id",
+        origin as Record<string, unknown>,
+      );
+    case "sources-digest":
+      return parseShapedItemOrigin(
+        built,
+        (id) => SOURCES_DIGEST_ITEM_ID.test(id),
+        "a digest id",
+        origin as Record<string, unknown>,
+      );
+    case "summary":
+      return parseShapedItemOrigin(
+        built,
+        (id) => SUMMARY_ITEM_ID.test(id),
+        "a summary level id",
+        origin as Record<string, unknown>,
+      );
     /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
     default:
       return built satisfies never;
@@ -5673,21 +5702,27 @@ function parseItemOrigin(mode: "glossary" | "bibliography" | "ideas", body: Reco
 }
 
 /**
- * **A literature-search item's origin**: a finding's id, shaped as
- * src/situate.ts § `findingId` mints it (`SITUATE_FINDING_ID`), or an
- * overview's dossier-time id (`SITUATE_OVERVIEW_ID`), plus its snapshot.
- * Shape only: the id is not looked up, so an item a newer search dropped
- * never refuses its own chat. No part of the snapshot reaches a thrown
- * message. Plans 261025h (qi-mmtsxdhg) and 261026g.
+ * **An item origin whose id has a shape of its own**, not a block-shaped one:
+ * a literature-search finding (`SITUATE_FINDING_ID`, minted by src/situate.ts
+ * § `findingId`) or its overview (`SITUATE_OVERVIEW_ID`), plans 261025h
+ * (qi-mmtsxdhg) and 261026g; the sources digest or one of its paragraphs
+ * (`SOURCES_DIGEST_ITEM_ID`) and a summary level (`SUMMARY_ITEM_ID`), plan
+ * 261030b. Each with its snapshot. Shape only: the id is not looked up, so an
+ * item a newer run dropped never refuses its own chat. No part of the
+ * snapshot reaches a thrown message.
  */
-function parseSituateOrigin(body: Record<string, unknown>): ThreadOrigin {
+function parseShapedItemOrigin(
+  mode: "situate" | "sources-digest" | "summary",
+  isId: (id: string) => boolean,
+  idWords: string,
+  body: Record<string, unknown>,
+): ThreadOrigin {
   const { itemId, quote, blockId, lens } = body;
   if (blockId !== undefined || lens !== undefined) {
     throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");
   }
-  /* A finding's id, or its dossier's overview's (plan 261026g § Stage 2). */
-  if (typeof itemId !== "string" || !(SITUATE_FINDING_ID.test(itemId) || SITUATE_OVERVIEW_ID.test(itemId))) {
-    throw httpError(400, "origin.itemId must be a finding id or an overview id");
+  if (typeof itemId !== "string" || !isId(itemId)) {
+    throw httpError(400, `origin.itemId must be ${idWords}`);
   }
   if (typeof quote !== "string" || quote.trim() === "") {
     throw httpError(400, "origin.quote must be a non-empty string");
@@ -5695,7 +5730,7 @@ function parseSituateOrigin(body: Record<string, unknown>): ThreadOrigin {
   if (quote.length > MAX_ORIGIN_NAME_CHARS) {
     throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
   }
-  return { mode: "situate", itemId, quote };
+  return { mode, itemId, quote };
 }
 
 /**
@@ -7230,8 +7265,9 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
  */
 /**
  * **Answer, then bring the public shelf's topic pills up to date**, before the
- * handler returns: the three routes that can move an article on or off
- * `/read/public` — share and un-share, archive and restore, delete.
+ * handler returns: the two routes that can move an article on or off
+ * `/read/public` — share and un-share, and delete. Archive, Put back and an
+ * open do not, since a shared article is listed archived or not (plan 261031c).
  *
  * Awaited after the answer is sent, as `/api/library/terms` does, so the spend
  * lands in this request's collector — booked to the site account with no
@@ -11903,10 +11939,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const slug = slugPart(captures, 1);
       const body = await readBody(req);
       const answer = await patchShelf(slug, body);
-      /* Archiving or restoring moves a shared article off or onto the public
-         shelf; a rename or a purpose does not touch it. */
-      const listing = typeof body === "object" && body !== null && "archived" in body;
-      await sendThenRefreshPublicTopics(res, answer, listing);
+      /* Nothing here moves an article on or off `/read/public`: a rename or a
+         purpose never did, and since plan 261031c archiving does not either —
+         a shared article is listed archived or not. */
+      send(res, 200, answer);
     },
   },
 
@@ -12929,6 +12965,29 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const at = slugPart(captures, 1);
       const found = await orNullWhenNotMadeYet({ req, res }, () =>
         withProfileChanged<SituateResponse>(at, () => loadSituate(at), (found) => found.situate),
+      );
+      if (!found) return;
+      send(res, 200, found);
+    },
+  },
+
+  /* The sources digest — plan 261030b, src/sources-digest.ts. Situate's
+     route exactly: **owner only** (every store read is owner-scoped, so
+     somebody else's article is a 404, and there is no public twin); GET only,
+     because asking again is POST /api/jobs { slug, steps: ["sources-digest"],
+     force: ["sources-digest"] }, whose step takes the allowance itself, so
+     this route never spends. The three staleness facts of a profile carrier;
+     none yet is `200 null` — `orNullWhenNotMadeYet`. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/sources-digest\/([\w.%-]+)$/,
+    article: "first-capture",
+    viewAs: "read",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        withProfileChanged<SourcesDigestResponse>(at, () => loadSourcesDigest(at), (found) => found.sourcesDigest),
       );
       if (!found) return;
       send(res, 200, found);

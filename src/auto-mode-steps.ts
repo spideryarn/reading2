@@ -77,6 +77,9 @@ export const STEP_READS: Partial<Record<StepName, readonly StepName[]>> = {
   /* Not a main mode either: the owner's press makes it (plan 261024o). Here
      because the copy must be whole. */
   situate: ["bibliography", "citation-blurbs"],
+  /* Not a main mode either: the owner's press makes it (plan 261030b). Here
+     because the copy must be whole. */
+  "sources-digest": ["bibliography"],
 };
 
 /**

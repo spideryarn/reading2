@@ -645,6 +645,28 @@
   ]
  },
  {
+  "id": "submode:sources:digest",
+  "label": "Digest",
+  "description": "What its sources say, in a few paragraphs: what it builds on, who has taken it up, what it may have missed, and which citations to check",
+  "aliases": [
+   "Sources",
+   "Digest Sources",
+   "Sources Digest",
+   "Digest mode",
+   "sources digest",
+   "citation digest",
+   "what its sources say"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:sources:bibliography",
   "label": "Bibliography",
   "description": "What this piece cites: the works in its bibliography, each with a link",

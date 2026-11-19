@@ -1,7 +1,7 @@
 ---
 reports: spya-pn7gvw
-ending: awaiting
-comment: Done as you chose: the level is made automatically, and column B opens the section you are in to show its sub-sections (all three judges picked it). No article has it until after the 1 Nov key reset. Open: re-run this paper then?
+ending: shipped
+comment: Shipped in stages, as you suggested: after today's structure call, a second step divides a section at the author's own sub-headings. Your paper's 2.4 now has a row per theory. Your paper's production re-run waits on the deploy.
 ---
 # Structure one level deeper
 
@@ -16,8 +16,8 @@ perhaps the reader asks for it; show a third column when there is one and the wi
 enough; e.g. in "other theories of consciousness" each theory should at least have its own section.
 (Full text: `npx tsx scripts/feedback-unswept.ts --show spya-pn7gvw`.)
 
-**Ending: Awaiting Greg**, on question **q-vrnbyj**, with the half that does not depend on his
-answer built and on `dev`. Plan
+**Ending: Shipped** (2026-11-01, see the last section), after questions q-vrnbyj and q-k25zfg, both
+answered. Plan
 [261029a](../plans/261029a-structure-one-level-deeper.md), with GPT Sol's plan and code reviews
 beside it; the layouts drawn out in mockup `m-pe3zds`.
 
@@ -51,3 +51,34 @@ because no article has the extra level.
 cannot be measured until the box's OpenRouter key resets on 1 November and ships only if the median
 structure call grows by less than about a fifth; and, if he says yes to the one question still open
 in q-vrnbyj, re-running this one paper in production (about 65¢). No backfill.
+
+**Stage 2, 2026-11-01 (`qi-negzd289`): measured, not shipped.** No addenda when re-read before
+acting and before this update. The key had reset. Greg's reply to q-vrnbyj (`spya-yg89m9`, 29 Oct):
+*"Yes, re-run this paper."* Two wordings of the prompt were tried on 14 of his articles, two runs
+each against the old prompt run twice, plus a one-paper smoke run ($10.24 across seven run files).
+Cost and time were fine (median article +3%, +1%).
+The second wording got his paper right in both runs: 2.4.1–2.4.6 under 2.4, and 2.5 beside it.
+But each wording left one other article with no sections at all, in both runs, so the live prompt
+is `toc/13` again and the production re-run waits. Kept: each structure run now logs the
+sub-sections it made and the author headings it swallowed. The harness and both wordings are kept
+for the next try. Write-up:
+[261101b](../investigations/261101b-structure-fourth-level-two-wordings-measured.md). How to go on
+(let the call think, a third wording on fresh articles, both, or stop) is
+[q-k25zfg](questions/q-k25zfg.md).
+
+**Stage 2 staged, 2026-11-01 (`qi-p6s6g6vw`): shipped.** No addenda when re-read before acting and
+before this update. Greg's reply to q-k25zfg (`spya-xb2rrn`): *"one of the hunches I always had was
+that we should do this in multiple stages, perhaps hierarchically … Or alternatively … a button that
+says add an extra level of granularity."* Built the staged version: the whole-document call is left
+exactly as it was, and a second step divides a section where the author's own sub-headings do —
+code picks the cuts, one AI call writes the summaries. Measured on 19 articles (fourteen fresh, one
+book), two runs: his paper right both times; 98% of the author's sub-section boundaries found on
+held-out trees, none wrongly; no section lost; gists checked blind; median +37% on the structure step
+of an article it touches, nothing on one it does not; labels unchanged. September's deepening wave
+was tried first and dropped for articles (+180% on the paper). The button was not needed. Plan
+[261101d](../plans/261101d-structure-fourth-level-staged-second-call.md), with GPT Sol's two plan
+reviews and code review; results
+[261101c](../investigations/261101c-structure-fourth-level-staged-measured.md). **What waits**: the
+deploy and the re-run of his paper's structure in production (approved in q-vrnbyj), which are the
+Overseer's, in its queue. Dividing long sections that have no sub-headings is not built; it would be
+its own measured step if asked for.

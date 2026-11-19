@@ -24,7 +24,7 @@ import { CONTACT_EMAIL } from "../src/site-text.js";
 import { MAX_FEEDBACK_QUESTION_BODY_CHARS } from "../src/feedback-question-values.js";
 import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 import { exactly } from "../src/web/relative-time.js";
-import { readerCssNoComments } from "./helpers/stylesheets.js";
+import { enclosing, mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
 /** Handed the request's init, so an answer can watch its `signal` (plan 261010f). */
@@ -55,6 +55,24 @@ vi.mock("../src/web/router.js", async (importOriginal) => ({
   ...await importOriginal<typeof import("../src/web/router.js")>(),
   useRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
   navigate: vi.fn(),
+}));
+
+/** The bundle's build time, which vitest has none of: `null` unless a test says otherwise. */
+let builtAt: string | null = null;
+vi.mock("../src/web/build-stamp.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/web/build-stamp.js")>(),
+  buildTime: () => builtAt,
+}));
+
+/** The different build the deploy watcher has seen live, as `<commit> <builtAt>`, or `null`. */
+let liveBuild: string | null = null;
+vi.mock("../src/web/stale-shell.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/web/stale-shell.js")>(),
+  differentBuildLive: () => liveBuild,
+  onDeployNoticed: (listener: (build: string | null) => void) => {
+    listener(liveBuild);
+    return () => {};
+  },
 }));
 
 /**
@@ -108,6 +126,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
         toggle: () => {
           addendumMicToggles.push("field");
         },
+        submit: () => options.onDone?.(),
         sendingAfter: false,
       };
     }
@@ -129,6 +148,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
         toggle: () => {
           replyMicToggles.push("field");
         },
+        submit: () => options.onDone?.(),
         sendingAfter: false,
       };
     }
@@ -150,6 +170,11 @@ vi.mock("../src/web/useDictationField.js", () => ({
       },
       finishThenDone: () => {
         micFinishes += 1;
+      },
+      /* The real one finishes while busy and sends at once when idle. */
+      submit: () => {
+        if (mic.transcribing || mic.armed) micFinishes += 1;
+        else options.onDone?.();
       },
     };
   },
@@ -392,6 +417,8 @@ beforeEach(() => {
   lists.length = 0;
   listAnswer = page({ reports: [], more: false, counts: NONE });
   asAdmin = false;
+  builtAt = null;
+  liveBuild = null;
   readerForMount = undefined;
   carried = null;
   finishShot = null;
@@ -465,6 +492,110 @@ describe("the feedback dialog", () => {
     expect(shown).toMatch(/what it would let you do/i);
     expect(shown).not.toMatch(/steps to reproduce/i);
     expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+  });
+
+  /* **The release's age and the changelog, for an admin only** (Greg,
+     2026-10-30, spya-hgpctx, plan 261030d). In the tab row since spya-j8xe8w,
+     after the head, so the close button is still the first thing in it; and
+     off a build, the link alone. */
+  it("shows an admin how old this release is and links the changelog, and a reader neither", () => {
+    builtAt = new Date(Date.now() - 3 * 3_600_000).toISOString();
+    mount();
+    expect(host.querySelector(".fb-release")).toBeNull();
+    act(() => root.unmount());
+    host.remove();
+
+    asAdmin = true;
+    mount();
+    const line = host.querySelector(".fb-release");
+    const link = line?.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("/changelog");
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(line?.querySelector(".fb-release-age")?.textContent).toBe("Released 3 hours ago · ");
+    expect(link?.textContent).toBe("Changelog");
+    /* In the tab row (spya-j8xe8w), at its end: beside the tablist, not in
+       it, because a tablist's children are tabs. The compact form too. */
+    expect(line?.parentElement?.classList.contains("fb-tabrow")).toBe(true);
+    expect(line?.previousElementSibling?.getAttribute("role")).toBe("tablist");
+    expect(line?.nextElementSibling).toBeNull();
+    expect(line?.closest('[role="tablist"]')).toBeNull();
+    expect(line?.querySelector(".fb-release-age-short")?.textContent).toBe("3h ago · ");
+    expect(host.querySelector("dialog button, dialog a")?.getAttribute("aria-label")).toBe("Close");
+
+    /* The panel stays at its 34rem-or-narrower base width until its 1024px
+       width step, so the compact wording stays the default until that same
+       step rather than following an unrelated phone-width query. `display:
+       none` also keeps the other form out of the accessibility tree. */
+    const css = readerCssNoComments();
+    for (const [selector, display] of [
+      [".fb-release-age", "none"],
+      [".fb-release-age-short", "inline"],
+    ] as const) {
+      const rule = `${selector} { display: ${display}; }`;
+      const at = css.indexOf(rule);
+      expect(at, rule).toBeGreaterThan(-1);
+      expect(enclosing(css, at + rule.indexOf("display")), `${rule} is unconditional`).toEqual([
+        selector,
+      ]);
+    }
+    const wideRelease = mediaBlock(css, "(min-width: 1024px)", ".fb-release-age-short");
+    expect(wideRelease).toMatch(/\.fb-release-age\s*\{\s*display:\s*inline/);
+    expect(wideRelease).toMatch(/\.fb-release-age-short\s*\{\s*display:\s*none/);
+    act(() => root.unmount());
+    host.remove();
+
+    /* A newer build is live than this tab's: that one is the release dated. */
+    liveBuild = `${"a".repeat(40)} ${new Date(Date.now() - 20 * 60_000).toISOString()}`;
+    mount();
+    const newer = host.querySelector(".fb-release");
+    expect(newer?.querySelector(".fb-release-age")?.textContent).toBe(
+      "Released 20 minutes ago (this tab is older — reload for it) · ",
+    );
+    expect(newer?.querySelector(".fb-release-age-short")?.textContent).toBe("20m ago (reload) · ");
+    expect(newer?.getAttribute("data-tip")).toMatch(/^Released .+ · commit a{40}$/);
+    expect(newer?.querySelector(".sr-only")?.textContent).toMatch(/^ · Released .+ · commit a{40}$/);
+    act(() => root.unmount());
+    host.remove();
+
+    /* `different` is not necessarily newer: a rollback makes an older build
+       live. Its date is still the one shown, without calling this tab older. */
+    liveBuild = `${"b".repeat(40)} ${new Date(Date.now() - 6 * 3_600_000).toISOString()}`;
+    mount();
+    expect(host.querySelector(".fb-release-age")?.textContent).toBe(
+      "Released 6 hours ago (an older release is live — rollback) · ",
+    );
+    expect(host.querySelector(".fb-release-age-short")?.textContent).toBe("6h ago (rollback) · ");
+    act(() => root.unmount());
+    host.remove();
+
+    /* A malformed watcher value cannot suppress the tab's valid stamp or
+       produce a stale-tab claim. */
+    liveBuild = `${"c".repeat(40)} not-a-time`;
+    mount();
+    expect(host.querySelector(".fb-release")?.textContent ?? "").toMatch(
+      /^Released 3 hours ago · 3h ago · Changelog/,
+    );
+    act(() => root.unmount());
+    host.remove();
+
+    /* `buildIdentity` accepts parseable timestamps with spaces. The separator
+       is after the fixed-width sha, not every space in the timestamp. */
+    liveBuild = `${"d".repeat(40)} ${new Date(Date.now() - 2 * 3_600_000).toUTCString()}`;
+    mount();
+    expect(host.querySelector(".fb-release-age")?.textContent).toBe(
+      "Released 2 hours ago (this tab is older — reload for it) · ",
+    );
+    act(() => root.unmount());
+    host.remove();
+
+    liveBuild = null;
+    builtAt = null;
+    mount();
+    expect(host.querySelector(".fb-release")?.textContent).toBe("Changelog");
+
+    /* Not while shut: the dialog stays mounted, and its clock need not tick. */
+    show(false);
+    expect(host.querySelector(".fb-release")).toBeNull();
   });
 
   /* **A third kind, for an admin only** (Greg, 2026-10-28, plan 261028b): only
@@ -2619,7 +2750,9 @@ describe("the Earlier tab", () => {
         expect(box(item(214))?.value).toBe("");
       });
 
-      it("gives each box its own microphone, named for its report, and Send off while it is busy", async () => {
+      /* Since spya-gjcyq3 (plan 261103b) Send stays live while dictating: it
+         goes to `dictate.submit`, which stops and sends once the words land. */
+      it("gives each box its own microphone, named for its report, and Send live while it is busy", async () => {
         await openAll();
         click(button(item(211), "Add to this report"));
         expect(addendumMicUses.at(-1)).toEqual({
@@ -2634,12 +2767,16 @@ describe("the Earlier tab", () => {
 
         addendumMic.armed = true;
         typeInto(item(211), "a draft, said");
-        expect(button(item(211), "Send addendum").disabled).toBe(true);
+        expect(button(item(211), "Send addendum").disabled).toBe(false);
         addendumMic.armed = false;
         addendumMic.transcribing = true;
         typeInto(item(211), "a draft, said.");
-        expect(button(item(211), "Send addendum").disabled).toBe(true);
+        expect(button(item(211), "Send addendum").disabled).toBe(false);
         expect(box(item(211))?.readOnly).toBe(true);
+        /* Pressed now, it waits for the words: nothing goes yet. */
+        click(button(item(211), "Send addendum"));
+        await settle();
+        expect(posts).toHaveLength(0);
       });
 
       it("stops a box's microphone on the way to Write, with the hook's own toggle", async () => {
@@ -4302,7 +4439,7 @@ describe("the Earlier tab", () => {
         expect(replyBoxes()[0]?.value).toBe("another");
       });
 
-      it("gives the reply box its own microphone: its own keeper, off the article, and Send off while it is busy", async () => {
+      it("gives the reply box its own microphone: its own keeper, off the article, and Send live while it is busy", async () => {
         await openThread();
         expect(thread().querySelector(".mock-mic")).not.toBeNull();
         expect(replyMicUses.at(-1)).toEqual({ keep: "feedback-reply:q-aaaaaa", doneKey: "reply:q-aaaaaa", context: { kind: "profile" } });
@@ -4311,7 +4448,10 @@ describe("the Earlier tab", () => {
 
         replyMic.armed = true;
         typeReply("said out loud.");
-        expect(button(thread(), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(false);
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(posts, "pressed while recording, it waits for the words").toHaveLength(0);
         /* And the guard is the function's too: a double press on Stop asks it directly. */
         act(() => replyMicDone?.());
         await settle();
@@ -4320,7 +4460,7 @@ describe("the Earlier tab", () => {
         replyMic.armed = false;
         replyMic.transcribing = true;
         typeReply("said out loud");
-        expect(button(thread(), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(false);
         expect(replyBoxes()[0]?.readOnly).toBe(true);
 
         /* Not busy: a double press on Stop sends, as the button would. */

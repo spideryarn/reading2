@@ -244,9 +244,12 @@ describe("Referee's criterion box", () => {
   });
 
   for (const [name, phase] of PHASES) {
-    it(`does not run while ${name}, and Run says so`, async () => {
+    /* Since spya-gjcyq3: Run is live while dictating, and a press stops the
+       microphone and runs once the words land — never with the live words
+       (the landing half is tests/dictation-finish-then-done.test.tsx's). */
+    it(`does not run now while ${name}, though Run is live`, async () => {
       await typedThen(phase);
-      expect(run().getAttribute("aria-disabled")).toBe("true");
+      expect(run().getAttribute("aria-disabled")).toBe("false");
       act(() => run().click());
       await flush();
       expect(writes(), `a criterion ran while ${name}`).toEqual([]);
@@ -357,9 +360,10 @@ describe("Candidates' scope box", () => {
       expect(box().value).toBe("Leave out the authors' own lab");
     });
 
-    it(`disables Ask while ${name}`, () => {
+    /* Live since spya-gjcyq3: the press asks once the words land, not now. */
+    it(`keeps Ask live while ${name}, and asks nothing now`, () => {
       typedThen(phase);
-      expect(ask().disabled).toBe(true);
+      expect(ask().disabled).toBe(false);
       act(() => ask().click());
       expect(asked).toEqual([]);
     });

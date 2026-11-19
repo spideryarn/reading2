@@ -246,6 +246,12 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "situate-search": "step-driven",
   "situate-triage": "step-driven",
   situate: "step-driven",
+  /* The sources digest's plan, searches, readers and writer, all inside the
+     `sources-digest` step (src/sources-digest.ts, plan 261030b). */
+  "digest-plan": "step-driven",
+  "digest-search": "step-driven",
+  "digest-read": "step-driven",
+  "sources-digest": "step-driven",
   /* *Dig deeper*'s answer, on the high-power model — src/explain.ts with a
      `dig`. Request scope, reader-triggered. */
   "dig-deeper": "interactive request work",

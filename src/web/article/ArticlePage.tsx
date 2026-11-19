@@ -17,7 +17,7 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { awaitingStructure, type Article, type Comment, type Crossref, type Visibility } from "../../types.js";
 import { HomeLogo } from "../HomeLogo.js";
 import { LandingPage } from "../LandingPage.js";
@@ -40,7 +40,6 @@ import { PurposePrompt } from "../PurposePrompt.js";
 import { settleFirstOpen } from "../first-open-purpose.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
-import { apiFetch } from "../lib/api.js";
 import { viewAsNonce } from "../lib/view-as.js";
 import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../../public-types.js";
 import { ReauthRequiredPage } from "../PublicChrome.js";
@@ -386,7 +385,15 @@ function OwnedArticle({
    * states across that switch; relaying only its known answers from an effect
    * in each child lost them when that child unmounted (code review 261002a).
    */
-  const archive = useArchive(slug, fetched.archivedAt, "archivedAt" in fetched, false);
+  /* The hook starts the open before a button can be pressed and serialises an
+     Archive behind it. View-as starts none, and therefore waits for none. */
+  const archive = useArchive(
+    slug,
+    fetched.archivedAt,
+    "archivedAt" in fetched,
+    false,
+    viewAsNonce() === null,
+  );
 
   /**
    * **Where an uploaded paper probably lives on the web, once somebody has
@@ -453,44 +460,6 @@ function OwnedArticle({
   const linkedTo = useCallback((forSlug: string, on: boolean | null) => {
     setLinked((was) => was?.slug === forSlug && was.on === on ? was : { slug: forSlug, on });
   }, []);
-
-  /**
-   * One more open, for the shelf's tooltip to count.
-   *
-   * **From here, not from inside `GET /api/article/:slug`.** A GET that writes
-   * is a GET that a prefetch, a retry or a health check inflates without
-   * anybody deciding to — and the shelf itself does not fetch article payloads,
-   * so counting on the server would count a different thing anyway.
-   *
-   * **And not from a visitor at all**, which is why it is in this component
-   * rather than in `ArticlePage`. There is no shelf row to count against, the
-   * POST would be refused, and the acceptance test for public reading is that a
-   * signed-out browser issues no POST whatever. (A private link is the one
-   * exception, since plan 261021d: its visitor's page sends one POST saying the
-   * link was opened — `usePrivateLinkOpen` in `VisitorArticle`.)
-   *
-   * **The ref is not belt-and-braces; without it the number is simply wrong.**
-   * `<StrictMode>` is on (main.tsx), and in development React deliberately runs
-   * every effect twice — so every article opened counted as two, and the
-   * tooltip said "opened 19 times" to somebody who had opened it nine. It would
-   * have been right in a production build, which is the worst version of this:
-   * a number that is confidently wrong exactly where anybody would look at it.
-   * A ref survives StrictMode's simulated remount, so this counts once per slug
-   * per mount either way. See docs/reusable/silent-success.md.
-   *
-   * See src/shelf.ts and docs/project/library.md.
-   */
-  const counted = useRef<string | null>(null);
-  useEffect(() => {
-    /* Not counted while viewing as another reader: it is a write, and the
-       subject did not open it (plan 261019n § Part 3, Client 3). */
-    if (viewAsNonce() !== null) return;
-    if (counted.current === slug) return;
-    counted.current = slug;
-    void apiFetch(`/api/library/${encodeURIComponent(slug)}/open`, { method: "POST" }).catch(
-      () => {},
-    );
-  }, [slug]);
 
   if (view === "metadata")
     return (

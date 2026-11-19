@@ -61,13 +61,16 @@ const mic: { supported: boolean; armed: boolean; transcribing: boolean; say: (te
   say: () => {},
 };
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: (options: { onChange: (text: string) => void }) => {
+  useDictationField: (options: { onDone?(): unknown; onChange: (text: string) => void }) => {
     mic.say = options.onChange;
     return {
       dictation: { supported: mic.supported, armed: mic.armed, transcribing: mic.transcribing, toggle: () => {} },
       readOnly: mic.transcribing,
       busy: mic.transcribing || mic.armed,
       toggle: () => {},
+      submit: () => {
+        if (!(mic.transcribing || mic.armed)) options.onDone?.();
+      },
     };
   },
 }));
@@ -832,16 +835,16 @@ describe("the button that asks", () => {
     expect(button()?.tabIndex).toBe(0);
   });
 
-  it.each(["armed", "transcribing"] as const)("says it is refused while the microphone is %s, and posts nothing", async (state) => {
+  /* Since spya-gjcyq3 (plan 261103b): live while dictating. A press goes to
+     `dictate.submit`, which stops the microphone and asks once the words
+     land; this fake's submit does nothing while busy, so nothing is posted. */
+  it.each(["armed", "transcribing"] as const)("stays live while the microphone is %s, and posts nothing before the words land", async (state) => {
     mic[state] = true;
     reading();
     openBar();
     type(SENTENCE);
-    expect(refused()).toBe(true);
-    /* `aria-disabled`, deliberately: it stays in the Tab order and its
-       mousedown can still preserve the box's focus. */
+    expect(refused()).toBe(false);
     expect(button()?.disabled).toBe(false);
-    expect(button()?.tabIndex).toBe(0);
     tap();
     await settle();
     expect(asked).toEqual([]);

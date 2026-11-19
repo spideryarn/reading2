@@ -1,0 +1,181 @@
+{
+ "slug": "clark-chalmers-1998-spya-uwb4tn",
+ "style": "author-year (no comma before year) and footnotes",
+ "n": 17,
+ "notes": "Footnote blocks count as body. No reference list. Blocks spya-swankj and spya-fpgbaw are the same paragraph twice; both are in citedIn.",
+ "works": [
+  {
+   "key": "McClelland:1986",
+   "surname": "McClelland",
+   "year": "1986",
+   "inList": false,
+   "citedIn": [
+    "spya-bszb9p"
+   ],
+   "citingWords": "McClelland et al. 1986"
+  },
+  {
+   "key": "Clark:1989",
+   "surname": "Clark",
+   "year": "1989",
+   "inList": false,
+   "citedIn": [
+    "spya-bszb9p"
+   ],
+   "citingWords": "Clark 1989"
+  },
+  {
+   "key": "Kirsh:1995",
+   "surname": "Kirsh",
+   "year": "1995",
+   "inList": false,
+   "citedIn": [
+    "spya-bszb9p"
+   ],
+   "citingWords": "Kirsh 1995"
+  },
+  {
+   "key": "Hutchins:1995",
+   "surname": "Hutchins",
+   "year": "1995",
+   "inList": false,
+   "citedIn": [
+    "spya-bszb9p",
+    "spya-bds960"
+   ],
+   "citingWords": "Hutchins 1995"
+  },
+  {
+   "key": "Kirsh:1994",
+   "surname": "Kirsh",
+   "year": "1994",
+   "inList": false,
+   "citedIn": [
+    "spya-g9ca3r"
+   ],
+   "citingWords": "David Kirsh and Paul Maglio (1994)"
+  },
+  {
+   "key": "Putnam:1975",
+   "surname": "Putnam",
+   "year": "1975",
+   "inList": false,
+   "citedIn": [
+    "spya-wsv38g"
+   ],
+   "citingWords": "Putnam (1975"
+  },
+  {
+   "key": "Burge:1979",
+   "surname": "Burge",
+   "year": "1979",
+   "inList": false,
+   "citedIn": [
+    "spya-wsv38g"
+   ],
+   "citingWords": "Burge (1979"
+  },
+  {
+   "key": "Suchman:1987",
+   "surname": "Suchman",
+   "year": "1987",
+   "inList": false,
+   "citedIn": [
+    "spya-bds960"
+   ],
+   "citingWords": "Suchman 1987"
+  },
+  {
+   "key": "Beer:1989",
+   "surname": "Beer",
+   "year": "1989",
+   "inList": false,
+   "citedIn": [
+    "spya-bds960"
+   ],
+   "citingWords": "Beer 1989"
+  },
+  {
+   "key": "Thelen:1994",
+   "surname": "Thelen",
+   "year": "1994",
+   "inList": false,
+   "citedIn": [
+    "spya-bds960"
+   ],
+   "citingWords": "Thelen and Smith 1994"
+  },
+  {
+   "key": "Ullman:1984",
+   "surname": "Ullman",
+   "year": "1984",
+   "inList": false,
+   "citedIn": [
+    "spya-swankj",
+    "spya-fpgbaw"
+   ],
+   "citingWords": "Ullman and Richards 1984"
+  },
+  {
+   "key": "Blake:1992",
+   "surname": "Blake",
+   "year": "1992",
+   "inList": false,
+   "citedIn": [
+    "spya-swankj",
+    "spya-fpgbaw"
+   ],
+   "citingWords": "Blake and Yuille, 1992"
+  },
+  {
+   "key": "Haugeland:1995",
+   "surname": "Haugeland",
+   "year": "1995",
+   "inList": false,
+   "citedIn": [
+    "spya-b3eq4u"
+   ],
+   "citingWords": "Haugeland 1995"
+  },
+  {
+   "key": "McClamrock:1995",
+   "surname": "McClamrock",
+   "year": "1995",
+   "inList": false,
+   "citedIn": [
+    "spya-b3eq4u"
+   ],
+   "citingWords": "McClamrock 1995"
+  },
+  {
+   "key": "Varela:1991",
+   "surname": "Varela",
+   "year": "1991",
+   "inList": false,
+   "citedIn": [
+    "spya-b3eq4u"
+   ],
+   "citingWords": "Varela et al. 1991"
+  },
+  {
+   "key": "Wilson:1994",
+   "surname": "Wilson",
+   "year": "1994",
+   "inList": false,
+   "citedIn": [
+    "spya-b3eq4u"
+   ],
+   "citingWords": "Wilson 1994"
+  },
+  {
+   "key": "Chalmers:forthcoming",
+   "surname": "Chalmers",
+   "year": "forthcoming",
+   "inList": false,
+   "citedIn": [
+    "spya-hkurvr"
+   ],
+   "citingWords": "Chalmers (forthcoming)"
+  }
+ ]
+}

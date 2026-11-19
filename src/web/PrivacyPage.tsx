@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "29 October 2026";
+const LAST_UPDATED = "31 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -215,14 +215,23 @@ export function PrivacyPage() {
               model to be marked and are not stored" — true at the time. Greg
               asked for the answers to be kept so they are still there when a
               reader comes back (report spya-e8ujxn), and `quiz_attempts` now
-              holds each answer and the reply it was given. What is still not
-              kept is whether an answer was judged right or wrong.
+              holds each answer and the reply it was given. **Since 2026-10-30
+              it also holds whether the hidden check judged the answer right or
+              wrong** (Greg's option B on q-m9zkx3, plan 261030c): until then
+              this comment said that was the one thing not kept. The sentence
+              says "when … can decide" because a failed check stores nothing,
+              and "can be mistaken" because the check is a cheap model. The
+              third use names the premise and Where-to-look-again adaptation
+              that stored verdicts also drive (plan 261030c, Sol F5/F6).
               docs/project/privacy.md § Quiz answers. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What you write</strong> — notes, comments,
             highlights, chat and voice conversations, saved searches, your answers to quiz
             questions, with what the AI wrote back about each, and the “about you” profile you can
-            fill in, which is there to be given to the model.
+            fill in, which is there to be given to the model. When an automatic check can decide,
+            we also keep whether it judged a quiz answer right or wrong. It can be mistaken; we use
+            it to colour the question, to decide when to ask it again, and to adapt the help around
+            it.
           </li>
           {/* **Reading time, and three words in it that were chosen against
               the obvious ones.** "Passage", not "paragraph": headings, figures
@@ -536,6 +545,25 @@ export function PrivacyPage() {
           sent the article’s DOI, or the words of its title, to find papers that cite it. The whole
           article, the search results, public abstracts, and what you wrote about yourself or why
           you are reading then go through OpenRouter to the AI that writes the dossier.
+          {/* Plan 261030b (src/sources-digest.ts): Sources › Digest, behind
+              the experimental switch, on the owner's press on its chip or
+              Write the digest. The planner is shown the fenced article and the
+              works it cites, never the profile, and writes every search; each
+              is one forced Exa search through OpenRouter (situate's
+              `searchOne`). The citers are OpenAlex's, as above. The Haiku
+              readers get a lead's passages and its results, no profile and no
+              tools; the writer gets the article, the reports and the profile.
+              Stored on `article_revisions.sources_digest`, owner-only.
+              docs/project/privacy.md § Sources' Digest. */}{" "}
+          When you open Sources’ Digest (an experimental feature) with its tab, or press Write the
+          digest there, the same is done in more depth. The whole article and details of works it cites go through
+          OpenRouter to an AI that writes questions and short searches, and those searches go
+          through OpenRouter to Exa. OpenAlex is sent the article’s DOI, or the words of its title,
+          to find papers that cite it. Smaller AIs, through OpenRouter, are each shown some passages
+          of the article and what the searches found for them. The whole article, what those AIs
+          reported, and what you wrote about yourself or why you are reading then go through
+          OpenRouter to the AI that writes the digest. It is kept with your article, and is not
+          shown to anybody reading an article you have shared.
         </p>
         <p>
           {/* **The honest version of the training question.** Everything here
@@ -852,9 +880,10 @@ export function PrivacyPage() {
           image your browser or somebody else’s has kept is out of our hands.
         </p>
         <p>
-          If you had shared an article and then archive it, it stops being listed anywhere public —
-          but the link you gave out still opens it. Archiving is about your shelf; sharing is about
-          the link. To close the link, use{" "}
+          If you had shared an article and then archive it, nothing public changes: it stays on the
+          public list and the link you gave out still opens it. Archiving is about your shelf;
+          sharing is about who else can read it. To take it off the public list and close the link,
+          use{" "}
           <strong className="tw:text-foreground">Stop sharing</strong> on the article’s own page.
           A private link is the same: archiving leaves it working, and{" "}
           <strong className="tw:text-foreground">Turn off</strong> on the article’s own page closes

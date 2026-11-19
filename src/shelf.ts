@@ -23,7 +23,8 @@
  * **An archived article is still readable by direct link.** Only the shelf
  * filters. That is a decision rather than an oversight: the shelf is a shelf,
  * not an access control list, and a link that stops working is a worse surprise
- * than a card that is out of sight.
+ * than a card that is out of sight. And since 2026-10-30 its owner opening it
+ * puts it back on the shelf (`recordOpen`, src/store/pg-shelf.ts; plan 261030f).
  *
  * `purpose` — "why you're reading this one" — is the newest field and the
  * argument is the same one again: it is the per-article half of

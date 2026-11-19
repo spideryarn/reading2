@@ -29,6 +29,11 @@
    in the corner: mode-band.css § `.mode-band > .band-about`. Sideways only, so
    the zero-slack vertical fit is untouched. */
 .mode-band.has-about > .srch-box { padding-right: calc(0.6rem + var(--band-about-room)); }
+/* The field and its microphone (plan 261103a): the field takes the room, the
+   microphone keeps its own size to the right, outside the field so the cross
+   and the spinner below keep their places. */
+.srch-line { display: flex; align-items: center; gap: 0.4rem; }
+.srch-line > .srch-field { flex: 1; min-width: 0; }
 .srch-field { position: relative; display: flex; align-items: center; }
 /* Its border, corner, ground, padding and focus are every band's text box's:
    mode-band.css § text boxes in the bands. */

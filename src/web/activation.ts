@@ -269,7 +269,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   sources: {
     kind: "delegated",
     target: (ctx) => activationForSources(ctx.sources),
-    why: "the sub-mode a press lands on is whatever `?sources=` says: Where it sits arms its composite, Bibliography its own list, and the rest nothing (plans 261025h and 261026g)",
+    why: "the sub-mode a press lands on is whatever `?sources=` says: Where it sits arms its composite, Digest its own step, Bibliography its own list, and the rest nothing (plans 261025h, 261026g and 261030b)",
   },
   faq: { kind: "fixed", target: "faq" },
   /* Owner only, and behind the experimental switch: a press is the only thing
@@ -606,8 +606,8 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 
 /**
  * **What a press that lands on one of Sources' sub-modes arms**:
- * `sources-where` for *Where it sits*, `bibliography` for Bibliography, and
- * nothing for any other.
+ * `sources-where` for *Where it sits*, `sources-digest` for the Digest (plan
+ * 261030b), `bibliography` for Bibliography, and nothing for any other.
  *
  * One answer for the three places that must agree, as `activationForSummary`
  * is: the bar's delegated row, the command bar's sub-mode rows
@@ -648,6 +648,14 @@ export function activationForSources(view: SourcesView): AutoRunTarget | null {
        when he opens the sub-mode. A link, a reload or Back arms nothing. */
     case "where":
       return "sources-where";
+    /* The sources digest (plan 261030b): its own step, armed by the press on
+       its chip or its command-bar row, as *Where it sits*' search is — the
+       press is the request, and a link, a reload or Back arms nothing
+       (docs/project/sources.md § Opening it is the request). A stored
+       digest, stale or outdated included, consumes the token without a run;
+       *Write it again* is the panel's button. */
+    case "digest":
+      return "sources-digest";
     /* Citations' fixed target until 2026-10-09: the list of works cited. */
     case "bibliography":
       return "bibliography";

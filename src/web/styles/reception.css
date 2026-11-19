@@ -315,13 +315,7 @@
    words on one line cut with an ellipsis, and a count. Whose words are whose
    is voices.css's (`.voice-author`, `.voice-reader`, `.voice-ai`); the
    quotation marks and the count are ours. */
-.investigate-send { flex: none; white-space: nowrap; }
-/* In a narrow band the button goes under the box, not beside it: side by side
-   on an iPad the box was 117px and its placeholder clipped (seen in the
-   browser, 2026-10-06, on the angle box). The box asks for 12rem before it
-   shares its line. */
-.investigate-box-row { flex-wrap: wrap; }
-.investigate-box-row .gloss-ask-input { flex: 1 1 12rem; }
+/* The box itself is the shared ask box's (origin-chat.css § the ask box). */
 .investigate-section { padding: 0.2rem 0.7rem 0.35rem; }
 .investigate-head { padding-top: 0.15rem; }
 .investigate-list { margin: 0; padding: 0; list-style: none; }
@@ -393,7 +387,6 @@
   font-size: max(var(--text-min), 0.78rem);
 }
 @media (any-pointer: coarse) {
-  .investigate-send,
   .investigate-q,
   .investigate-yours-line,
   .investigate-yours-more { min-height: max(40px, 2.5rem); }
@@ -709,6 +702,62 @@ button.situate-quote:focus-visible { outline: 2px solid var(--highlight-text); o
 @media (any-pointer: coarse) {
   .situate-source-toggle,
   .situate-searched-toggle { min-height: max(40px, 2.5rem); }
+}
+
+/* **Sources › Digest** (SourcesDigestPanel.tsx, plan 261030b): one text to
+   read, in the dossier's frame. The body is one `.where-section`, so it has
+   the dossier's gutter; the paragraphs are Summary's (`.simple-text`,
+   `.simple-refs`, summary.css), so each sentence is a door drawn as Summary
+   draws one; the toggles, the sources and *What was searched* are the
+   dossier's own classes above. Only what neither has is here. */
+.digest-headline {
+  margin: 0.3rem 0 0.35rem;
+  color: var(--ink);
+  font-size: var(--type-item);
+  font-weight: 600;
+}
+.digest-overview { margin-bottom: 0.4rem; }
+/* **Five blocks at a glance, not twelve equal paragraphs**: the overview and
+   each section are parted by a rule and a gap about twice the space between
+   paragraphs, while a heading stays tight to its first paragraph, so it reads
+   as belonging to what is under it. A reader, a product manager and a
+   designer, asked separately over a 12-paragraph digest, each named the four
+   sections running together as the first thing to fix (plan 261031d § 3). */
+.digest-section { margin-top: 1.1rem; padding-top: 0.7rem; border-top: 1px solid var(--rule); }
+/* The rule above gives the space; a step darker than the dossier's group
+   labels, because here the four headings are how a reader finds their way
+   back down the column. */
+.digest-head { display: flex; align-items: center; gap: 0.3rem; padding-top: 0; color: var(--ink-soft); }
+/* The (i) beside a heading: a quiet icon button, as Settings' is. */
+.digest-info {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.digest-info:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (hover: hover) {
+  .digest-info:hover { color: var(--ink); }
+}
+/* *More* sits in the doors row after the ids, so the row's gap spaces it. */
+.simple-refs > .digest-more-toggle { margin-left: 0; }
+.digest-more { margin: 0.3rem 0 0 0.2rem; padding-left: 0.6rem; border-left: 1px solid var(--rule); }
+.digest-more-text { color: var(--ink-soft); }
+.digest-sources { margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.digest-lead { padding: 0.12rem 0; }
+.digest-lead-q { color: var(--ink); }
+.digest-lead > .situate-queries { padding-left: 0.9rem; }
+/* A paragraph's *Ask in chat* ends the doors row, pushed right as Summary's
+   paragraph button is (summary.css § `.simple-ask`), so it sits in one place
+   under every paragraph; its chat's mark takes a line of its own. The ask box
+   under the digest follows *What was searched* (plan 261030b's sketch). */
+.simple-refs > .digest-ask-para { margin-left: auto; }
+.digest-ask { padding-top: 0.5rem; }
+@media (any-pointer: coarse) {
+  .digest-info { min-width: max(40px, 2.5rem); min-height: max(40px, 2.5rem); justify-content: center; }
 }
 
 /* **The empty sentence is drawn like an answer, not like a gap.** Finding no

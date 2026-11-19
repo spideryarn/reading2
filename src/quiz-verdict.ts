@@ -46,9 +46,12 @@
  * entirely unaffected: this call happens after the marking stream is complete.
  *
  * **Nothing here is logged or stored.** A per-answer right/wrong on a log line
- * is a stored grade wearing a different hat, and docs/project/privacy.md makes a
- * public promise about it. The one thing that reaches the log is that the call
- * happened, via the gateway's own meter, which is how it gets paid for.
+ * is a stored grade wearing a different hat. The one thing that reaches the log
+ * is that the call happened, via the gateway's own meter, which is how it gets
+ * paid for. **The route stores the word, not this file**: since 2026-10-30
+ * (Greg's option B on q-m9zkx3, plan 261030c) `markOneAnswer` writes it on the
+ * answer's `quiz_attempts` row, `NULL` when this returned nothing, and
+ * docs/project/privacy.md § Quiz answers says what the public page now says.
  */
 import { openRouterJson } from "./ai-call.js";
 import { modelFor } from "./models.js";
@@ -133,7 +136,7 @@ function diagnosticFor(raw: unknown): { verdict?: QuizVerdict; diagnostic: Verdi
 
 export interface VerdictRequest {
   question: string;
-  /** What the reader wrote. Never logged, never stored — as everywhere else. */
+  /** What the reader wrote. Never logged — as everywhere else. (Stored, by the route, since 261005b.) */
   answer: string;
   /** The mark they were just shown, complete. */
   mark: string;

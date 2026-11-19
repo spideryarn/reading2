@@ -41,6 +41,8 @@ remains.
 | Sources › Claims | each claim's heading (icon only) | [`ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) § `ClaimsList` | [reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat) |
 | Sources › Investigate | the question box and each suggested question (a *lens*: the words, no item); its claim and work rows use Claims' and Bibliography's senders | [`InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx) § `InvestigatePanel` | [reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle) |
 | Sources › Where it sits | each finding of the literature search, beside its passage (since 2026-10-25, plan 261025h: an id-shaped origin, `situate`, the finding's id and its passage; before then a lens, which such a chat still is); and its overview, beside the overview (since 2026-10-26, plan 261026g: the same origin, with an overview id, `so-` and the dossier's time; its way back lands on the summary box) | [`SituateDossier.tsx`](../../src/web/SituateDossier.tsx) § `Finding`, `OverviewChat` | [sources.md § Where this piece sits](sources.md#where-this-piece-sits) |
+| Sources › Digest | the ask box under the whole digest, and each paragraph (since 2026-10-31, plan 261030b: an id-shaped origin, `sources-digest`, `sd-` and the digest's time, `-p<N>` for a paragraph numbered across the four sections; a paragraph's way back lands on it) | [`SourcesDigestPanel.tsx`](../../src/web/SourcesDigestPanel.tsx) § `DigestAsk`, `DigestParagraph`; the box is [`AskBox.tsx`](../../src/web/AskBox.tsx) | [sources.md § Digest](sources.md#digest) |
+| Summary | the ask box under the Brief or the Fuller text, not Thread (since 2026-10-31, plan 261030b: an id-shaped origin, `summary`, `ss-brief-`/`ss-fuller-` and the summary's time; its way back opens that level). Not the paragraph button, which stores no origin | [`SimplePanel.tsx`](../../src/web/SimplePanel.tsx) § `LevelAsk` | [summaries.md § Ask about the summary](summaries.md#ask-about-the-summary) |
 | Glossary | the open entry, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
 | Glossary | a term's hover card in the prose, and Skim's term chip (which draws the same card), in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `TermCard` (`onAskTerm`) | [glossary.md § The hover card](glossary.md#the-hover-card) |
 | Sources › Bibliography | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work) |
@@ -70,8 +72,8 @@ lands on the question while its batch is current, and on Quiz's start once it is
 
 Three things look like this and are not: Summary's *Ask about a paragraph*
 ([summaries.md](summaries.md#ask-about-a-paragraph-since-2026-10-04)) goes to Chat and stores no
-origin (`summary` is reserved in the database CHECK and not built, and since 2026-10-09 the CHECK
-`chat_threads_origin_summary` lets it carry none of the shape columns); a chat about a passage has an
+origin (the `summary` origin, since plan 261030b, is the ask box under a whole Brief or Fuller
+level, not a paragraph); a chat about a passage has an
 *anchor*, not an origin; and a comment's question is linked from the comment's side
 ([comments.md](comments.md#asking-the-model-and-the-link-back)). A citation card's *Does it say
 that?* was the passage kind, fresh each press, until 2026-10-24; it is now both anchored on the citing
@@ -148,6 +150,8 @@ A press calls `openOrigin` in [`Reader.tsx`](../../src/web/reader/Reader.tsx), o
 | Ideas | one push of `mode=ideas&idea=`, and a focus | the idea open, its row in view; not the row press, which jumps the prose |
 | Sources › Claims, a claim | one push of `mode=sources&sources=claims` that clears `?bears=` and `?receptionthread=`, and a focus | the claim's row in view, an older search's claim unfolded |
 | Sources › Investigate, a lens question (including an angle chat made before Investigate) | one push of `mode=sources&sources=investigate`, keeping `?thread=` | the question under *Your questions*, its conversation still open beside it |
+| Sources › Digest | one push of `mode=sources&sources=digest` that clears `?thread=`, `?bears=` and `?receptionthread=`; for a paragraph, a focus (`digestFocus`) | a paragraph scrolled into view and flashed; the whole digest's chat, or a paragraph of an older digest, opens the digest at its top |
+| Summary, a level | one push of `mode=summary&summary=<level>` that clears `?thread=`; a URL write, so it never starts a run | that level of the summary |
 
 **The way back lands on the item, and the item is one press from its block.** No arm jumps the
 prose: on a phone the band lies over it, and the flash would be held until the band moved (GPT
@@ -164,7 +168,7 @@ otherwise opens the newest one (Greg, spya-nhwy3d;
 **A focus** is the one-shot that Bibliography had first (`CiteFocus`), now
 [`item-focus.ts`](../../src/web/item-focus.ts) § `ItemFocus` and `useLandOnItem`, one piece of
 state per band in `Reader`. Once the row (`data-term-id`, `data-citation-id`, `data-idea-id`,
-`data-claim-key`) is drawn, the band centres it in the list's own scroller — never the page — and
+`data-claim-key`, `data-digest-paragraph` since 2026-10-31) is drawn, the band centres it in the list's own scroller — never the page — and
 flashes it, then hands the request back. Centred and flashed since 2026-10-17, for all four lists
 alike; it was `block: "nearest"` until then, which left a row already on screen where it was
 (Greg, `spya-m53cdk`: *"can we scroll to the right source (perhaps centred in the scrollable
@@ -192,25 +196,28 @@ In the order you would do them:
 3. **`sameOrigin`**, same file: how the item finds its chat again. **Loud** (`never`).
 4. **The database.** [`src/db/schema.ts`](../../src/db/schema.ts) § `chat_threads_origin_mode`
    lists the allowed words (today `debate`, `reception`, `sources-claims`, `summary`, `glossary`,
-   `bibliography`, `ideas`, `quiz`, `cite-check`, `situate`, and `citations`, Bibliography's word
+   `bibliography`, `ideas`, `quiz`, `cite-check`, `situate`, `sources-digest`, and `citations`, Bibliography's word
    until 2026-10-09, still admitted until plan 261009w's contract migration). **Loud**:
    a word not listed is refused on insert, which the reader sees as a failed first question.
-   `chat_threads_origin_item` names `glossary`, `bibliography` (and `citations`), `ideas` and
-   `situate` one by one. **Silent**: a new
+   `chat_threads_origin_item` names `glossary`, `bibliography` (and `citations`), `ideas`,
+   `situate`, `sources-digest` and `summary` one by one. **Silent**: a new
    id-shaped mode left out of it may store half a shape, which then reads back as no origin
    (step 5). Both are a migration: [database.md § A new migration, in five lines](database.md#a-new-migration-in-five-lines);
-   copy `drizzle/20261025183854_chat_thread_origin_situate.sql`, which is the latest.
+   copy `drizzle/20261030220450_chat_thread_origin_sources_digest_and_summary.sql`, which is the
+   latest, and also gives an id of its own form a CHECK of its own (`chat_threads_origin_sources_digest`,
+   `chat_threads_origin_summary`).
 5. **The columns, both ways.** [`src/thread-origin.ts`](../../src/thread-origin.ts).
    `originColumns` is **loud** (`never`). **`originFromColumns` is silent, and this is the one to
    remember**: it reads a string out of the database, reads a retired word as its successor
-   (`RETIRED_ORIGIN_MODES` in src/types.ts), tests for `glossary`, `bibliography`, `ideas` and
-   `debate` by hand, and returns no origin for anything else (the `return {}` near its end). Miss it
+   (`RETIRED_ORIGIN_MODES` in src/types.ts), tests for each mode by hand, and returns no origin for anything else (the `return {}` near its end). Miss it
    and the chat is saved with its origin, reads back as a plain chat, and the item never shows its
    mark. Nothing fails. The export ([`src/store/export.ts`](../../src/store/export.ts)) and the
    test seeder call this file, so they need no edit and inherit the same hole. The check that
    catches it is the round trip in step 11.
 6. **The route.** [`src/routes.ts`](../../src/routes.ts) § `parseOrigin`, and § `parseItemOrigin`
-   for an id-shaped one (its `mode` parameter is typed to the id-shaped modes). **Loud** once step 2
+   for an item whose id is block-shaped (`spya-…`), or § `parseShapedItemOrigin` for one whose id
+   has a form of its own (`situate`, `sources-digest`, `summary`, each handed its pattern). Each
+   one's `mode` parameter is typed to the modes it takes. **Loud** once step 2
    is done. Only a claim's block is checked against the article; an `itemId` is never looked up.
 7. **The title, the list and the way back.** [`src/chat-title.ts`](../../src/chat-title.ts) §
    `titleFromOrigin`, [`src/web/thread-source.ts`](../../src/web/thread-source.ts) §
@@ -226,7 +233,9 @@ In the order you would do them:
    The `chatfrom` row in [url-state.md](url-state.md) lists the words too. **Silent**.
 9. **The question.** [`src/web/chat-handoff.ts`](../../src/web/chat-handoff.ts): a function beside
    `askAboutGlossaryEntry`, using `fencedQuote`, and `itemOrigin` (its `mode` is typed, so
-   **loud**). The item's words are the article's or a model's, so they go inside the fence.
+   **loud**). The item's words are the article's or a model's, so they go inside the fence. A
+   message that quotes a long model text under the reader's own words (the ask box) uses
+   `askAboutModelText`, which cuts the text to fit `MAX_CHAT_QUESTION_CHARS` with everything counted.
 10. **The reader and the panel.** [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx):
     a sender beside `askGlossaryEntryInChat`, wrapped in `reopenItemChat` as `askEntry` is
     (**silent**: an unwrapped sender starts a second chat every press,
@@ -236,7 +245,7 @@ In the order you would do them:
     ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts)) and `OriginChatMark`, one or the
     other, passed through the owner's arm of `access`. The icon rule is [icons.md § A chat is two bubbles](icons.md#a-chat-is-two-bubbles).
 11. **The tests to copy.** `tests/thread-origin-way-back.test.ts` (the `describe.each` over
-    `glossary`, `bibliography`, `ideas` and `situate`: `sameOrigin`, and **the columns round trip that covers
+    `glossary`, `bibliography`, `ideas`, `situate`, `sources-digest` and `summary`: `sameOrigin`, and **the columns round trip that covers
     step 5**); `tests/chat-origin-route.test.ts` (the route, the CHECKs, the export);
     `tests/chat-origin-transaction.test.ts`'s `describe.each` (a renamed snapshot, another item,
     another mode); `tests/chat-handoff.test.ts` (the fence, and a long name cut);

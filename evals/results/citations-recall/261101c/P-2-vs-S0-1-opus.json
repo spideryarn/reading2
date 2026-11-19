@@ -1,0 +1,434 @@
+[
+ {
+  "id": "10356-a-path:Bryson:1969",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A adds Mode-2 link not in passage; B states use plainly"
+ },
+ {
+  "id": "10356-a-path:Miller:2016",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B says what the module may be built like"
+ },
+ {
+  "id": "10356-a-path:Kahneman:2011",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B overclaims inspiration; passage says similar"
+ },
+ {
+  "id": "10356-a-path:Kingma:2013",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "one of many examples; 0.5 too high"
+ },
+ {
+  "id": "10356-a-path:Bardes:2021",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "10356-a-path:Vaswani:2017",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "10356-a-path:Janner:2021",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B names the use; A describes the work"
+ },
+ {
+  "id": "10356-a-path:Sutton:1991",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "arxiv-1706-0:#1",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "arxiv-1706-0:#2",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both rely on article-wide use"
+ },
+ {
+  "id": "arxiv-1706-0:#3",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "same content"
+ },
+ {
+  "id": "arxiv-1706-0:#4",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "arxiv-1706-0:#5",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A faithful to passage"
+ },
+ {
+  "id": "arxiv-1706-0:#6",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B captures the cost comparison"
+ },
+ {
+  "id": "arxiv-1706-0:#7",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "arxiv-1706-0:#8",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "same content"
+ },
+ {
+  "id": "arxiv-2308-0:Block:1995",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": true,
+  "relevanceOffB": false,
+  "reason": "A truncated, 0.8 too high for a term"
+ },
+ {
+  "id": "arxiv-2308-0:Nagel:1974",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B says how report uses it"
+ },
+ {
+  "id": "arxiv-2308-0:Schwitzgebel:2016",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A slightly clearer"
+ },
+ {
+  "id": "arxiv-2308-0:Searle:1980",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B gives context of the contrast"
+ },
+ {
+  "id": "arxiv-2308-0:Tononi:2015",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "arxiv-2308-0:Birch:2022b",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A more specific; B vague"
+ },
+ {
+  "id": "arxiv-2308-0:Michel:2021",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both about reality monitoring, not the Swiss cheese use"
+ },
+ {
+  "id": "arxiv-2308-0:Block:2023",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "clark-chalme:McClelland:1986",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "clark-chalme:Clark:1989",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "clark-chalme:Kirsh:1995",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "clark-chalme:Hutchins:1995",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "same content"
+ },
+ {
+  "id": "clark-chalme:Kirsh:1994",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B more precise with timings"
+ },
+ {
+  "id": "clark-chalme:Putnam:1975",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B says 'cited with Putnam' for Putnam"
+ },
+ {
+  "id": "clark-chalme:Burge:1979",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "clark-chalme:Suchman:1987",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "jmlr-v15-sri:Nowlan:1992",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "jmlr-v15-sri:Xiong:2011",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "identical why"
+ },
+ {
+  "id": "jmlr-v15-sri:Salakhutdinov:2008",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "jmlr-v15-sri:Livnat:2010",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "jmlr-v15-sri:Vincent:2008",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B's pretraining claim muddled/unsupported"
+ },
+ {
+  "id": "jmlr-v15-sri:van der Maaten:2013",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "jmlr-v15-sri:Wang:2013",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A captures speeding up"
+ },
+ {
+  "id": "jmlr-v15-sri:Chen:2012",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both accurate"
+ },
+ {
+  "id": "synesthesia-:#2",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": true,
+  "relevanceOffB": false,
+  "reason": "A summarises the book; 0.9 too high"
+ },
+ {
+  "id": "synesthesia-:#3",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A's case studies unsupported; passage cites definition"
+ },
+ {
+  "id": "synesthesia-:#4",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "B 0.8 too high, more summary"
+ },
+ {
+  "id": "synesthesia-:#5",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A summarises the collection"
+ },
+ {
+  "id": "synesthesia-:#7",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "both unsupported by passage"
+ },
+ {
+  "id": "synesthesia-:#12",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "both cite cross-activation, passage cites grapheme-colour"
+ },
+ {
+  "id": "synesthesia-:#13",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B's 'first documentation' unsupported"
+ },
+ {
+  "id": "synesthesia-:#16",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B names ideasthesia, not in passage"
+ }
+]

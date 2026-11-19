@@ -1,0 +1,434 @@
+[
+ {
+  "id": "10356-a-path:Bryson:1969",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A captures forward models and naming"
+ },
+ {
+  "id": "10356-a-path:Miller:2016",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B states the proposed memory use"
+ },
+ {
+  "id": "10356-a-path:Kahneman:2011",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A avoids unsupported speed labels"
+ },
+ {
+  "id": "10356-a-path:Kingma:2013",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B matches the noise-based example"
+ },
+ {
+  "id": "10356-a-path:Bardes:2021",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A is closer to the stated criterion"
+ },
+ {
+  "id": "10356-a-path:Vaswani:2017",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "10356-a-path:Janner:2021",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A captures causal trajectory configuration"
+ },
+ {
+  "id": "10356-a-path:Sutton:1991",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "arxiv-1706-0:#1",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A adds the unsupported decoder claim"
+ },
+ {
+  "id": "arxiv-1706-0:#2",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": true,
+  "relevanceOffB": false,
+  "reason": "Both miss this passage; B overclaims less"
+ },
+ {
+  "id": "arxiv-1706-0:#3",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A adds unsupported byte-pair encoding"
+ },
+ {
+  "id": "arxiv-1706-0:#4",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B identifies the relevant task"
+ },
+ {
+  "id": "arxiv-1706-0:#5",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B sticks closely to the passage"
+ },
+ {
+  "id": "arxiv-1706-0:#6",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A states the full cost comparison"
+ },
+ {
+  "id": "arxiv-1706-0:#7",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "arxiv-1706-0:#8",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both falsely imply uniqueness"
+ },
+ {
+  "id": "arxiv-2308-0:Block:1995",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B at least conveys its framing role"
+ },
+ {
+  "id": "arxiv-2308-0:Nagel:1974",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A explains how the phrase is used"
+ },
+ {
+  "id": "arxiv-2308-0:Schwitzgebel:2016",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "arxiv-2308-0:Searle:1980",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B matches the stated opposing view"
+ },
+ {
+  "id": "arxiv-2308-0:Tononi:2015",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A states the cited rejection directly"
+ },
+ {
+  "id": "arxiv-2308-0:Birch:2022b",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both add unsupported objections"
+ },
+ {
+  "id": "arxiv-2308-0:Michel:2021",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": true,
+  "relevanceOffB": false,
+  "reason": "Both name an unrelated use"
+ },
+ {
+  "id": "arxiv-2308-0:Block:2023",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B gives the precise representational claim"
+ },
+ {
+  "id": "clark-chalme:McClelland:1986",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "clark-chalme:Clark:1989",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "clark-chalme:Kirsh:1995",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "clark-chalme:Hutchins:1995",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both capture the article's two uses"
+ },
+ {
+  "id": "clark-chalme:Kirsh:1994",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B includes timing and epistemic action"
+ },
+ {
+  "id": "clark-chalme:Putnam:1975",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B states the contrast more precisely"
+ },
+ {
+  "id": "clark-chalme:Burge:1979",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "clark-chalme:Suchman:1987",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "jmlr-v15-sri:Nowlan:1992",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "jmlr-v15-sri:Xiong:2011",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "A matches the Bayesian-averaging example"
+ },
+ {
+  "id": "jmlr-v15-sri:Salakhutdinov:2008",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "B attributes the wrong dataset"
+ },
+ {
+  "id": "jmlr-v15-sri:Livnat:2010",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B explains the motivating analogy"
+ },
+ {
+  "id": "jmlr-v15-sri:Vincent:2008",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B states exactly how dropout extends it"
+ },
+ {
+  "id": "jmlr-v15-sri:van der Maaten:2013",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "jmlr-v15-sri:Wang:2013",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B adds fewer unsupported specifics"
+ },
+ {
+  "id": "jmlr-v15-sri:Chen:2012",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Equivalent accurate descriptions"
+ },
+ {
+  "id": "synesthesia-:#2",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": true,
+  "relevanceOffB": true,
+  "reason": "B alone includes the cited definition"
+ },
+ {
+  "id": "synesthesia-:#3",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B includes the definition used here"
+ },
+ {
+  "id": "synesthesia-:#4",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": true,
+  "relevanceOffB": true,
+  "reason": "Both miss the passage; B claims less"
+ },
+ {
+  "id": "synesthesia-:#5",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A at least mentions the definition"
+ },
+ {
+  "id": "synesthesia-:#7",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A is closer to the passage's range"
+ },
+ {
+  "id": "synesthesia-:#12",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both substitute an unsupported mechanism"
+ },
+ {
+  "id": "synesthesia-:#13",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both capture number forms but overclaim"
+ },
+ {
+  "id": "synesthesia-:#16",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B directly matches the development claim"
+ }
+]

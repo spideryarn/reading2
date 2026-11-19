@@ -1,0 +1,13 @@
+1. **High — fixed** — [report.ts:60](/var/tmp/spideryarn-worktrees/fbpn7gvw-structure-stage2-fourth-level/evals/structure-fourth-level/report.ts:60): the report could silently evaluate incomplete or mixed evidence. It now refuses anything other than two clean, complete corpus runs of one prompt, duplicate/missing rows, successful rows without calls, mislabeled files, or missing raw answers. Added a red-first regression test at [structure-fourth-level-eval.test.ts:113](/var/tmp/spideryarn-worktrees/fbpn7gvw-structure-stage2-fourth-level/tests/structure-fourth-level-eval.test.ts:113).
+
+2. **Low — fixed** — [q-k25zfg.md:22](/var/tmp/spideryarn-worktrees/fbpn7gvw-structure-stage2-fourth-level/docs/user-feedback/questions/q-k25zfg.md:22) and [q-k25zfg.md:28](/var/tmp/spideryarn-worktrees/fbpn7gvw-structure-stage2-fourth-level/docs/user-feedback/questions/q-k25zfg.md:28): the question overstated the section-loss gate and described 43/340 plus 61/266 as “a quarter to a fifth.” It now states the actual half-control threshold and “about one in six” overall.
+
+3. **Low — fixed** — [261029_0300…md:58](/var/tmp/spideryarn-worktrees/fbpn7gvw-structure-stage2-fourth-level/docs/user-feedback/261029_0300-structure-one-level-deeper.md:58): $10.24 included the one-paper smoke run, not only the six full-corpus runs. The bookkeeping now says so.
+
+4. **None — verified** — the live prompt is toc/13. `src/structure-prompt.ts` and all four pinned test files have the exact blobs from `087a9b260`; `src/structure.ts` differs only by the diagnostic import, run fields, and `depthCounts` call. `SYSTEM` hashes to the control’s `634fd08ec3e5f967`; `STRUCTURE_OUTPUT_SCHEMA` lies in an unchanged region.
+
+5. **None — verified** — [structure-depth.ts:47](/var/tmp/spideryarn-worktrees/fbpn7gvw-structure-stage2-fourth-level/src/structure-depth.ts:47) runs after `assertTreeSound`, skips supplement subtrees, and handles headings-fallback trees. A deliberately dense 2,000-block/1,000-internal-node benchmark took roughly 15–30 ms. Its documented false positives and negatives are acceptable for a diagnostic, not a shipping gate.
+
+6. **None — verified** — the report’s gates match its header, including section loss. Collapsed rungs and tag-derived heading diagnostics are correctly print-only. Both saved wordings and wording 2’s output example match `df05311ea` and `e2482c1fc` exactly. Both reports retain their original `DO NOT SHIP` verdicts.
+
+Checks: requested Vitest gate passed, 50 files and 970 tests. Typechecking passed for all 4,132 covered files via `node --import tsx scripts/typecheck.ts`; literal `npm run typecheck` was blocked before project code by the sandbox denying tsx’s `/tmp` IPC socket.

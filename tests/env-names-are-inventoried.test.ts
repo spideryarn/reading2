@@ -246,15 +246,19 @@ const ALLOWED: readonly AllowGroup[] = [
        every pipeline stage asks for (`effortFor`, src/models.ts), and the three
        structure-deepening experiments (src/structure-deepen.ts, whose exported
        `DEEPEN_ENV`, `REASK_ENV` and `DEEPEN_RECORDS_ENV` are the same three
-       strings). A deployment has no opinion about any of them, and reporting
-       them would put four lines of tuning above the credentials that actually
-       break things. */
+       strings), and stage 2's off switch (`SUBSECTIONS_ENV`,
+       src/structure-subsections.ts, plan 261101d), which is on unless set to
+       `0` or `false` and exists for an eval's paired run or an emergency. A
+       deployment has no opinion about any of them, and reporting them would
+       put five lines of tuning above the credentials that actually break
+       things. */
     why: "Per-run pipeline switches, set for one command on the machine running it",
     names: [
       "SPIDERYARN_PIPELINE_EFFORT",
       "SPIDERYARN_DEEPEN_STRUCTURE",
       "SPIDERYARN_DEEPEN_REASK",
       "SPIDERYARN_DEEPEN_RECORDS",
+      "SPIDERYARN_SUBSECTIONS",
     ],
   },
   {

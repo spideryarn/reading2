@@ -163,6 +163,11 @@ import {
   inputFingerprint as situateFingerprint,
   PROMPT_VERSION as SITUATE_PROMPT_VERSION,
 } from "../src/situate.js";
+import {
+  emptyCounts as emptySourcesDigestCounts,
+  inputFingerprint as sourcesDigestFingerprint,
+  PROMPT_VERSION as SOURCES_DIGEST_PROMPT_VERSION,
+} from "../src/sources-digest.js";
 import { optionalSources } from "../src/registry-keys.js";
 import { CITATION_BLURBS_MODEL } from "../src/models.js";
 import { articleText, articleWithIds } from "../src/article-prompt.js";
@@ -657,9 +662,11 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     elapsedMs: 1,
   });
   /* **An EMPTY list**, like `timeline`'s events: an article that cites no work
-     is a real answer, and `SHAPE.citations` accepts it. */
+     is a real answer, and `SHAPE.citations` accepts it. Stamped with the
+     model the step writes, Haiku at both powers since `citations/8` (plan
+     261101c): `CAPABLE_MODEL` here would be another generation, not done. */
   store.plant(SLUG, "bibliography", "bibliography", {
-    generator: CAPABLE_MODEL,
+    generator: modelFor("bibliography", "standard"),
     slug: SLUG,
     sourceHash: BIBLIOGRAPHY_SOURCE_HASH,
     version: BIBLIOGRAPHY_VERSION,
@@ -750,6 +757,28 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     questions: [],
     searched: { queries: [], pages: 0, citers: 0, cited: 0 },
     counts: emptySituateCounts(),
+  });
+  /* **Nothing found**, as `situate` above: every phase's model recorded, the
+     reader and the writer null because neither was bought (plan 261030b). */
+  store.plant(SLUG, "sources-digest", "sources-digest", {
+    version: SOURCES_DIGEST_PROMPT_VERSION,
+    generator: CAPABLE_MODEL,
+    phases: { plan: modelFor("digest-plan", "standard"), read: null, write: null },
+    slug: SLUG,
+    sourceHash: sourcesDigestFingerprint(BLOCKS, TREE, META),
+    profileHash: null,
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+    year: null,
+    outcome: "nothing-found",
+    overview: [],
+    sections: { cites: [], citedBy: [], missed: [], check: [] },
+    leads: [],
+    pieceSearch: null,
+    citers: 0,
+    reports: [],
+    evidence: [],
+    counts: emptySourcesDigestCounts(),
   });
   /* **An EMPTY list**, which `SHAPE.crossrefs` accepts, as `faq`'s: nothing in
      the piece worth linking is a real answer. */

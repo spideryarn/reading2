@@ -1,0 +1,70 @@
+[
+ {
+  "slug": "arxiv-2308-08708-spya-w598t3",
+  "control": {
+   "usd": 0.4216741,
+   "ms": 58644,
+   "calls": 9,
+   "batches": 9,
+   "dropped": 0
+  },
+  "staged": {
+   "usd": 0.4247389,
+   "ms": 59665,
+   "calls": 9,
+   "batches": 9,
+   "dropped": 0
+  }
+ },
+ {
+  "slug": "arxiv-2307-09288v2-spya-smdqsk",
+  "control": {
+   "usd": 0.453978,
+   "ms": 45953,
+   "calls": 12,
+   "batches": 12,
+   "dropped": 0
+  },
+  "staged": {
+   "usd": 0.469119,
+   "ms": 46347,
+   "calls": 11,
+   "batches": 11,
+   "dropped": 0
+  }
+ },
+ {
+  "slug": "replication-crisis-spya-hrjamq",
+  "control": {
+   "usd": 0.1725848,
+   "ms": 24624,
+   "calls": 7,
+   "batches": 6,
+   "dropped": 0
+  },
+  "staged": {
+   "usd": 0.1761936,
+   "ms": 24634,
+   "calls": 7,
+   "batches": 6,
+   "dropped": 0
+  }
+ },
+ {
+  "slug": "spider-silk-spya-ge30uz",
+  "control": {
+   "usd": 0.0689194,
+   "ms": 24718,
+   "calls": 2,
+   "batches": 2,
+   "dropped": 0
+  },
+  "staged": {
+   "usd": 0.0732526,
+   "ms": 25793,
+   "calls": 2,
+   "batches": 2,
+   "dropped": 0
+  }
+ }
+]

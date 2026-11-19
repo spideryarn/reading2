@@ -1,0 +1,26 @@
+{
+  "slug": "fd-src-s41598-023-33209-9-spya-hxekgz-spya-pwtq9e",
+  "arm": "S1",
+  "run": 1,
+  "model": "anthropic/claude-sonnet-5.5",
+  "effort": "medium",
+  "prompt": "candidate",
+  "systemSha256": "47bb5b25086038ed27fe0cecf4a2b21d8021b005419a6ec72d8fe85ca57b48f4",
+  "maxTokens": 128000,
+  "at": "2026-11-01T01:49:42.456Z",
+  "referenceList": {
+    "entries": {},
+    "identifierEntries": {}
+  },
+  "elapsedMs": 5047,
+  "stopReason": "end_turn",
+  "usage": {
+    "input": 23816,
+    "output": 669,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "answer": "{\"capped\":false,\"works\":[{\"title\":\"Lever, C., Burton, S. & O'Keefe, J. Rearing on hind legs, environmental novelty, and the hippocampal formation\",\"authors\":\"Lever, Burton, O'Keefe\",\"year\":\"2006\",\"why\":\"Main review of rearing; the article's results are framed as direct support for its hypotheses about rearing and hippocampal learning.\",\"relevance\":0.9,\"influence\":0.5,\"mentions\":[{\"block\":\"spya-uyy3vb\",\"quote\":\"Lever and colleagues15\"}],\"entry\":15},{\"title\":\"Hippocampal network dynamics during rearing episodes\",\"authors\":\"Barth, Domonkos, Fernandez-Ruiz, Freund, Varga\",\"year\":\"2018\",\"why\":\"Recordings showing the hippocampus switches to a distinct mode during rearing, with a role for the dentate gyrus; used to explain the effect.\",\"relevance\":0.7,\"influence\":0.4,\"mentions\":[{\"block\":\"spya-hf95nb\",\"quote\":\"Barth et al.24 suggested\"}],\"entry\":24},{\"title\":\"Self-directed exploration provides a Ncs1-dependent learning bonus\",\"authors\":\"Mun et al.\",\"year\":\"2015\",\"why\":\"Found that rearing during exploration predicted memory in a hippocampus-dependent novel place task.\",\"relevance\":0.6,\"influence\":0.2,\"mentions\":[{\"block\":\"spya-t3p24n\",\"quote\":\"Mun et al.19 reported\"}],\"entry\":19},{\"title\":\"Novelty and anxiolytic drugs dissociate two components of hippocampal theta in behaving rats\",\"authors\":\"Wells et al.\",\"year\":\"2013\",\"why\":\"Showed novelty lowers the speed modulation of theta and raises rearing, linking hippocampal function to rearing.\",\"relevance\":0.6,\"influence\":0.2,\"mentions\":[{\"block\":\"spya-t3p24n\",\"quote\":\"Wells et al. showed\"}],\"entry\":18}]}",
+  "dollars": 0.054322,
+  "calls": 1
+}

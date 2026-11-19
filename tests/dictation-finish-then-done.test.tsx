@@ -130,7 +130,8 @@ async function settle() {
 }
 
 
-function harness() {
+/** `refuse`: the box's done action turns down whatever lands, as a too-long answer is. */
+function harness({ refuse = false }: { refuse?: boolean } = {}) {
   let field: UseDictationField | null = null;
   let shown = "";
   const sent: Array<{ value: string; busy: boolean }> = [];
@@ -142,7 +143,11 @@ function harness() {
     const current = useDictationField({
       value,
       onChange: setValue,
-      onDone: () => sent.push({ value, busy: current.busy }),
+      onDone: (): boolean => {
+        if (refuse) return false;
+        sent.push({ value, busy: current.busy });
+        return true;
+      },
       box,
       context: { kind: "profile" },
       transcribe,
@@ -286,5 +291,166 @@ describe("a second press, however fast the words come back", () => {
     await settle();
     expect(h.get().dictation.phase).toBe("listening");
     expect(h.sent).toEqual([]);
+  });
+});
+
+/* **`submit`: the one way a box's Send, Enter and form submit reach the done
+   action** (report spya-gjcyq3, plan 261103b). Idle, it is the done action;
+   while the microphone is involved, it is `finishThenDone`. And when a press
+   was made and nothing could be sent, the field says so (`unsent`). */
+describe("submit: Send pressed, whatever the microphone is doing", () => {
+  it("on an idle box, runs the done action at once", async () => {
+    const h = harness();
+    act(() => h.get().submit());
+    expect(h.sent).toEqual([{ value: "", busy: false }]);
+    expect(FakeRecorder.instances).toHaveLength(0);
+  });
+
+  it("while listening, stops the microphone and sends the words once they land", async () => {
+    const h = harness();
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().submit());
+    await settle();
+    expect(h.get().dictation.armed).toBe(false);
+    expect(h.get().sendingAfter).toBe(true);
+    expect(h.sent).toEqual([]);
+    await h.answer(0, ok("pressed send mid-sentence"));
+    expect(h.sent).toEqual([{ value: "pressed send mid-sentence", busy: false }]);
+  });
+
+  it("a second press while the words are on their way still sends once", async () => {
+    const h = harness();
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().submit());
+    await settle();
+    act(() => h.get().submit());
+    act(() => h.get().submit());
+    await settle();
+    expect(calls).toHaveLength(1);
+    await h.answer(0, ok("once"));
+    expect(h.sent).toEqual([{ value: "once", busy: false }]);
+  });
+
+  it("Stop pressed first, then Send inside the hold: one send, the hold taken", async () => {
+    const h = harness();
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().toggle());
+    act(() => h.get().submit());
+    expect(holds.pending(), "Send took the held Stop").toBe(0);
+    await settle();
+    await h.answer(0, ok("stopped then sent"));
+    expect(h.sent).toEqual([{ value: "stopped then sent", busy: false }]);
+  });
+
+  it("Stop pressed and run its course, then Send while transcribing: sends when the words land", async () => {
+    const h = harness();
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().toggle());
+    act(() => holds.expire());
+    await settle();
+    act(() => h.get().submit());
+    await h.answer(0, ok("late send"));
+    expect(h.sent).toEqual([{ value: "late send", busy: false }]);
+  });
+
+  it("when the words do not come, sends nothing and says nothing was sent", async () => {
+    const h = harness();
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().submit());
+    await settle();
+    expect(h.get().unsent).toBe(false);
+    await h.answer(0, failed);
+    expect(h.sent).toEqual([]);
+    expect(h.get().unsent).toBe(true);
+  });
+
+  it("a Try again that lands clears the notice and still sends nothing by itself", async () => {
+    const h = harness();
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().submit());
+    await settle();
+    await h.answer(0, failed);
+    expect(h.get().unsent).toBe(true);
+    act(() => h.get().dictation.retry());
+    await settle();
+    await h.answer(1, ok("second time lucky"));
+    expect(h.shown()).toBe("second time lucky");
+    expect(h.get().unsent).toBe(false);
+    expect(h.sent, "the reader presses Send for these").toEqual([]);
+  });
+
+  it("Send pressed during a Try again that fails: nothing sent then, nor by a later Try again (Sol's plan review, P1)", async () => {
+    const h = harness();
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().toggle());
+    act(() => holds.expire());
+    await settle();
+    await h.answer(0, failed);
+    act(() => h.get().dictation.retry());
+    await settle();
+    expect(h.get().readOnly, "the retry is on its way").toBe(true);
+    act(() => h.get().submit());
+    await h.answer(1, failed);
+    expect(h.sent).toEqual([]);
+    expect(h.get().unsent, "the press is owed an answer").toBe(true);
+    expect(h.get().sendingAfter).toBe(false);
+    act(() => h.get().dictation.retry());
+    await settle();
+    await h.answer(2, ok("third time"));
+    expect(h.shown()).toBe("third time");
+    expect(h.sent, "a Try again sends nothing by itself").toEqual([]);
+  });
+
+  it("the notice goes when a new dictation starts", async () => {
+    const h = harness();
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().submit());
+    await settle();
+    await h.answer(0, failed);
+    expect(h.get().unsent).toBe(true);
+    act(() => h.get().dictation.clearRecording());
+    await h.start();
+    expect(h.get().unsent).toBe(false);
+  });
+
+  it("words that land and are refused by the box say nothing was sent (Sol's code review, F1)", async () => {
+    const h = harness({ refuse: true });
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().submit());
+    await settle();
+    await h.answer(0, ok("far too long an answer"));
+    expect(h.shown()).toBe("far too long an answer");
+    expect(h.sent).toEqual([]);
+    expect(h.get().unsent).toBe(true);
+  });
+
+  it("a plain Stop that fails says nothing about sending", async () => {
+    const h = harness();
+    await h.start();
+    clock += 3000;
+    act(() => h.recorder().emit(300));
+    act(() => h.get().toggle());
+    act(() => holds.expire());
+    await settle();
+    await h.answer(0, failed);
+    expect(h.get().unsent).toBe(false);
   });
 });

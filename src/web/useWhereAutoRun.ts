@@ -78,10 +78,12 @@ function searching(situate: WhereSearch): boolean {
  * and is followed by another. StrictMode's cleanup removes its first waiter;
  * the second setup asks again and is the one allowed to release the token.
  * `find-more-handoff.ts` uses the same engine seam for the same cross-tab race.
+ * Exported for the sources digest's press (useSourcesDigest.ts), the same
+ * rule for a third door to a dear run.
  */
 const FRESH_QUEUE_CEILING_MS = 10_000;
 
-function useFreshQueueForActivation(slug: string, target: AutoRunTarget, enabled = true): boolean {
+export function useFreshQueueForActivation(slug: string, target: AutoRunTarget, enabled = true): boolean {
   const read = useCallback(() => pendingActivation(slug, target), [slug, target]);
   const nonce = useSyncExternalStore(subscribeActivations, read, read);
   const activation = nonce === null ? null : `${slug}\u0000${target}\u0000${nonce}`;

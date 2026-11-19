@@ -462,6 +462,10 @@ Three things that table is worth reading carefully for.
 
 - **The tree is ONE model call**, whatever the article's size — 96 blocks and 330 blocks each cost
   exactly one. Both runs recorded `wholeDocumentResumed: false`, so neither was a cached zero.
+  **Since 2026-11-01, plus a small second pass where the author's sub-headings divide a section**
+  ([structure-step.md § Stage 2](structure-step.md#subsections)): nothing on an article without
+  them, a median of about a quarter more on one with them (plan
+  [261101d](../plans/261101d-structure-fourth-level-staged-second-call.md) has the measurement).
 - **`labels` is the bigger half on a long article and the reader does not wait for it.** It is
   deliberately not in `DEFAULT_INGEST_STEPS` — it was 79.5–92% of the old combined step's wall clock
   — so the money between pasting a URL and being able to read is the structure row alone:

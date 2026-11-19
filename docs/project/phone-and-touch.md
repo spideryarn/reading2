@@ -243,7 +243,7 @@ existing question already answers it.
 | the two size notices | `SmallScreenHint.tsx`, `ShelfPhoneHint.tsx`, `small-screen-hint.ts` | the installation hint is the iOS row above, not one of these two |
 | long-press and scrollbar fixes | `-webkit-touch-callout` in `styles/dock.css` and `annotations.css`; `scrollbar-color` in `styles/mode-band.css` | the second is for iPadOS, whose scroll indicator was invisible on a band |
 | one-line order rows | `OrderGroup.tsx`, `styles/glossary.css`, `styles/quotes.css` | |
-| measuring a real phone | `ViewportProbe.tsx`, opened with `?probe=1` | a diagnostic: it records what the visual viewport does on the device |
+| measuring a real phone | `ViewportProbe.tsx`, opened with `?probe=1`, or by the administrator's *Viewport probe* row in the command bar (`probe-switch.ts`) | a diagnostic: it records what the visual viewport does on the device. On the administrator's reading view it records silently from page load, so the row can show a bug that a reload would clear ([261030e](../plans/261030e-the-bottom-bar-floats-on-an-ipad-after-a-rotation-and-the-probe-that-can-catch-it.md)) |
 
 ## Checking it
 

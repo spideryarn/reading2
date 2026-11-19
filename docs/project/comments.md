@@ -250,9 +250,10 @@ words, not the box losing them.
 
 Three things follow from storing on the way out, and the last two hold for every create:
 
-- **A draft stored mid-dictation is stored as the box stands.** Save refuses while the microphone is
-  armed because better words are about to arrive; at an exit nothing better will, so the words the
-  reader could see are kept ([dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box)).
+- **A draft stored mid-dictation is stored as the box stands.** Save pressed while the microphone is
+  armed stops it and waits, because better words are about to arrive; at an exit nothing better
+  will, so the words the reader could see are kept
+  ([dictation.md § Send while dictating](dictation.md#send-while-dictating-stops-and-sends)).
 - **A create made before the comment list has loaded waits for it**, inside `useComments.create`.
   The Save button already waited ([260908c](../postmortems/260908c-an-opening-read-can-erase-a-later-write.md));
   a box that is going away has no button to wait at, so the order is kept one layer down as well.

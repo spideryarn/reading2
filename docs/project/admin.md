@@ -1335,8 +1335,8 @@ Since 2026-10-24 the command bar on an article has rows only the administrator s
 > and add it to the command bar. And if there's a way to do this without leaving the article, that
 > would be even better.
 
-All typed-only — `admin`, `gift`, `author`, `users`, `costs` bring them up — and none marked
-`generates`:
+All typed-only — `admin`, `gift`, `author`, `users`, `costs`, `probe` bring them up — and none
+marked `generates`:
 
 - **Gift this to its author** opens a small dialog over the article (`AuthorGiftDialog.tsx`): the
   Give form's ticked half with the article already chosen — the rights tick, *High-powered AI*
@@ -1345,6 +1345,11 @@ All typed-only — `admin`, `gift`, `author`, `users`, `costs` bring them up —
   gift's card on Drafts, in a new tab. Nothing is emailed from it; Send stays on the card. The
   dialog's code and its first read are fetched on the first press, not before.
 - **What it cost** opens Metadata's administrator-only section (`?section=what-it-cost`).
+- **Viewport probe**, since 2026-10-30, shows the viewport probe on the reading view as it stands,
+  over a recording that has been running silently since the page loaded. It is for a layout bug on
+  an iPad or a phone that a reload would clear, which `?probe=1` cannot catch
+  ([phone-and-touch.md § Where the code branches](phone-and-touch.md#where-the-code-branches),
+  [261030e](../plans/261030e-the-bottom-bar-floats-on-an-ipad-after-a-rotation-and-the-probe-that-can-catch-it.md)).
 - **Admin**, **Admin › Users**, **› Feedback**, **› Gift vouchers**, **› Articles**, **› Costs**,
   **› Mockups** and **Design reference** go to those pages.
 

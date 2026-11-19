@@ -59,7 +59,7 @@ export interface CitedCandidate {
   displayTitle: string | null;
   /** The extracted byline — a fact about the document, as on the public shelf. */
   byline: string | null;
-  /** The reader's own article, archived. Never true for a stranger's — the store's `where`. */
+  /** The reader's own article, archived. Never true for a stranger's — the store's owner-gated projection. */
   archived: boolean;
   /** The canonical address we found for the reader's own upload; null for anything else. */
   guessedUrl: string | null;

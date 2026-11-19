@@ -385,8 +385,9 @@ export interface QuizMarkResult {
    * **Whether the reader got it right — never shown to them.**
    *
    * The walk reads this to decide whether the next step carries its premise
-   * (src/web/quiz-ladder.ts § `showPremise`); the panel renders
-   * it nowhere, and nothing writes it down. It is judged by a separate call
+   * (src/web/quiz-ladder.ts § `showPremise`); it is drawn only as the deeper
+   * green of plan 261029m, never as a word, and since plan 261030c the route
+   * stores it on the answer's row. It is judged by a separate call
    * (src/quiz-verdict.ts) that reads the finished `reply` above rather than by
    * this prompt, so that `QUIZ_MARK_SYSTEM` — which spends two pages refusing to
    * grade — is not asked to grade after all. That reasoning is the spine of
@@ -394,7 +395,8 @@ export interface QuizMarkResult {
    *
    * **Optional, and absent often.** The classifier failing, timing out, or
    * declining an ill-posed question all arrive here as `undefined`, which means
-   * *hold the band*. A mark is complete and correct without it.
+   * *show the premise*, and is stored as `NULL`, never as wrong. A mark is
+   * complete and correct without it.
    */
   verdict?: QuizVerdict;
 }

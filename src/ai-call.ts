@@ -684,6 +684,13 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* **The sources digest's searches** (src/sources-digest.ts, plan 261030b):
+     Situate's request under its own job, so Situate's route for its reasons. */
+  "digest-search": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
   /* **Find one cited work's own page** (src/citation-find.ts). `debate`'s
      policy and its reason: the request sends `openrouter:web_search`, and a
      fallback that silently dropped the tool leaves a model answering from
@@ -1259,6 +1266,8 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   /* `search_web`'s request, so its setting: only the search's annotations are
      read, never the lines (src/situate.ts § `searchOne`). */
   "situate-search": { effort: "low" },
+  /* Situate's searches' request, so its setting. */
+  "digest-search": { effort: "low" },
   "citation-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",
   },
@@ -1485,6 +1494,12 @@ export type ChatJob = Exclude<
   | "situate-plan"
   | "situate-triage"
   | "situate"
+  /* The sources digest's plan, readers and writer, on the Messages wire like
+     Situate's. Its searches (`digest-search`) stay IN: they are chat
+     completions. src/sources-digest.ts. */
+  | "digest-plan"
+  | "digest-read"
+  | "sources-digest"
   /* Generation, on the Messages wire like `faq`. src/skim.ts. */
   | "skim"
   /* Generation, on the Messages wire like `faq`. src/crossrefs.ts. */

@@ -1,0 +1,111 @@
+{
+ "label": "staged-smoke3",
+ "at": "2026-11-01T15:30:35.910Z",
+ "commit": "45fc89c87",
+ "srcDirty": true,
+ "promptVersion": "toc/13",
+ "systemSha256": "634fd08ec3e5f967",
+ "subsectionsPromptVersion": "subs/1",
+ "subsectionsSha256": "6db29bb3af38d295",
+ "spentUsd": 0.3549,
+ "results": [
+  {
+   "slug": "arxiv-2308-08708-spya-w598t3",
+   "blocks": 667,
+   "body": 667,
+   "ok": true,
+   "wave1": {
+    "calls": [
+     {
+      "purpose": "structure",
+      "attempt": 1,
+      "startedAt": "2026-11-01T15:30:04.966Z",
+      "endedAt": "2026-11-01T15:30:25.028Z",
+      "ms": 20062,
+      "networkAttempts": 1,
+      "inputTokens": 97867,
+      "outputTokens": 2668,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "usd": 0.222414,
+      "unpriced": 0,
+      "outcome": "ok"
+     }
+    ],
+    "ms": 20062,
+    "usd": 0.222414
+   },
+   "control": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 3,
+    "sections": 27,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 24,
+     "hit": 0
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 7,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "controlLabelBatches": 9,
+   "stage2": {
+    "ms": 10845,
+    "usd": 0.132526,
+    "calls": 3,
+    "stats": {
+     "eligible": 7,
+     "made": 7,
+     "failedSections": 0,
+     "added": 26,
+     "calls": 3,
+     "failedCalls": 0,
+     "skipped": {
+      "no-own-heading": 0,
+      "holds-supplement": 0,
+      "holds-sibling-heading": 0,
+      "incompatible-numbering": 0,
+      "one-child": 0
+     },
+     "outOfTime": false
+    }
+   },
+   "staged": {
+    "subsections": 26,
+    "deepenedSections": 7,
+    "swallowedHeadings": 3,
+    "sections": 27,
+    "headingSplits": 19,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 24,
+     "hit": 19
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 2,
+     "folded": 0,
+     "none": 5
+    }
+   },
+   "stagedLabelBatches": 9,
+   "checks": {
+    "stage1Kept": true,
+    "leavesKept": true,
+    "newNodesShaped": true,
+    "startsAsPlanned": true
+   }
+  }
+ ]
+}

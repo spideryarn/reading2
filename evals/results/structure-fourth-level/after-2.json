@@ -1,0 +1,683 @@
+{
+ "label": "after-2",
+ "at": "2026-11-01T02:11:33.207Z",
+ "commit": "df05311ea",
+ "srcDirty": false,
+ "promptVersion": "toc/14",
+ "systemSha256": "2e95970df64531ff",
+ "spentUsd": 1.6782,
+ "results": [
+  {
+   "slug": "arxiv-2308-08708-spya-xax6v4",
+   "blocks": 667,
+   "body": 667,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:18.770Z",
+     "endedAt": "2026-11-01T02:10:37.615Z",
+     "ms": 18845,
+     "networkAttempts": 1,
+     "inputTokens": 98514,
+     "outputTokens": 2555,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.222578,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 4,
+    "deepenedSections": 1,
+    "swallowedHeadings": 4,
+    "sections": 16,
+    "headingSplits": 3,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 27,
+     "hit": 3
+    },
+    "headedSections": 8,
+    "undividedHeadedSections": 7,
+    "openings": {
+     "own": 1,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 0,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "rovelli-order-of-time-7098a4fca8e95ec987b96f1c97-spya-r26sug",
+   "blocks": 1123,
+   "body": 980,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:18.819Z",
+     "endedAt": "2026-11-01T02:10:33.454Z",
+     "ms": 14635,
+     "networkAttempts": 1,
+     "inputTokens": 91290,
+     "outputTokens": 1658,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.19916,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 14,
+    "sections": 21,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 31,
+     "hit": 0
+    },
+    "headedSections": 10,
+    "undividedHeadedSections": 10,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 3,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "arxiv-2602-11988-spya-sudvzx",
+   "blocks": 241,
+   "body": 241,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:18.823Z",
+     "endedAt": "2026-11-01T02:10:36.870Z",
+     "ms": 18047,
+     "networkAttempts": 1,
+     "inputTokens": 31568,
+     "outputTokens": 2373,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.086866,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 21,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 36,
+     "hit": 0
+    },
+    "headedSections": 12,
+    "undividedHeadedSections": 12,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 3,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "arxiv-2609-16247-spya-y0kw0z",
+   "blocks": 278,
+   "body": 278,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:18.829Z",
+     "endedAt": "2026-11-01T02:10:47.440Z",
+     "ms": 28611,
+     "networkAttempts": 1,
+     "inputTokens": 41324,
+     "outputTokens": 4216,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.124808,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 7,
+    "deepenedSections": 1,
+    "swallowedHeadings": 0,
+    "sections": 30,
+    "headingSplits": 6,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 25,
+     "hit": 6
+    },
+    "headedSections": 7,
+    "undividedHeadedSections": 6,
+    "openings": {
+     "own": 1,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 2,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "s41593-022-01026-4-spya-bh0g5s",
+   "blocks": 313,
+   "body": 313,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:33.477Z",
+     "endedAt": "2026-11-01T02:10:59.298Z",
+     "ms": 25821,
+     "networkAttempts": 1,
+     "inputTokens": 44367,
+     "outputTokens": 3723,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.125964,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 15,
+    "deepenedSections": 3,
+    "swallowedHeadings": 6,
+    "sections": 26,
+    "headingSplits": 12,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 25,
+     "hit": 5
+    },
+    "headedSections": 8,
+    "undividedHeadedSections": 6,
+    "openings": {
+     "own": 1,
+     "folded": 0,
+     "none": 2
+    }
+   },
+   "repairs": 10,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 3
+  },
+  {
+   "slug": "constitution",
+   "blocks": 360,
+   "body": 360,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:36.887Z",
+     "endedAt": "2026-11-01T02:10:57.215Z",
+     "ms": 20328,
+     "networkAttempts": 1,
+     "inputTokens": 53087,
+     "outputTokens": 2852,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.134694,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 2,
+    "sections": 22,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 10,
+     "hit": 0
+    },
+    "headedSections": 4,
+    "undividedHeadedSections": 4,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 7,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "pmc13013618-spya-uekgh6",
+   "blocks": 214,
+   "body": 214,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:37.626Z",
+     "endedAt": "2026-11-01T02:10:49.282Z",
+     "ms": 11656,
+     "networkAttempts": 1,
+     "inputTokens": 46324,
+     "outputTokens": 1485,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.107498,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 15,
+    "sections": 11,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 3,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 2,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "2607-22753v1-spya-nfrmw5",
+   "blocks": 245,
+   "body": 245,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:47.453Z",
+     "endedAt": "2026-11-01T02:10:54.881Z",
+     "ms": 7428,
+     "networkAttempts": 1,
+     "inputTokens": 51088,
+     "outputTokens": 811,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.110286,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 5,
+    "sections": 0,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 0,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "noema-mythology-of-conscious-ai",
+   "blocks": 141,
+   "body": 141,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:49.287Z",
+     "endedAt": "2026-11-01T02:11:05.598Z",
+     "ms": 16311,
+     "networkAttempts": 1,
+     "inputTokens": 23609,
+     "outputTokens": 2202,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.069238,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 17,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 4,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+   "blocks": 244,
+   "body": 244,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:54.891Z",
+     "endedAt": "2026-11-01T02:11:07.954Z",
+     "ms": 13063,
+     "networkAttempts": 1,
+     "inputTokens": 24215,
+     "outputTokens": 1848,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.06691,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 9,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 0,
+     "hit": 0
+    },
+    "headedSections": 0,
+    "undividedHeadedSections": 0,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 1,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "dhp-intro-than-spya-v5mdhd",
+   "blocks": 364,
+   "body": 364,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:57.229Z",
+     "endedAt": "2026-11-01T02:11:13.169Z",
+     "ms": 15940,
+     "networkAttempts": 1,
+     "inputTokens": 40402,
+     "outputTokens": 1996,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.100764,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 17,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 2,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 2,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "tinbergen1963onethology-spya-ks84se",
+   "blocks": 96,
+   "body": 96,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:10:59.307Z",
+     "endedAt": "2026-11-01T02:11:22.700Z",
+     "ms": 23393,
+     "networkAttempts": 1,
+     "inputTokens": 32197,
+     "outputTokens": 3098,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.095374,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 26,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 7,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "arxiv-2212-spya-u5293w",
+   "blocks": 334,
+   "body": 334,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:11:05.604Z",
+     "endedAt": "2026-11-01T02:11:27.021Z",
+     "ms": 21417,
+     "networkAttempts": 1,
+     "inputTokens": 51006,
+     "outputTokens": 3425,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.136262,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 7,
+    "sections": 30,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 21,
+     "hit": 0
+    },
+    "headedSections": 6,
+    "undividedHeadedSections": 6,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 7,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  },
+  {
+   "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+   "blocks": 172,
+   "body": 172,
+   "calls": [
+    {
+     "purpose": "structure",
+     "attempt": 1,
+     "startedAt": "2026-11-01T02:11:07.963Z",
+     "endedAt": "2026-11-01T02:11:33.201Z",
+     "ms": 25238,
+     "networkAttempts": 1,
+     "inputTokens": 31290,
+     "outputTokens": 3517,
+     "reasoningTokens": 0,
+     "cacheReadTokens": 0,
+     "usd": 0.09775,
+     "unpriced": 0,
+     "outcome": "ok"
+    }
+   ],
+   "ok": true,
+   "score": {
+    "subsections": 0,
+    "deepenedSections": 0,
+    "swallowedHeadings": 0,
+    "sections": 33,
+    "headingSplits": 0,
+    "inventedSplits": 0,
+    "shortInventedSplits": 0,
+    "demotedHeadings": 0,
+    "subheadings": {
+     "expected": 1,
+     "hit": 0
+    },
+    "headedSections": 1,
+    "undividedHeadedSections": 1,
+    "openings": {
+     "own": 0,
+     "folded": 0,
+     "none": 0
+    }
+   },
+   "repairs": 2,
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "collapsedRungs": 0
+  }
+ ]
+}

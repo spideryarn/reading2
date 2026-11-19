@@ -206,6 +206,8 @@ describe("an edit the store will refuse stops nothing", () => {
     finished: Promise<void>;
   }
 
+  const pending: Promise<void>[] = [];
+
   function open(body: unknown): Open {
     const payload = [Buffer.from(JSON.stringify(body))];
     const req = Object.assign(
@@ -235,6 +237,9 @@ describe("an edit the store will refuse stops nothing", () => {
     const finished = handleApi(req, res, acceptAny).then(() => {
       settled = true;
     });
+    // Observe failures during readiness waits; teardown reports them after draining every request.
+    void finished.catch(() => {});
+    pending.push(finished);
     return {
       status: () => res.statusCode,
       written: () => written,
@@ -243,19 +248,40 @@ describe("an edit the store will refuse stops nothing", () => {
     };
   }
 
-  const hanging = ((_url: unknown, init?: { signal?: AbortSignal }) =>
-    new Promise((_resolve, reject) => {
-      const gone = () => reject(init?.signal?.reason ?? new Error("aborted"));
+  /** How many model calls `hanging` has been handed, so a test can wait for one. */
+  let held = 0;
+  const releaseHeld = new Set<() => void>();
+  const hanging = ((_url: unknown, init?: { signal?: AbortSignal }) => {
+    held += 1;
+    return new Promise((_resolve, reject) => {
+      const gone = () => {
+        releaseHeld.delete(gone);
+        init?.signal?.removeEventListener("abort", gone);
+        reject(init?.signal?.reason ?? new Error("test finished with a live model call"));
+      };
+      releaseHeld.add(gone);
       if (init?.signal?.aborted) gone();
       else init?.signal?.addEventListener("abort", gone, { once: true });
-    })) as unknown as typeof fetch;
+    });
+  }) as unknown as typeof fetch;
 
   /* The file's own stub, written out again: `globalThis.fetch` read here would
      be the provider guard's, because this runs before the `beforeAll` above. */
   const rejecting = (() =>
     Promise.reject(new Error("no model in tests"))) as unknown as typeof fetch;
-  afterEach(() => {
+  afterEach(async () => {
+    /* Assertions and readiness waits can fail before the tidy-up edit. Stop
+       using the hanging stub first, then release its existing calls and drain
+       every request before the outer hook removes their threads. Otherwise a
+       late call can write into the next test and increment its `held` count. */
     globalThis.fetch = rejecting;
+    for (const release of releaseHeld) release();
+    const results = await Promise.allSettled(pending);
+    pending.length = 0;
+    held = 0;
+    for (const result of results) {
+      if (result.status === "rejected") throw result.reason;
+    }
   });
 
   const statuses = async (threadId: string) =>
@@ -270,9 +296,23 @@ describe("an edit the store will refuse stops nothing", () => {
     const q1 = first[0]?.data.questionId as string;
     const a1 = first[0]?.data.messageId as string;
 
+    held = 0;
     globalThis.fetch = hanging;
     const live = open({ threadId, question: "q2" });
     await vi.waitFor(() => expect(live.written()).toContain("event: begin"), { timeout: 10_000 });
+    /* **And wait for the model call itself**, not only `begin`. The route
+       writes `begin` and then reads the profile, the reading so far and the
+       other threads before it calls `fetch`; a caller who swaps
+       `globalThis.fetch` in that gap hands the live answer the *next* stub
+       instead of this one. Under the full suite's load that gap was wide
+       enough: the live answer called `rejecting`, which ignores the abort, and
+       ended as `ai-gave-up` rather than `stopped` — two readiness reds on
+       2026-11-03,
+       docs/postmortems/261103a-a-test-swapped-the-fetch-stub-before-the-live-answer-reached-it.md.
+       Waiting here is what makes "held open" true when this returns. */
+    await vi.waitFor(() => expect(held, "the live answer has reached the model").toBe(1), {
+      timeout: 10_000,
+    });
     const begin = /event: begin\ndata: (.*)\n/.exec(live.written())?.[1];
     const a2 = (JSON.parse(begin as string) as { messageId: string }).messageId;
     expect(await statuses(threadId)).toEqual([

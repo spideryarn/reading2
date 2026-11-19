@@ -98,6 +98,8 @@ const STEP_PLACE: Record<StepName, StepPlace> = {
   /* Drawn in Sources › Where it sits (plan 261025h; at the top of
      Investigate before, plan 261024o), so it sends the reader to that view. */
   situate: { sub: { mode: "sources", view: "where" } },
+  /* Drawn in Sources › Digest (plan 261030b, Stage 2). */
+  "sources-digest": { sub: { mode: "sources", view: "digest" } },
   crossrefs: {
     name: "Cross-references",
     what: "Links in the prose from a claim to the passage it rests on",

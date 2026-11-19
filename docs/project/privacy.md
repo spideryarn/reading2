@@ -30,6 +30,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
 - [§ Search the literature](#search-the-literature) — what the planner, Exa, OpenAlex and the final read receive, on the owner's opening or manual press
+- [§ Sources' Digest](#sources-digest) — the literature search's flows in more depth, the profile only to the writer
 - [§ The Chrome extension](#the-chrome-extension) — what one press takes, and where it goes
 - [§ A claim typed into Sources › Claims](#a-claim-typed-into-sources-claims) — the reader's words to the search, kept with the check
 - [§ A private link](#a-private-link) — the four places the page names it, and [who opens one](#who-opens-one-since-2026-10-21), recorded since 2026-10-21
@@ -943,6 +944,31 @@ revision (`article_revisions.situate`), goes with the article, and is never show
 26 October when opening the sub-mode started it;
 `tests/privacy-page.test.ts` holds the sentence.
 
+## Sources' Digest
+
+**Added 2026-10-31**, with [sources.md § Digest](sources.md#digest)
+([261030b](../plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md),
+[`src/sources-digest.ts`](../../src/sources-digest.ts)). The same flows as the literature search
+above, to the same parties, in more depth, so the page gives it a few sentences in the same
+paragraph rather than a section of its own. On the owner's press on the Digest chip, its command-bar row or *Write the
+digest* (behind the experimental switch, so the page says *an experimental feature*):
+
+- **The planner** (Claude Sonnet, Opus under high-powered AI, through OpenRouter) is shown the
+  fenced article and the works Bibliography lists, and writes every search. Never the profile.
+- **Each search goes through OpenRouter to Exa**, as the literature search's do (`searchOne`).
+  OpenAlex is asked for the citers by DOI or title, as above.
+- **The readers** (Claude Haiku, through OpenRouter, one per question) are shown that question's
+  passages of the article and what its searches returned. Never the profile, and no tools.
+- **The writer** (Claude Opus, through OpenRouter) is shown the whole article, the readers' reports
+  with their checked quotes, and the profile block — the only call that sees it.
+
+Stored on the revision (`article_revisions.sources_digest`), in the owner's export, gone with the
+article, and never shown to a visitor ([sources.md § Digest](sources.md#digest) has the owner-only
+decision; an administrator's view-as sees it, as the page's sentence on administrators already
+covers). **The ask box under it adds no flow**: its chat is an ordinary chat turn, its first message
+the reader's words and the digest's text. The same is true of the box under Summary.
+`LAST_UPDATED` moved to 31 October 2026; `tests/privacy-page.test.ts` holds the sentence.
+
 ## A claim typed into Sources › Claims
 
 **Added 2026-10-09**, with [reception.md § Checking the claims you pick](reception.md#checking-the-claims-you-pick)
@@ -971,14 +997,35 @@ is gone; `LAST_UPDATED` moved to 5 October 2026. The plan is
 [261005b](../plans/261005b-quiz-answers-are-kept-and-restored.md); how it behaves is
 [quiz.md § Answers are kept](quiz.md#answers-are-kept).
 
+**Whether the check judged an answer right or wrong is stored too, since 2026-10-30**, the second
+reversal here. Until then it was deliberately kept only in the page's memory for one visit, and a
+*right* drawn as a deeper green (plan 261029m) was gone after a reload. Asked as
+[q-m9zkx3](../user-feedback/questions/q-m9zkx3.md), with the costs named — a stored machine
+judgement about the reader, and a check that is sometimes wrong — Greg chose to keep it:
+
+> B
+>
+> — Greg, 2026-10-30 (`spya-dxhyu2`), choosing *"Save right/wrong with each answer. The deeper
+> green stays. Spacing adapts: got it wrong, back in a day; got it right, back in a week, then
+> longer each time you get it right again."*
+
+So `quiz_attempts.verdict` holds `right`, `wrong`, or `NULL`, and the *What you write* bullet now
+ends: *"When an automatic check can decide, we also keep whether it judged a quiz answer right or
+wrong. It can be mistaken; we use it to colour the question, to decide when to ask it again, and to
+adapt the help around it."* `LAST_UPDATED` moved to 30 October 2026. The plan is
+[261030c](../plans/261030c-quiz-keeps-right-or-wrong-and-spacing-adapts.md).
+
 What the code has to keep true for the page to stay honest:
 
-- **Whether an answer was judged right or wrong is still not stored**, and not logged. The table has
-  no column for it; the hidden verdict lives in the page's memory, on the kept answer it was judged
-  with, for the length of a visit. Since 2026-10-29 a *right* is drawn as a deeper green on the
-  question (plan 261029m), which needs no storage and is gone after a reload
-  ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)). Storing it would
-  need the public page to say so: that is asked of Greg in q-m9zkx3.
+- **A check that failed or declined is stored as `NULL`, never as wrong**, and the schedule treats
+  it as no evidence either way ([`src/quiz-spacing.ts`](../../src/quiz-spacing.ts)). That is what
+  "when … can decide" on the page means.
+- **The verdict is used for the things the page names and nothing else**: the deeper green on the
+  question, when it comes back, and the hidden adaptation of the next premise and *Where to look
+  again* (a due verdict is left out of those last two). In Quiz it is never shown as a word, a
+  count, a score or red. The reader's own Markdown export does say it in words, under the mark,
+  with "it can be mistaken" — it is their data. Answering again is a new row, judged again.
+- **Not logged**, from the route, the store or the classifier.
 - **Neither the answer nor the reply is logged** — the route reports a failed save with the slug
   and nothing else, and the store is guarded so a failed query's parameters do not reach an error.
 - **Owner-only.** The owner's read returns them; the public page has no quiz and its queries never
@@ -988,7 +1035,7 @@ What the code has to keep true for the page to stay honest:
   longer shows.
 
 `tests/privacy-page.test.ts` holds the page to it: the old sentence must be gone and the new clause
-there.
+there, and since 2026-10-30 the verdict's sentence too, held to the column.
 
 ## The Chrome extension
 
@@ -1180,10 +1227,10 @@ these moves:
   controls: Archive is reversible and destroys nothing, Delete permanently erases the article and
   everything made from it with no undo, and neither can reach a copy already downloaded to a device.
   Rewrite that section if either control changes what it does. The page also says what archiving
-  does to an article that was *shared*: it drops
-  out of the public listing (`publicLibraryQuery` filters `archived_at`) and the link keeps working,
-  which is [library.md](library.md#archive-and-undo-is-the-confirmation)'s split between listing and
-  access. If `publicSlug` ever starts filtering too, that sentence is wrong
+  does to an article that was *shared*: nothing public — it stays on the public list and the link
+  keeps working (since 2026-10-31; neither `publicLibraryQuery` nor `publicSlug` reads
+  `archived_at`, [library.md](library.md#archive-and-undo-is-the-confirmation)). If either ever
+  starts filtering on it, that sentence is wrong
 - what actually survives a delete — the page names three kinds of thing, and both were checked against the
   schema rather than assumed: `raw_sources` has no lifecycle at all (nothing deletes a row from it,
   and the bytes are content-addressed, so two readers who add the same document share one object),

@@ -175,24 +175,34 @@ describe("the microphone on Ask about Spideryarn", () => {
     expect(row?.querySelectorAll("button")).toHaveLength(2);
   });
 
-  it("refuses to send while the microphone is on, and says so on the button", async () => {
+  /* Since spya-gjcyq3 (plan 261103b): Ask while dictating stops the
+     microphone and asks once the words land, never with the live guess. */
+  it("Ask while the microphone is on stops it and asks once the words land", async () => {
     type("What is the spine?");
     start();
-    expect(askButton()?.disabled).toBe(true);
+    expect(askButton()?.disabled, "Ask is live while recording").toBe(false);
     await pressEnter();
     act(() => s().ask());
-    expect(posted).toEqual([]);
+    expect(posted, "nothing before the words").toEqual([]);
+    expect(s().dictate.sendingAfter).toBe(true);
+    /* The press stopped the microphone; this mock's own toggle does nothing. */
+    mic.armed = false;
+    mic.transcribing = true;
+    draw();
+    await end(" And the orange line?");
+    expect(posted, "once, with the transcript").toHaveLength(1);
+    expect((posted[0] as { question?: string } | undefined)?.question).toContain("And the orange line?");
   });
 
-  it("refuses to send while the words are on their way", async () => {
-    type("What is the spine?");
+  it("Ask while the words are on their way asks once they land", async () => {
     start();
     stop();
     expect(box()?.readOnly).toBe(true);
-    expect(askButton()?.disabled).toBe(true);
+    expect(askButton()?.disabled).toBe(false);
     await pressEnter();
-    act(() => s().ask());
     expect(posted).toEqual([]);
+    await end("What is the spine?");
+    expect(posted).toEqual([{ question: "What is the spine?" }]);
   });
 
   it("sends the transcript, not the live guess, on a double press of Stop", async () => {

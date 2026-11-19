@@ -17,8 +17,10 @@
  * "Sections", one above the leaves, with the notes collapsed into one). This
  * file only counts. Pure: no React, no DOM.
  *
- * **Per visit, and never stored.** The verdicts are `QuizPanel`'s React state
- * and so is everything computed from them here; nothing is logged or sent.
+ * **Computed, never stored or logged.** The verdicts are `QuizPanel`'s, read
+ * from the kept answers — stored with each answer since plan 261030c, so the
+ * advice survives a reload; a due answer counts as unjudged. Nothing computed
+ * here is sent anywhere.
  * docs/plans/260930i-quiz-scores-answers-by-section-and-says-where-to-look-again.md.
  */
 import type { BlockId, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
@@ -28,7 +30,7 @@ export interface SectionTally {
   section: Section;
   /** The questions about it, in path order. */
   questionIds: QuizQuestionId[];
-  /** Questions whose latest verdict this visit is `right` / `wrong`. No verdict is neither. */
+  /** Questions whose latest verdict is `right` / `wrong`. No verdict, or a due one, is neither. */
   right: number;
   wrong: number;
 }

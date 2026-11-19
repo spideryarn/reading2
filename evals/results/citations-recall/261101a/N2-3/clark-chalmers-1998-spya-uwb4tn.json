@@ -1,0 +1,33 @@
+{
+  "slug": "clark-chalmers-1998-spya-uwb4tn",
+  "arm": "N2",
+  "run": 3,
+  "model": "anthropic/claude-haiku-5.5",
+  "effort": "high",
+  "prompt": "production",
+  "systemSha256": "47bb5b25086038ed27fe0cecf4a2b21d8021b005419a6ec72d8fe85ca57b48f4",
+  "maxTokens": 128000,
+  "at": "2026-11-01T16:41:18.559Z",
+  "referenceList": null,
+  "elapsedMs": 40407,
+  "stopReason": "end_turn",
+  "usage": {
+    "input": 22131,
+    "output": 9937,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "answer": "{\"capped\":false,\"works\":[{\"title\":\"McClelland et al. (1986)\",\"authors\":\"McClelland et al.\",\"year\":\"1986\",\"why\":\"Cited as one example of people leaning on outside aids, here pen and paper for long multiplication, to show such reliance is ordinary.\",\"relevance\":0.2,\"influence\":null,\"mentions\":[{\"block\":\"spya-bszb9p\",\"quote\":\"McClelland et al. 1986\"}]},{\"title\":\"Clark (1989)\",\"authors\":\"Clark\",\"year\":\"1989\",\"why\":\"Cited with McClelland et al. for the pen-and-paper multiplication example of relying on outside aids in everyday thinking.\",\"relevance\":0.2,\"influence\":null,\"mentions\":[{\"block\":\"spya-bszb9p\",\"quote\":\"Clark 1989\"}]},{\"title\":\"Kirsh (1995)\",\"authors\":\"Kirsh\",\"year\":\"1995\",\"why\":\"Cited for the Scrabble example, where players rearrange letter tiles to help recall words, as another case of outside aids.\",\"relevance\":0.2,\"influence\":0.5,\"mentions\":[{\"block\":\"spya-bszb9p\",\"quote\":\"Kirsh 1995\"}]},{\"title\":\"Hutchins (1995)\",\"authors\":\"Hutchins\",\"year\":\"1995\",\"why\":\"Cited twice: for the nautical slide rule example of outside aids, and as research treating cognition as continuous with the environment.\",\"relevance\":0.3,\"influence\":0.8,\"mentions\":[{\"block\":\"spya-bszb9p\",\"quote\":\"Hutchins 1995\"},{\"block\":\"spya-bds960\",\"quote\":\"Hutchins 1995\"}]},{\"title\":\"Kirsh and Maglio (1994)\",\"authors\":\"Kirsh, Maglio\",\"year\":\"1994\",\"why\":\"Supplies the Tetris findings that physical rotation can serve to test whether a shape fits, an 'epistemic action' the article uses in its case.\",\"relevance\":0.5,\"influence\":0.6,\"mentions\":[{\"block\":\"spya-g9ca3r\",\"quote\":\"David Kirsh and Paul Maglio (1994)\"}]},{\"title\":\"Putnam (1975)\",\"authors\":\"Putnam\",\"year\":\"1975\",\"why\":\"Cited as the standard externalism the article's view differs from: there, outside features that shape belief are distant and historical, not active now.\",\"relevance\":0.3,\"influence\":0.9,\"mentions\":[{\"block\":\"spya-wsv38g\",\"quote\":\"Putnam (1975) and Burge (1979)\"}]},{\"title\":\"Burge (1979)\",\"authors\":\"Burge\",\"year\":\"1979\",\"why\":\"Cited with Putnam as the standard externalism the article contrasts with its own view, where the outside features act in the present.\",\"relevance\":0.3,\"influence\":0.8,\"mentions\":[{\"block\":\"spya-wsv38g\",\"quote\":\"Putnam (1975) and Burge (1979)\"}]},{\"title\":\"Suchman (1987)\",\"authors\":\"Suchman\",\"year\":\"1987\",\"why\":\"Listed among research areas where cognition is treated as continuous with the environment, supporting the article's general point.\",\"relevance\":0.1,\"influence\":0.6,\"mentions\":[{\"block\":\"spya-bds960\",\"quote\":\"Suchman 1987\"}]},{\"title\":\"Beer (1989)\",\"authors\":\"Beer\",\"year\":\"1989\",\"why\":\"Listed among research areas, such as real-world robotics, where cognition is treated as continuous with the environment.\",\"relevance\":0.1,\"influence\":null,\"mentions\":[{\"block\":\"spya-bds960\",\"quote\":\"Beer 1989\"}]},{\"title\":\"Thelen and Smith (1994)\",\"authors\":\"Thelen, Smith\",\"year\":\"1994\",\"why\":\"Listed among research areas, such as child development, where cognition is treated as continuous with the environment.\",\"relevance\":0.1,\"influence\":0.6,\"mentions\":[{\"block\":\"spya-bds960\",\"quote\":\"Thelen and Smith 1994\"}]},{\"title\":\"Ullman and Richards (1984)\",\"authors\":\"Ullman, Richards\",\"year\":\"1984\",\"why\":\"Cited as an example of vision relying on structure in natural scenes, offered as a case of evolution exploiting the environment.\",\"relevance\":0.2,\"influence\":null,\"mentions\":[{\"block\":\"spya-swankj\",\"quote\":\"Ullman and Richards 1984\"}]},{\"title\":\"Blake and Yuille (1992)\",\"authors\":\"Blake, Yuille\",\"year\":\"1992\",\"why\":\"Cited as an example of vision using shortcuts from bodily motion and locomotion, offered as evolution exploiting the environment.\",\"relevance\":0.2,\"influence\":null,\"mentions\":[{\"block\":\"spya-swankj\",\"quote\":\"Blake and Yuille, 1992\"}]},{\"title\":\"Haugeland (1995)\",\"authors\":\"Haugeland\",\"year\":\"1995\",\"why\":\"Listed in the reference list among works on the environment and cognition; the passage given does not say how the article uses it.\",\"relevance\":0.1,\"influence\":null,\"reference\":{\"block\":\"spya-b3eq4u\",\"quote\":\"Philosophical views of a similar spirit can be found in Haugeland 1995\"}},{\"title\":\"McClamrock (1995)\",\"authors\":\"McClamrock\",\"year\":\"1995\",\"why\":\"Listed in the reference list among works on the environment and cognition; the passage given does not say how the article uses it.\",\"relevance\":0.1,\"influence\":null,\"reference\":{\"block\":\"spya-b3eq4u\",\"quote\":\"Haugeland 1995, McClamrock 1995\"}},{\"title\":\"Varela et al. (1991)\",\"authors\":\"Varela et al.\",\"year\":\"1991\",\"why\":\"Listed in the reference list among works on the environment and cognition; the passage given does not say how the article uses it.\",\"relevance\":0.1,\"influence\":0.7,\"reference\":{\"block\":\"spya-b3eq4u\",\"quote\":\"Varela et al. 1991\"}},{\"title\":\"Wilson (1994)\",\"authors\":\"Wilson\",\"year\":\"1994\",\"why\":\"Listed in the reference list among works on the environment and cognition; the passage given does not say how the article uses it.\",\"relevance\":0.1,\"influence\":null,\"reference\":{\"block\":\"spya-b3eq4u\",\"quote\":\"and Wilson 1994\"}},{\"title\":\"Chalmers (forthcoming)\",\"authors\":\"Chalmers\",\"year\":\"forthcoming\",\"why\":\"Cited where the article says its cases mirror Putnam and Burge but differ, since the outside features here act now and change behaviour, as in the Otto case.\",\"relevance\":0.3,\"influence\":null,\"reference\":{\"block\":\"spya-hkurvr\",\"quote\":\"In the terminology of Chalmers (forthcoming)\"}}]}",
+  "dollars": 0.0071816,
+  "calls": 2,
+  "notesPass": {
+    "batches": 1,
+    "batchesKept": 0,
+    "resolved": 17,
+    "works": 17,
+    "input": 7029,
+    "output": 2078,
+    "dollars": 0.0017419,
+    "ms": 9496
+  }
+}

@@ -326,9 +326,9 @@ describe("Sources' sub-mode, and Reception's order", () => {
    * before anything parses it (tests/sources-old-addresses.test.ts).
    */
   /* Where it sits is the default since plan 261025h (decision 7). */
-  it("reads the nine sub-modes, and anything else as Where it sits", () => {
+  it("reads the ten sub-modes, and anything else as Where it sits", () => {
     expect([...SOURCES_VIEWS]).toEqual([
-      "where", "bibliography", "not-cited", "links", "reception", "claims", "investigate", "guess-first", "evidence-first",
+      "where", "digest", "bibliography", "not-cited", "links", "reception", "claims", "investigate", "guess-first", "evidence-first",
     ]);
     expect(sourcesParam.parse("guess-first")).toBe("guess-first");
     expect(sourcesParam.parse("evidence-first")).toBe("evidence-first");

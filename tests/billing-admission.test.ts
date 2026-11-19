@@ -535,8 +535,10 @@ describe("a repeat paste of an article on the shelf", () => {
  * docs/plans/261009j-a-public-copy-offered-at-import.md.
  *
  * Which public articles count is Bibliography's read (pg-cited-in-spideryarn.ts),
- * so the absences below are the ones that matter: a stranger's private,
- * archived or unopenable article at the same address is never offered.
+ * so the absences below are the ones that matter: a stranger's private or
+ * unopenable article at the same address is never offered. An archived public
+ * one is, since archiving leaves a shared article public (Greg, 2026-10-31,
+ * spya-zyh56c; plan 261031c).
  */
 describe("an address somebody else has made public", () => {
   const STRANGER = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
@@ -651,9 +653,15 @@ describe("an address somebody else has made public", () => {
     expect(reply.body).toEqual({ article: mine, repeat: true });
   });
 
+  it("offers a stranger's public article they have archived", async () => {
+    const slug = await strangers("pub-archived", `${HOST}/pub-archived`, { archived: true });
+    const reply = await post("/api/jobs", { url: `${HOST}/pub-archived` });
+    expect(reply.status, JSON.stringify(reply.body)).toBe(200);
+    expect(reply.body).toEqual({ publicCopy: { slug, title: "A public article" } });
+  });
+
   it.each([
     ["private", { visibility: "private" }],
-    ["archived", { archived: true }],
     ["unopenable", { openable: false }],
   ] as const)("never offers a stranger's %s article", async (name, how) => {
     await strangers(`pub-${name}`, `${HOST}/pub-${name}`, how);

@@ -381,8 +381,11 @@ describe("the repo's own .gitignore", () => {
    *
    * `outreach-private/` is Greg's marketing contact lists, kept out of git on
    * purpose, so a tree holding them may hold the only copy.
+   *
+   * `user-conversations-private/` is transcripts of Greg's conversations with
+   * readers — the same shape, private and with no copy in git.
    */
-  const BLOCKS_ON_PURPOSE = new Set(["uploads", ".claude/worktrees", "outreach-private"]);
+  const BLOCKS_ON_PURPOSE = new Set(["uploads", ".claude/worktrees", "outreach-private", "user-conversations-private"]);
 
   it("gives every directory it names a verdict, or says it blocks on purpose", () => {
     const body = readFileSync(new URL("../.gitignore", import.meta.url), "utf8");

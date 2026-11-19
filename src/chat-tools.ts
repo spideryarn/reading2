@@ -170,10 +170,11 @@ export const MAX_LINK_BLOCKS = 6;
 /**
  * Most works `article_citations` lists. The counts above them are never capped.
  *
- * The stored list holds up to `MAX_CITATIONS` (80) and a row is several lines —
- * title, what the piece uses it for, scores, link, where it is cited — so the
- * whole list is too much to re-send on every later round (rule 2 above). The
- * `query` argument is the way to the rest, and the heading says so.
+ * The model contributes up to `MAX_CITATIONS` (300), and code may add the
+ * separately capped rows it finds in the article's text. A row is several
+ * lines — title, what the piece uses it for, scores, link, where it is cited —
+ * so the whole list is too much to re-send on every later round (rule 2
+ * above). The `query` argument is the way to the rest, and the heading says so.
  */
 export const MAX_CITATION_ROWS = 25;
 /**
@@ -2287,7 +2288,7 @@ function bibliographyResult(
     : null;
   /* **What N means when the list is capped** (GPT Sol F5). The model that made
      the list said it left works out, so its length is a fact about the list and
-     not about the article, and a model told "the article cites 80 works" will
+     not about the article, and a model told "the article cites N works" will
      repeat it. Drawn only from `capped`, never inferred from the length — the
      panel's rule (docs/project/bibliography.md § The orders). */
   const capped = bibliography.capped

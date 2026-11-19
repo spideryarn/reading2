@@ -27,13 +27,14 @@ import { settleChat } from "./helpers/settle-chat.js";
 let dictateInto: ((next: string) => void) | undefined;
 
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: (opts: { onChange(next: string): void }) => {
+  useDictationField: (opts: { onDone?(): unknown; onChange(next: string): void }) => {
     dictateInto = opts.onChange;
     return {
       dictation: { supported: false, armed: false, transcribing: false, toggle: () => {} },
       readOnly: false,
       busy: false,
       toggle: () => {},
+      submit: () => opts.onDone?.(),
       sendingAfter: false,
       doubleStop: true,
     };

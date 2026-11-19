@@ -13,7 +13,8 @@
  * docs/plans/261024n-admin-commands-in-the-command-bar-and-an-author-gift-without-leaving-the-article.md.
  * In short: the author gift for this article (a dialog over the page, so the
  * article stays put), this article's *What it cost* section, and the admin
- * pages and `/design` as places to go.
+ * pages and `/design` as places to go. Since 2026-10-30 also the viewport
+ * probe, started on the page as it stands (plan 261030e).
  *
  * ## A courtesy, not a gate
  *
@@ -35,12 +36,13 @@
  *
  * ## All typed-only
  *
- * The empty list stays the reader's; typing `admin`, `gift`, `author`, `users`
- * or `costs` brings these up. Last in the list, so on a tie every reader's
+ * The empty list stays the reader's; typing `admin`, `gift`, `author`, `users`,
+ * `costs` or `probe` brings these up. Last in the list, so on a tie every reader's
  * row wins — `feedback` is the Feedback dialog before it is the admin page.
  */
 import type { ActionOutcome, Command } from "./command-match.js";
 import { type SectionRow, sectionCommand } from "./article-commands.js";
+import { startProbe } from "./probe-switch.js";
 import {
   ADMIN_ARTICLES_HREF,
   ADMIN_COSTS_HREF,
@@ -69,6 +71,31 @@ export const COST_SECTION_ROW: SectionRow = {
   label: "What it cost",
   description: "Every AI call made for this article, and what each one cost.",
   aliases: ["spend", "article cost", "cost of this article", "how much did it cost", "ai cost"],
+};
+
+export const VIEWPORT_PROBE_ROW_ID = "admin-viewport-probe";
+
+/**
+ * **The viewport probe, on the page as it stands** — the way to record a
+ * layout bug on a phone or an iPad *while it is happening*, which `?probe=1`
+ * could not do because adding it reloads the page (probe-switch.ts, plan
+ * 261030e). Only with an article, because the probe is drawn by the reading
+ * view.
+ */
+const VIEWPORT_PROBE_ROW: Command = {
+  kind: "action",
+  id: VIEWPORT_PROBE_ROW_ID,
+  label: "Viewport probe",
+  description:
+    "Show the viewport recording for a layout bug on a phone or an iPad. Mark, then copy the trace into Feedback.",
+  aliases: ["probe", "viewport", "viewport trace", "layout trace", "debug the layout", "bar partway up"],
+  generates: false,
+  typedOnly: true,
+  opensOnly: true,
+  run: () =>
+    startProbe()
+      ? { kind: "close" }
+      : { kind: "stay", message: "The viewport probe is drawn by an article's reading view, not this page." },
 };
 
 /** The admin pages and `/design`, in the `/admin` index's own order. */
@@ -148,8 +175,8 @@ const ADMIN_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
 ];
 
 /**
- * **The administrator's rows for where the bar was opened.** The two about
- * this article only with `article`; the pages always.
+ * **The administrator's rows for where the bar was opened.** The three that need
+ * the reading view only with `article`; the pages always.
  *
  * `openAuthorGift` opens `AuthorGiftDialog` over the page. The row only opens
  * it — `generates: false`, `opensOnly: true` — and the dialog's *Draft* button,
@@ -177,6 +204,7 @@ export function adminRows({
             run: article.openAuthorGift,
           } as const,
           sectionCommand(COST_SECTION_ROW, article.goToCost),
+          VIEWPORT_PROBE_ROW,
         ]),
     ...ADMIN_PAGES,
   ];

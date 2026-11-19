@@ -82,7 +82,7 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
   quiz: {
     head: "Quiz",
     what: "A question about what you have just read, to answer in your own words. Press this line to answer it here, in a line, or press the microphone beside it to say your answer. It is marked against the article, and the line turns green once answered. The button under the box opens the full walk through the questions, at this one.",
-    how: "From Quiz mode. The question was written by AI from the whole article, and the AI marks your answer against the article's own words. It sits after the passage that finishes what it asks about, and the questions build on one another in order. Green means answered, not right or wrong.",
+    how: "From Quiz mode. The question was written by AI from the whole article, and the AI marks your answer against the article's own words. It sits after the passage that finishes what it asks about, and the questions build on one another in order. Green means answered; a deeper green means a quick automatic check thought your answer looked right, and it is sometimes wrong. A faded green with a clock means it is time to try it again from memory.",
   },
   "comment-own": {
     head: "Yours",

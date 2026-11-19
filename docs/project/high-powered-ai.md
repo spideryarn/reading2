@@ -108,13 +108,17 @@ what Sonnet already made stays. [admin.md § Author gifts](admin.md#author-gifts
 
 - **Every task on the capable tier except Simple moves**, for that article only: the pipeline stages
   (structure, headings, gist, glossary, quotes, ideas, timeline, quiz, FAQ, sketch, illustrated,
-  skim, reception, bibliography) and the calls made while you read it (chat's model-calling tools; explain — a comment's
+  skim, reception) and the calls made while you read it (chat's model-calling tools; explain — a comment's
   first answer and *Try again*, and the glossary's *Look up* box; search; quiz marking; referee;
   Bibliography's stand-alone *Look it up*; live conversation's search tool). A *Dig deeper* press does
   not move with it — the next point.
   A developer's explicit per-task environment override still wins, so a deliberate model comparison
   stays pinned. [`TASK_TIER` and `resolveModel` in `src/models.ts`](../../src/models.ts) are the
   exhaustive list and that exception.
+- **Bibliography's list does not move.** Since 2026-11-01 it is pinned to Haiku 5.5 at both powers
+  (`BIBLIOGRAPHY_MODEL`, `PINNED_MODEL`): Haiku at high effort found more of the works an article
+  cites than Sonnet did, for a seventh of the cost, and Greg chose it
+  ([bibliography.md § Who makes the list](bibliography.md#who-makes-the-list)).
 - ***Search the literature* moves two of its three calls.** Its plan and its read go to Opus; its
   triage, which picks the sources the read is shown, stays on Haiku (`PINNED_MODEL`), because Haiku
   shortlisting for an Opus writer is what the eval measured. About $0.52 an article against $0.30,

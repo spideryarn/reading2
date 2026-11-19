@@ -436,12 +436,28 @@ const rawPgShelfStore: ShelfStore = {
        filesystem side gets the same guarantee a different way, by serialising
        its read-modify-write in one process. */
     const ownerId = currentOwnerId();
-    await getDb().transaction(async (tx) => {
+    return getDb().transaction(async (tx) => {
+      /* **And opening an archived article puts it back on the shelf** — Greg,
+         spya-h8cda9 (2026-10-30): *"I open an archived article. It should
+         unarchive it."* In this UPDATE, so the open and the un-archive cannot
+         disagree. Un-archiving is a reader-settings change, so it moves
+         `updated_at` as Put back does; an open of an article already on the
+         shelf does not (schema.ts § `updatedAt`) — so the `case` reads the
+         row's own old value, in the one statement. Plan 261030f.
+
+         Nothing public moves with it: a shared article is on `/read/public`
+         archived or not (plan 261031c), so the route has nobody to tell. */
       const [row] = await tx
         .update(articles)
-        .set({ opens: sql`${articles.opens} + 1`, lastOpenedAt: sql`now()` })
+        .set({
+          opens: sql`${articles.opens} + 1`,
+          lastOpenedAt: sql`now()`,
+          archivedAt: null,
+          updatedAt: sql`case when ${articles.archivedAt} is not null
+            then clock_timestamp() else ${articles.updatedAt} end`,
+        })
         .where(ownedSlug(slug, ownerId))
-        .returning({ slug: articles.slug });
+        .returning({ id: articles.id });
       if (!row) throw notFound(slug);
       /* **And when, for Active days on /admin/users** (src/db/schema.ts §
          `articleOpenTimes`). After the update, so an open of somebody else's

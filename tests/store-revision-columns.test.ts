@@ -271,6 +271,9 @@ const READS = [
      `CITED_FINGERPRINT_COLUMNS`, as `sourcesClaims`: the article the read was
      sent. docs/plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md. */
   "situate",
+  /* Added 2026-10-30 with the `sources-digest` stage, owner only, as
+     `situate`: the article the plan and the write were sent. Plan 261030b. */
+  "sourcesDigest",
   /* Added 2026-09-30 with the `crossrefs` stage. `CITED_FINGERPRINT_COLUMNS`,
      like `faq`: its article head carries the cited metadata fields.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */

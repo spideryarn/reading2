@@ -27,7 +27,18 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+
+/** Who `useSession` says is here: nobody, unless a case says the administrator. */
+const session: { user: { id: string } | null } = { user: null };
+vi.mock("../src/web/useSession.js", () => ({
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
+}));
+
 const { ViewportProbe } = await import("../src/web/ViewportProbe.js");
+const { resetProbeSwitchForTests, startProbe } = await import("../src/web/probe-switch.js");
+const { adminRows, VIEWPORT_PROBE_ROW_ID } = await import("../src/web/admin-commands.js");
+const VIEW_AS = "__spideryarnViewAs";
 
 class FakeViewport extends EventTarget {
   width = 390;
@@ -106,6 +117,10 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  session.user = null;
+  delete (window as unknown as Record<string, unknown>)[VIEW_AS];
+  resetProbeSwitchForTests();
+  vi.useRealTimers();
   noViewport();
   setWidths(1024, 0);
   address("");
@@ -379,9 +394,12 @@ describe("what it survives", () => {
       "composer",
       "controls",
       "dock",
+      "floor",
       "focus",
       "head",
       "hint",
+      "page",
+      "root",
     ]);
   });
 
@@ -578,5 +596,164 @@ describe("what it survives", () => {
 
     /* A fresh root so `afterEach`'s unmount has something to unmount. */
     root = createRoot(host);
+  });
+});
+
+/**
+ * **The probe without a reload** — plan 261030e, from spya-u0vb0a. Greg's
+ * iPad leaves the bottom bar partway up *sometimes*, and adding `?probe=1`
+ * reloads the page, which very probably clears what needed recording. So the
+ * administrator's reading view records silently from page load, and the
+ * command bar's *Viewport probe* row shows the panel over that recording.
+ */
+describe("the probe started on the page as it stands", () => {
+  /** The command bar's row, run as the bar runs it. */
+  function runRow(): unknown {
+    const rows = adminRows({
+      article: { openAuthorGift: () => ({ kind: "close" }), goToCost: () => ({ kind: "close" }) },
+    });
+    const row = rows.find((c) => c.kind === "action" && c.id === VIEWPORT_PROBE_ROW_ID);
+    if (row?.kind !== "action") throw new Error("no Viewport probe row");
+    let outcome: unknown;
+    act(() => {
+      outcome = row.run();
+    });
+    return outcome;
+  }
+
+  it("the row shows the panel on a page loaded without ?probe", () => {
+    fakeViewport();
+    address("");
+    show();
+    expect(host.querySelector("button")).toBe(null);
+
+    expect(runRow()).toEqual({ kind: "close" });
+    expect(host.textContent).toContain("probe");
+    expect(trace().samples[0]?.ev).toBe("start");
+  });
+
+  it("the row says so, and starts nothing, where no probe is drawn", () => {
+    expect(runRow()).toEqual({ kind: "stay", message: expect.stringContaining("reading view") });
+    fakeViewport();
+    address("");
+    show();
+    expect(host.innerHTML).toBe("");
+  });
+
+  /**
+   * **A reader still gets nothing**: no element and no viewport listener. The
+   * silent recording is the administrator's alone.
+   */
+  it("records nothing and draws nothing for a reader", () => {
+    const vv = fakeViewport();
+    address("");
+    show();
+    expect(host.innerHTML).toBe("");
+    expect(vv.open).toBe(0);
+  });
+
+  it("records silently for the administrator, and nothing can be seen or pressed", () => {
+    session.user = { id: ADMIN_USER_ID_LOCAL };
+    const vv = fakeViewport();
+    address("");
+    show();
+
+    expect(vv.listening.get("resize")).toBe(1);
+    expect(host.querySelectorAll("button").length).toBe(0);
+    expect(host.textContent).toBe("");
+  });
+
+  it("records nothing for the administrator while viewing as another reader", () => {
+    session.user = { id: ADMIN_USER_ID_LOCAL };
+    (window as unknown as Record<string, unknown>)[VIEW_AS] = { nonce: "a".repeat(43) };
+    const vv = fakeViewport();
+    address("");
+    show();
+
+    expect(host.innerHTML).toBe("");
+    expect(vv.open).toBe(0);
+  });
+
+  /**
+   * **The moments before the panel was asked for are in the trace**, which is
+   * the reason for recording silently: opening the command bar focuses a text
+   * field, and on an iPad the keyboard is itself a suspect (Sol P1). Silent,
+   * the newest are kept, so a long session does not fill up on its first
+   * minutes.
+   */
+  it("keeps the newest silent samples, and shows them when the row is run", () => {
+    session.user = { id: ADMIN_USER_ID_LOCAL };
+    const vv = fakeViewport();
+    address("");
+    show();
+
+    for (let i = 0; i < 250; i += 1) vv.move(500, i, "scroll");
+    runRow();
+
+    const samples = trace().samples as unknown as { ev: string; vv: number[] }[];
+    expect(samples.length).toBe(200);
+    expect(samples.at(-1)?.vv[2]).toBe(249);
+  });
+
+  it("records the opening sample once under Strict Mode", () => {
+    fakeViewport();
+    address("?probe=1");
+    act(() => {
+      root.render(createElement(StrictMode, null, createElement(ViewportProbe)));
+    });
+    expect(trace().samples.filter((s) => s.ev === "start").length).toBe(1);
+  });
+
+  /**
+   * **A rotation's numbers are taken again once they have settled**, and a
+   * stream of resizes books one pair, not one pair each (Sol P4).
+   */
+  it("books one coalesced pair of settled samples after a burst of resizes", () => {
+    vi.useFakeTimers();
+    const vv = fakeViewport();
+    address("?probe=1");
+    show();
+
+    for (let i = 0; i < 10; i += 1) vv.move(500 - i, 0, "resize");
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(trace().samples.filter((s) => s.ev === "settled").length).toBe(2);
+  });
+
+  it("cancels settled samples booked before the trace is cleared", () => {
+    vi.useFakeTimers();
+    const vv = fakeViewport();
+    address("?probe=1");
+    show();
+    vv.move(500, 0, "resize");
+
+    expand();
+    press("clear");
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(trace().samples).toEqual([]);
+  });
+
+  it("takes a mark into a full trace", () => {
+    const vv = fakeViewport();
+    address("?probe=1");
+    show();
+    for (let i = 0; i < 700; i += 1) vv.move(500, i, "scroll");
+
+    expand();
+    press("mark");
+    const samples = trace().samples;
+    expect(samples.length).toBe(601);
+    expect(samples.at(-1)?.ev).toBe("mark");
+  });
+});
+
+describe("the switch", () => {
+  it("starts nothing with no probe mounted", () => {
+    expect(startProbe()).toBe(false);
   });
 });

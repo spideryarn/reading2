@@ -68,8 +68,9 @@ of a page mounted for people with no account. The file's own header has the full
   private reading is on the page. Neither can be falsified by the query. Two earlier drafts could
   be: *"an article that is not listed here is one nobody has shared"*, and then *"Every article
   somebody … has made public"*, which is the same completeness claim read from the other end and
-  survived the first fix. A shared article that is archived, or whose revision has no tree or no
-  blocks, or that falls past the row cap, is shared and absent.
+  survived the first fix. A shared article whose revision has no tree or no blocks, or that falls
+  past the row cap, is shared and absent. (An archived one is listed, since 2026-10-31:
+  [library.md § archiving leaves a shared article on the public list](library.md#archive-and-undo-is-the-confirmation).)
 
 Every sentence is in [`src/messages.ts`](../../src/messages.ts) § the shelf of public articles.
 
@@ -222,8 +223,9 @@ What that is, as built (plan
   coordinator as a reader's topics ([shelf-terms.md](shelf-terms.md)), stored under the **site
   account** ([`src/site-account.ts`](../../src/site-account.ts)), an account that owns nothing and
   cannot sign in. Each card is its own work: two readers sharing one article are two cards.
-- **Kept up to date by the requests that change the listing** — share, un-share, archive, restore,
-  delete — after their answer, billed to the site with no article. A share is filed into the pills
+- **Kept up to date by the requests that change the listing** — share, un-share and delete
+  (archive and Put back stopped changing it on 2026-10-31, plan
+  [261031c](../plans/261031c-archiving-leaves-a-public-article-on-the-public-list.md)) — after their answer, billed to the site with no article. A share is filed into the pills
   (about 0.01 of a cent); a full rebuild runs by itself while the public shelf has 20 articles or
   fewer (about 0.1 of a cent at 20). Past 20 a due rebuild waits for **Rebuild on `/admin`**, which
   says when one is due; new shares are still filed.

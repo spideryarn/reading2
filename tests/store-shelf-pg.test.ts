@@ -800,6 +800,39 @@ describe("the Postgres shelf and library search", () => {
       expect(new Date(after as string).getTime()).toBeGreaterThanOrEqual(before.getTime() - 5_000);
     });
 
+    /* **Opening an archived article puts it back on the shelf** — Greg,
+       spya-h8cda9: *"I open an archived article. It should unarchive it."*
+       In the open's own UPDATE, so there is no moment when the open is
+       counted and the archive is not undone. Plan 261030f. */
+    it("puts an archived article back on the shelf when it is opened", async () => {
+      await pgShelfStore.patch(SLUG, { archived: true });
+      /* Pushed into the past rather than trusting two fast writes to land in
+         different milliseconds. */
+      const LONG_AGO = new Date("2026-01-01T00:00:00.000Z");
+      await getDb().update(articles).set({ updatedAt: LONG_AGO }).where(eq(articles.slug, SLUG));
+      const stamped = async () =>
+        (await getDb().select({ at: articles.updatedAt }).from(articles).where(eq(articles.slug, SLUG)))[0]!.at;
+      const archivedStamp = await stamped();
+      await pgShelfStore.recordOpen(SLUG);
+      expect((await pgShelfStore.read(SLUG)).archivedAt).toBeUndefined();
+      /* Un-archiving is a change to the reader's settings, so it moves
+         `updated_at` as Put back does (schema.ts § `updatedAt`)… */
+      const unarchivedStamp = await stamped();
+      expect(unarchivedStamp!.getTime()).toBeGreaterThan(archivedStamp!.getTime());
+      /* …and an open of an article already on the shelf does not. */
+      await pgShelfStore.recordOpen(SLUG);
+      expect((await stamped())!.getTime()).toBe(unarchivedStamp!.getTime());
+    });
+
+    it("puts it back when two tabs open an archived article together", async () => {
+      await pgShelfStore.patch(SLUG, { archived: true });
+      const before = (await pgShelfStore.read(SLUG)).opens;
+      await Promise.all([pgShelfStore.recordOpen(SLUG), pgShelfStore.recordOpen(SLUG)]);
+      const after = await pgShelfStore.read(SLUG);
+      expect(after.archivedAt).toBeUndefined();
+      expect(after.opens).toBe(before + 2);
+    });
+
     it("counts concurrent opens without losing any", async () => {
       /* `opens + 1` is computed by Postgres. A read-then-write from TypeScript
          would have ten tabs all read 0 and all write 1, with every write

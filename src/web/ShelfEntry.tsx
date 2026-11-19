@@ -621,7 +621,7 @@ const TIPS = {
   archive: {
     head: "Archive",
     what: "Takes the article off the shelf, and offers an Undo for nine seconds afterwards.",
-    how: "Nothing is destroyed and the link still opens — it is the listing it leaves, including the public one if you have shared it. The card goes when the server has agreed, not before, so a failed archive cannot leave you looking at a shelf it is missing from.",
+    how: "Nothing is destroyed and the link still opens — it is only your shelf it leaves, and a shared article stays on the public list. The card goes when the server has agreed, not before, so a failed archive cannot leave you looking at a shelf it is missing from.",
   },
   /**
    * **Archive while Include archived is on**, when the card does not leave: the
@@ -632,7 +632,7 @@ const TIPS = {
   archiveShown: {
     head: "Archive",
     what: "Moves the article to the archive, and offers an Undo for nine seconds afterwards.",
-    how: "While Include archived is on, the card stays where it is, marked Archived, with Put back in place of this button; turn Include archived off and it is gone from the shelf. Nothing is destroyed and the link still opens — it is the listing it leaves, including the public one if you have shared it.",
+    how: "While Include archived is on, the card stays where it is, marked Archived, with Put back in place of this button; turn Include archived off and it is gone from the shelf. Nothing is destroyed and the link still opens — it is only your shelf it leaves, and a shared article stays on the public list.",
   },
   restore: {
     head: "Put back",

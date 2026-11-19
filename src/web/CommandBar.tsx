@@ -2575,11 +2575,12 @@ export function CommandBar({
   const dictationBusy = dictate.busy;
   /**
    * **When a press on the ask button would be refused** — `ask`'s own guards,
-   * as the reader can see them: a sentence already out, a run starting, the
-   * microphone on or its words on their way. `ask` is still the lock; this is
+   * as the reader can see them: a sentence already out, a run starting. Not
+   * the microphone: pressed while dictating, the button stops it and presses
+   * Enter once the words land (spya-gjcyq3). `ask` is still the lock; this is
    * the row's `aria-disabled` again, for the same reason.
    */
-  const askRefused = dictationBusy || said?.kind === "asking" || said?.kind === "pending";
+  const askRefused = said?.kind === "asking" || said?.kind === "pending";
   /* **The bar stays mounted when it closes**, so the hook's cleanup never runs
      and a microphone left on would go on recording behind a shut bar.
      `dictation.toggle`, not the field's, which would put the focus back into a
@@ -3018,7 +3019,10 @@ export function CommandBar({
                  question whose answer is now a row that spends: the repeat
                  must not confirm it. */
               if (e.repeat) return;
-              enter();
+              /* Through the field: while dictating, stop the microphone and
+                 press Enter once the words land (`onDone` is `enter`);
+                 idle, `enter` now (spya-gjcyq3). */
+              dictate.submit();
             }
           }}
         />
@@ -3066,7 +3070,7 @@ export function CommandBar({
             refusal. **After the bar's status line, not before it**: the strip
             carries a live region of its own (DictationStrip.tsx), and the
             bar's is the one a reader and every test here looks for first. */}
-        <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} done="enter" />
+        <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} unsent={dictate.unsent} done="enter" />
 
         {shown.length === 0 ? (
           /* Greg's answer 3: no search fallback, no list of everything, and
@@ -3099,7 +3103,12 @@ export function CommandBar({
                        suggestions replace this button; a finger tap must not
                        summon the phone keyboard. */
                     const fromKeyboard = e.detail === 0 && document.activeElement === e.currentTarget;
-                    ask();
+                    /* While dictating it is Enter's touch twin: stop, and
+                       press Enter once the words land — the same function a
+                       double press on Stop runs (Sol's plan review of 261103b,
+                       P3: a phone may have no Enter key on screen). */
+                    if (dictationBusy) dictate.submit();
+                    else ask();
                     if (fromKeyboard && !askRefused) inputRef.current?.focus({ preventScroll: true });
                   }}
                 >

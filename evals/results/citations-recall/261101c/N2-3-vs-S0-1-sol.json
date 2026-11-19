@@ -1,0 +1,434 @@
+[
+ {
+  "id": "10356-a-path:Bryson:1969",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B matches the stated historical use."
+ },
+ {
+  "id": "10356-a-path:Miller:2016",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A states the resemblance more precisely."
+ },
+ {
+  "id": "10356-a-path:Kahneman:2011",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Similarity is stated; inspiration is not."
+ },
+ {
+  "id": "10356-a-path:Kingma:2013",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B identifies VAE as a noisy-latent regularizer."
+ },
+ {
+  "id": "10356-a-path:Bardes:2021",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": true,
+  "relevanceOffB": false,
+  "reason": "B reflects the method actually discussed."
+ },
+ {
+  "id": "10356-a-path:Vaswani:2017",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately describe the suggested use."
+ },
+ {
+  "id": "10356-a-path:Janner:2021",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B adds sequence contents absent from the passage."
+ },
+ {
+  "id": "10356-a-path:Sutton:1991",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both plainly capture the same use."
+ },
+ {
+  "id": "arxiv-1706-0:#1",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "The passage only establishes encoder use."
+ },
+ {
+  "id": "arxiv-1706-0:#2",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "A at least identifies the cited background context."
+ },
+ {
+  "id": "arxiv-1706-0:#3",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately state the motivating finding."
+ },
+ {
+  "id": "arxiv-1706-0:#4",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B attributes multiple listed tasks to one work."
+ },
+ {
+  "id": "arxiv-1706-0:#5",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B stays within the passage's background claim."
+ },
+ {
+  "id": "arxiv-1706-0:#6",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B states both the cited method and comparison."
+ },
+ {
+  "id": "arxiv-1706-0:#7",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately describe the background citation."
+ },
+ {
+  "id": "arxiv-1706-0:#8",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both incorrectly call it the sole prior winner."
+ },
+ {
+  "id": "arxiv-2308-0:Block:1995",
+  "better": "B",
+  "errorA": true,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B gives the terminology used here."
+ },
+ {
+  "id": "arxiv-2308-0:Nagel:1974",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A connects the phrase to its role in the report."
+ },
+ {
+  "id": "arxiv-2308-0:Schwitzgebel:2016",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A more clearly states that the report follows the method."
+ },
+ {
+  "id": "arxiv-2308-0:Searle:1980",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B includes the contrast with the adopted assumption."
+ },
+ {
+  "id": "arxiv-2308-0:Tononi:2015",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B contains the supported contrast but adds an unsupported label."
+ },
+ {
+  "id": "arxiv-2308-0:Birch:2022b",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B identifies the relevant distinction, though not the stated objections."
+ },
+ {
+  "id": "arxiv-2308-0:Michel:2021",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both describe an unrelated use."
+ },
+ {
+  "id": "arxiv-2308-0:Block:2023",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B is complete and directly matches the passage."
+ },
+ {
+  "id": "clark-chalme:McClelland:1986",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A also states why the example matters."
+ },
+ {
+  "id": "clark-chalme:Clark:1989",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately explain the same example."
+ },
+ {
+  "id": "clark-chalme:Kirsh:1995",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately connect the example to outside aids."
+ },
+ {
+  "id": "clark-chalme:Hutchins:1995",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A connects both uses more clearly to the thesis."
+ },
+ {
+  "id": "clark-chalme:Kirsh:1994",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B includes both the timing result and conceptual use."
+ },
+ {
+  "id": "clark-chalme:Putnam:1975",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B mistakenly says Putnam is cited with Putnam."
+ },
+ {
+  "id": "clark-chalme:Burge:1979",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B states the contrast plainly and fully."
+ },
+ {
+  "id": "clark-chalme:Suchman:1987",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A identifies the cited research area."
+ },
+ {
+  "id": "jmlr-v15-sri:Nowlan:1992",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A names the particular anti-overfitting method."
+ },
+ {
+  "id": "jmlr-v15-sri:Xiong:2011",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "A includes the passage's actual use before adding another."
+ },
+ {
+  "id": "jmlr-v15-sri:Salakhutdinov:2008",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B more precisely describes the ideal being approximated."
+ },
+ {
+  "id": "jmlr-v15-sri:Livnat:2010",
+  "better": "B",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B stays closest to the stated evolutionary motivation."
+ },
+ {
+  "id": "jmlr-v15-sri:Vincent:2008",
+  "better": "A",
+  "errorA": false,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B adds an unsupported pretraining use."
+ },
+ {
+  "id": "jmlr-v15-sri:van der Maaten:2013",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A is complete and accurately states the limitation."
+ },
+ {
+  "id": "jmlr-v15-sri:Wang:2013",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B retains the stated purpose with less unsupported detail."
+ },
+ {
+  "id": "jmlr-v15-sri:Chen:2012",
+  "better": "tie",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both accurately describe the related prior work."
+ },
+ {
+  "id": "synesthesia-:#2",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A at least includes the definition supported here."
+ },
+ {
+  "id": "synesthesia-:#3",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B includes the definition supported by the passage."
+ },
+ {
+  "id": "synesthesia-:#4",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": true,
+  "reason": "Neither note describes the use visible here."
+ },
+ {
+  "id": "synesthesia-:#5",
+  "better": "A",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A at least mentions the supported definitional use."
+ },
+ {
+  "id": "synesthesia-:#7",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Neither note addresses the passage's cited claim."
+ },
+ {
+  "id": "synesthesia-:#12",
+  "better": "tie",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "Both give uses unsupported by this passage."
+ },
+ {
+  "id": "synesthesia-:#13",
+  "better": "B",
+  "errorA": true,
+  "errorB": true,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "B is closer to the spatial-number example, but adds an illustration."
+ },
+ {
+  "id": "synesthesia-:#16",
+  "better": "A",
+  "errorA": false,
+  "errorB": false,
+  "relevanceOffA": false,
+  "relevanceOffB": false,
+  "reason": "A most exactly reproduces the proposed developmental link."
+ }
+]

@@ -110,6 +110,9 @@ export const STEP_SHARING = {
      on them (the cited works' own abstract words, for the read), and writes
      its own column. Plan 261024o. */
   situate: { column: "situate", reads: ["bibliography", "citation-blurbs"] },
+  /* Reads the Bibliography (the works the planner is shown) and writes its own
+     column. Never shared: owner only, as `situate`. Plan 261030b. */
+  "sources-digest": { column: "sourcesDigest", reads: ["bibliography"] },
   crossrefs: { column: "crossrefs", reads: [] },
   simple: { column: "simpleSummary", reads: [] },
 } as const satisfies Record<StepName, "exclusive" | SharingPolicy>;

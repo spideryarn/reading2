@@ -68,8 +68,11 @@ it are [keyboard.md § ← / → in Structure](keyboard.md).
 > — Greg, 2026-10-29, `spya-pn7gvw`, in [261029a](../plans/261029a-structure-one-level-deeper.md)
 
 The tree may go one level deeper inside a section the article divides, and not elsewhere
-([granularity-zoom.md § The tree](granularity-zoom.md#the-tree)). Nothing makes such a tree yet —
-the structure step's half is 261029a's stage 2 — but the reading view already draws one:
+([granularity-zoom.md § The tree](granularity-zoom.md#the-tree)). Since 2026-11-01 the structure
+step makes one wherever the author's own sub-headings divide a section, in a second pass after the
+whole-document call ([structure-step.md § Stage 2](structure-step.md#subsections), plan
+[261101d](../plans/261101d-structure-fourth-level-staged-second-call.md)); a long section with no
+sub-headings is not divided. The reading view draws it:
 
 - **The list's fisheye** draws, at its floor, the sub-sections of the section the reader is in;
   the gist goes on the sub-section they are in, and the paragraphs, when drawn, hang off it.

@@ -3,12 +3,18 @@
 Started 2026-10-29, for feedback `spya-pn7gvw` (Greg, admin, suggestion). Worktree
 `fbpn7gvw-structure-one-level-deeper`. Up: [structure.md](../project/structure.md).
 
-**Status: stage 1 (the reading view copes with a deeper tree) is done and on `dev` (7cc28dc53, Sol's
-code-review fixes f44c9da8e). Greg answered [q-vrnbyj](../user-feedback/questions/q-vrnbyj.md) on
-2026-10-29: automatic, and the layout chosen by trying it (§ Greg's answer). Stage 1b (column B
-opens the current section's sub-sections) is built. Stage 2 (the structure step makes the level)
-waits only on the box's OpenRouter key, over its monthly limit until 1 November, so no prompt can be
-measured before then. Queued as `qi-negzd289`.**
+**Status, later on 2026-11-01: the level ships, staged, by
+[261101d](261101d-structure-fourth-level-staged-second-call.md)** — the whole-document call left as
+it is, then a second pass for sections the author's sub-headings divide; every gate passed
+([261101c](../investigations/261101c-structure-fourth-level-staged-measured.md)). Greg's paper's
+re-run waits on the deploy, which is the Overseer's. What follows is the one-call attempt.
+
+**Status before that: stages 1 and 1b (the reading view) are on `dev` and in production. Stage 2 (the prompt)
+was measured on 2026-11-01 and not shipped: two wordings, each left one article with no sections at
+all in both runs, though cost and time passed and the second got the report's paper right. The live
+prompt is `toc/13`; the run now logs sub-sections and swallowed headings. Next step is Greg's,
+[q-k25zfg](../user-feedback/questions/q-k25zfg.md); the write-up is
+[261101b](../investigations/261101b-structure-fourth-level-two-wordings-measured.md).**
 
 ## What Greg asked
 
@@ -274,6 +280,89 @@ Greg picked "automatically" (reply `spya-b2ceuy`):
 
 
 Queued for the Overseer to pick up after 1 November: `overseer-queue.ts` item naming this plan.
+
+### Stage 2 as built (2026-11-01, `qi-negzd289`)
+
+The key had reset (`limit_remaining` $600). Greg said yes to the re-run on 2026-10-29 (reply
+`spya-yg89m9`): *"Yes, re-run this paper."*
+
+**One premise above was wrong, and it changes the opening-prose choice.** The recommended "opening
+prose stays a paragraph directly under the section" cannot be written in the model's answer: the
+answer gives each child a `start` only, and the first child's start is pinned to its parent's
+whatever it says (`src/start-ranges.ts`, the whole-document policy). So a section's sub-sections
+always tile the whole section. Making the bare-paragraph shape would need `buildTree` to split the
+first sub-section at its claimed heading after the fact — new machinery for a cosmetic gain. Taken
+instead, the simpler one, and the shape depth 2 already has (the paper's part 2 opens with the
+model's own "Aims of the Survey" section): **prose before the first sub-heading is a sub-section of
+its own, titled for what it says**. Cost: Structure numbers the author's 2.4.1 as .2 — but its
+numbers are already its own (`qi-ac2z88kt`). The eval counts how often the model folds the opening
+into the first sub-section instead.
+
+**The prompt, `toc/14`.** Only the STRUCTURE block moves; GISTS (whose "deeper than that" band
+already covers depth 3), QUESTIONS (depth 0–1 only, unchanged) and OUTPUT are byte-identical. The
+two bullets "Go 3 levels deep…" and "Do NOT emit leaf nodes… Stop at the section level." become:
+
+```
+- Go 3 levels deep: root (depth 0), chapters (depth 1), sections (depth 2).
+  A section may have ONE more level, sub-sections (depth 3), in two cases only:
+    - the author's own sub-headings divide it: headings deeper than the
+      heading the section starts with. Each of them starts a sub-section.
+    - it is longer than ~10 blocks and its topic clearly shifts inside it.
+      Then propose sub-sections at those shifts.
+  Never divide a section of fewer than 10 blocks at a join you chose
+  yourself. A divided section has at least 2 sub-sections. Most sections
+  have none: a tree where every section is divided is wrong.
+- Which level an author's heading starts: a heading at the same level as
+  the headings that start the neighbouring sections starts a section of its
+  own, never a sub-section, and is never left inside another section. A
+  deeper heading starts a sub-section. The author's headings outrank the
+  5-9 target and the 10-block rule. The 5-9 target does not apply to
+  sub-sections: make as many as the headings or the shifts give.
+- Sub-sections cover their whole section, from its first block. Where a
+  section has prose of its own before its first sub-heading, that prose is
+  its own first sub-section, titled for what it says.
+- Do NOT emit leaf nodes for individual blocks. Stop at the section level,
+  or at the sub-section level where there is one.
+```
+
+**The schema**: `depth2Schema` gains optional `children` of a `depth3Schema` (title, gist, start,
+sourceHeading; no question, no children) — four levels unrolled, as the provider refuses recursion.
+`minItems: 2` is not in the provider's subset, so "at least 2" is the prompt's; a lone sub-section
+that restates its section is already spliced away by `collapseRestatedRungs`.
+
+**On the run**: `src/structure-depth.ts` counts `subsections`, `deepenedSections` and
+`swallowedHeadings` on every finished tree, and the structure step logs them beside
+`droppedHeadings`, so a prompt that stops making the level, or swallows headings, shows in the
+step's log and not only in an eval. The headings fallback (`buildBoundedHeadingTree`) is untouched
+and stays three levels. The long-document slices path sends the same `wholeDocumentRequest` per
+slice, so it gets the level too; nothing there reads depth below 2 (`seamsHeld` reads depths 1–2).
+
+**The measurement**: `evals/structure-fourth-level/`, production's own request, parser and builder
+with its one re-ask, on 14 of Greg's own production articles (blocks read once, read-only, into
+gitignored `data/`): the report's paper, the Rovelli book (1,123 blocks), six whose sections the
+author divides with sub-headings and six with none. Arms separated in time: `before-1`, `before-2`
+on 087a9b260 (`toc/13`), `after-1`, `after-2` on the prompt commit. Per article: cost, latency,
+output tokens, sub-sections, heading-driven vs invented splits, invented splits in sections under 10
+blocks (target 0), sections the author divides that the model left whole, openings own vs folded,
+swallowed headings before and after. **Ship rule as written**: the median article's cost and time
+each grow under ~20%, judged against the spread between `before-1` and `before-2`.
+
+**Revised after Sol's plan review** ([261029a-stage2-plan-review-sol.md](261029a-stage2-plan-review-sol.md),
+all seven findings taken): levels read from numbering as well as tags (the paper tags "2.4.5(a)" h2);
+invented sub-sections need separate topics, not length; an opening sub-section gets a new title and
+no `sourceHeading`; `children` non-empty; quality gates before cost (the paper's hand-checked shape,
+no short invented split, no rise in failures, re-asks or dropped children, and, added when the first
+report missed it, no article left with under half the control's sections); the production re-run
+goes through 261029l's Metadata › Structure button, which already drops an arc that no longer fits.
+
+**Result: not shipped.** Wording 1 (above, as revised) lost every section of 2607-22753 in both runs.
+Wording 2, Opus's (map heading levels onto depths, sections "exactly as before", a divided section in
+the OUTPUT example), got the paper right twice and lost every section of arxiv-2602-11988 in both
+runs. Cost and time passed under both (median +3% / +1%). The call does no thinking at all (0
+reasoning tokens, old prompt included). `src/structure.ts` is `toc/13` again, byte for byte. Kept: the
+run counts, the harness, and both wordings verbatim in `evals/structure-fourth-level/wordings.ts`.
+The numbers and what was ruled out are in
+[261101b](../investigations/261101b-structure-fourth-level-two-wordings-measured.md).
 
 ## Not in this change
 

@@ -254,6 +254,13 @@ const rowsOf = (which: Seeded | undefined) =>
     .where(eq(quizAttempts.articleId, which?.article.articleId ?? ""))
     .orderBy(asc(quizAttempts.createdAt));
 
+/** A marker that finishes, and whose hidden check said `verdict`. */
+const judged = (reply: string, verdict: "right" | "wrong") =>
+  async function* (): AsyncGenerator<QuizMarkEvent> {
+    yield { type: "delta", text: reply };
+    yield { type: "done", reply, model: "test/marker", verdict };
+  };
+
 /** A marker that says two things and finishes. */
 const finishes = (reply: string) =>
   async function* (): AsyncGenerator<QuizMarkEvent> {
@@ -297,8 +304,70 @@ describe("a finished mark is kept", () => {
         answer: "It says the quoted thing.",
         reply: "You have the main point [spya-aaaaaa].",
         answeredAt: row?.createdAt.toISOString(),
+        /* No verdict from this marker: stored as NULL, the neutral three days. */
+        recallAfterDays: 3,
       },
     ]);
+    expect(row?.verdict).toBeNull();
+    expect(marked.done?.recallAfterDays).toBe(3);
+  });
+
+  it("keeps the hidden check's word, and schedules from it on `done` and on the read (plan 261030c)", async () => {
+    script = judged("A mark.", "right");
+    const first = await mark(SLUG, mine?.quiz, 0, "My first answer.");
+    /* Straight off the `done` frame, without waiting for a re-read. */
+    expect(first.done).toMatchObject({ verdict: "right", recallAfterDays: 7 });
+
+    script = judged("Another mark.", "wrong");
+    const second = await mark(SLUG, mine?.quiz, 1, "My other answer.");
+    expect(second.done).toMatchObject({ verdict: "wrong", recallAfterDays: 1 });
+
+    const rows = await rowsOf(mine);
+    expect(rows.map((r) => r.verdict)).toEqual(["right", "wrong"]);
+    const byQuestion = new Map(((await read(SLUG)).json?.attempts ?? []).map((a) => [a.questionId, a]));
+    expect(byQuestion.get(mine?.quiz.questions[0]?.id ?? "")).toMatchObject({ verdict: "right", recallAfterDays: 7 });
+    expect(byQuestion.get(mine?.quiz.questions[1]?.id ?? "")).toMatchObject({ verdict: "wrong", recallAfterDays: 1 });
+  });
+
+  it("judges an edited answer again, and never stores a failed check as wrong", async () => {
+    script = judged("Right first.", "right");
+    await mark(SLUG, mine?.quiz, 0, "First try.");
+    /* The same question answered again, edited: a new row with its own verdict. */
+    script = judged("Wrong this time.", "wrong");
+    const edited = await mark(SLUG, mine?.quiz, 0, "Second try, edited.");
+    expect(edited.done).toMatchObject({ verdict: "wrong", recallAfterDays: 1 });
+    /* And again with the check failing: NULL, neutral, not a third "wrong". */
+    script = finishes("Unjudged.");
+    const unjudged = await mark(SLUG, mine?.quiz, 0, "Third try.");
+    expect(unjudged.done?.verdict).toBeUndefined();
+    expect(unjudged.done?.recallAfterDays).toBe(3);
+
+    expect((await rowsOf(mine)).map((r) => r.verdict)).toEqual(["right", "wrong", null]);
+    const [latest] = (await read(SLUG)).json?.attempts ?? [];
+    expect(latest).toMatchObject({ answer: "Third try.", recallAfterDays: 3 });
+    expect(latest && "verdict" in latest).toBe(false);
+  });
+
+  it("reads the latest answer and its schedule in one order, even for rows in one instant", async () => {
+    /* Two rows with one `created_at`: the id breaks the tie, the same way for
+       the answer and for the schedule (GPT Sol's plan review, F3). */
+    const at = new Date("2026-10-30T10:00:00Z");
+    const base = {
+      articleId: mine?.article.articleId ?? "",
+      batchId: mine?.quiz.batchId ?? "",
+      questionId: mine?.quiz.questions[0]?.id ?? "",
+      question: "q",
+      reply: "r",
+      createdAt: at,
+    };
+    await getDb()
+      .insert(quizAttempts)
+      .values([
+        { ...base, id: "00000000-0000-4000-8000-00000000000a", answer: "older by id", verdict: "right" as const },
+        { ...base, id: "00000000-0000-4000-8000-00000000000b", answer: "newer by id", verdict: "wrong" as const },
+      ]);
+    const [latest] = (await read(SLUG)).json?.attempts ?? [];
+    expect(latest).toMatchObject({ answer: "newer by id", verdict: "wrong", recallAfterDays: 1 });
   });
 
   it("appends a second answer to the same question, and the read returns the later one", async () => {

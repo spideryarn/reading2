@@ -160,7 +160,7 @@ describe("a lens and a claim", () => {
  * for titles and tooltips. A regeneration that rewords the entry keeps the
  * mark; that is the difference from a claim. An idea joined them in plan 261009k.
  */
-describe.each(["glossary", "bibliography", "ideas", "situate"] as const)("a %s entry's origin", (mode) => {
+describe.each(["glossary", "bibliography", "ideas", "situate", "sources-digest", "summary"] as const)("a %s entry's origin", (mode) => {
   const item = (over: { itemId?: string; quote?: string } = {}): ThreadOrigin => ({
     mode,
     itemId: "spya-ttm222",

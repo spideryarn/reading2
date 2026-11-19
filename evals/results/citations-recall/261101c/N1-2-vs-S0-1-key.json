@@ -1,0 +1,242 @@
+{
+  "10356-a-path:Bryson:1969": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "10356-a-path:Miller:2016": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "10356-a-path:Kahneman:2011": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "10356-a-path:Kingma:2013": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "10356-a-path:Bardes:2021": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "10356-a-path:Vaswani:2017": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "10356-a-path:Janner:2021": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "10356-a-path:Sutton:1991": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "held-out"
+  },
+  "arxiv-1706-0:#1": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "arxiv-1706-0:#2": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "arxiv-1706-0:#3": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "arxiv-1706-0:#4": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "arxiv-1706-0:#5": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "arxiv-1706-0:#6": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "arxiv-1706-0:#7": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "held-out"
+  },
+  "arxiv-1706-0:#8": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "arxiv-2308-0:Block:1995": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "arxiv-2308-0:Nagel:1974": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "arxiv-2308-0:Schwitzgebel:2016": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "arxiv-2308-0:Searle:1980": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "arxiv-2308-0:Tononi:2015": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "arxiv-2308-0:Birch:2022b": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "held-out"
+  },
+  "arxiv-2308-0:Michel:2021": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "held-out"
+  },
+  "arxiv-2308-0:Block:2023": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "clark-chalme:McClelland:1986": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "clark-chalme:Clark:1989": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "clark-chalme:Kirsh:1995": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "clark-chalme:Hutchins:1995": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "clark-chalme:Kirsh:1994": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "clark-chalme:Putnam:1975": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "held-out"
+  },
+  "clark-chalme:Burge:1979": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "clark-chalme:Suchman:1987": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "jmlr-v15-sri:Nowlan:1992": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "jmlr-v15-sri:Xiong:2011": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "jmlr-v15-sri:Salakhutdinov:2008": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "jmlr-v15-sri:Livnat:2010": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "jmlr-v15-sri:Vincent:2008": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "jmlr-v15-sri:van der Maaten:2013": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "jmlr-v15-sri:Wang:2013": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "jmlr-v15-sri:Chen:2012": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "synesthesia-:#2": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "synesthesia-:#3": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "seen"
+  },
+  "synesthesia-:#4": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "synesthesia-:#5": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "seen"
+  },
+  "synesthesia-:#7": {
+    "A": "S0-1",
+    "B": "N1-2",
+    "half": "held-out"
+  },
+  "synesthesia-:#12": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "synesthesia-:#13": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  },
+  "synesthesia-:#16": {
+    "A": "N1-2",
+    "B": "S0-1",
+    "half": "held-out"
+  }
+}

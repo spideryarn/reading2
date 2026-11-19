@@ -36,13 +36,37 @@ export function ShelfPublicSection({
   enabled,
   ownerLoaded,
   ownerReady,
+  archiveFailed,
+  retryArchive,
   ...props
 }: ShelfPublicProps & {
   enabled: boolean;
   ownerLoaded: boolean;
+  /** The live owner shelf **and the archive** are in (Library.tsx § `ownKnown`). */
   ownerReady: boolean;
+  /**
+   * The archive could not be loaded, so an article you archived and still
+   * share cannot be told from somebody else's (plan 261031c).
+   */
+  archiveFailed: boolean;
+  retryArchive: () => void;
 }) {
   if (!enabled || !ownerLoaded) return null;
+  if (!ownerReady && archiveFailed) {
+    return (
+      <p role="status" className="tw:mt-10 tw:text-sm tw:text-muted-foreground">
+        Shared articles can't be shown until your archived articles have loaded, or some of your
+        own would look like somebody else's.{" "}
+        <button
+          type="button"
+          onClick={retryArchive}
+          className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight-text tw:underline"
+        >
+          {PUBLIC_SHELF_RETRY}
+        </button>
+      </p>
+    );
+  }
   if (!ownerReady) {
     return (
       <p role="status" className="tw:mt-10 tw:text-sm tw:text-muted-foreground">

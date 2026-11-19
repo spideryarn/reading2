@@ -38,6 +38,10 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
   and learning deeply (2026-10-10): twenty-one topic files and a digest of what they say about each
   mode. Research on how people read goes there, not only here.
 
+- [261030a-sources-digest-how-others-show-a-papers-citations.md](../research/261030a-sources-digest-how-others-show-a-papers-citations.md)
+  — for the Sources digest: how scite, Semantic Reader, Scholar QA and others show a paper's
+  citations, how often citations fail, and what planner–readers–writer pipelines learned
+
 - [261024a-situating-a-paper-in-the-literature-how-researchers-read-and-check.md](../research/261024a-situating-a-paper-in-the-literature-how-researchers-read-and-check.md)
   — how researchers situate a paper, how often citations fail their claims, what changes the
   picture after publication, and what CiteSee and CiteRead learned about notes in the reading view

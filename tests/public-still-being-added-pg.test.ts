@@ -547,10 +547,10 @@ describe("a visitor before publication", { timeout: 60_000 }, () => {
   });
 
   it("says it for an archived article too, as a published archived one reads by its address", async () => {
-    /* Archiving takes an article off listings, not off its own address: a
-       published, archived, shared article is a 200 to whoever has the link
-       (tests/share-link-pg.test.ts). So the same article one step earlier is
-       the 409, and a 404 here would be the odd one out. */
+    /* Archiving changes only the owner's shelf: a published, archived, shared
+       article is both listed and a 200 to whoever has the link
+       (tests/share-link-pg.test.ts; plan 261031c). So the same article one step
+       earlier is the 409, and a 404 here would be the odd one out. */
     expectStillBeingAdded(await article(ARCHIVED), ARCHIVED);
   });
 

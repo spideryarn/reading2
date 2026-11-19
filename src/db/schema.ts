@@ -85,6 +85,7 @@ import type {
   Bibliography,
   CitationBlurbs,
   Situate,
+  SourcesDigest,
   Arc,
   Citation,
   Reception,
@@ -108,6 +109,7 @@ import type {
   NavLabelStatus,
   PaperPassage,
   Quiz,
+  QuizVerdict,
   Quotes,
   SearchHit,
   Timeline,
@@ -361,7 +363,8 @@ export const articles = spideryarn.table("articles", {
    * at all, un-archiving nulls `archived_at`, and switching High-powered AI off
    * nulls `high_power_since`. Those columns keep their meanings exactly.
    *
-   * **Not "the row changed".** An open (`last_opened_at`), a visibility change
+   * **Not "the row changed".** An open (`last_opened_at`) — unless it put an
+   * archived article back, which is un-archiving (plan 261030f) — a visibility change
    * (`article_visibility_changes`), a publish (`public_at`) and the pipeline's
    * own writes each have their own time and do not move this one. Stored, not
    * shown — docs/plans/261003j-store-when-it-happened-timestamp-audit.md.
@@ -1493,6 +1496,18 @@ export const articleRevisions = spideryarn.table(
      * what was searched. No foreign key, on its neighbours' argument.
      */
     situate: jsonb("situate").$type<Situate>(),
+
+    /**
+     * The sources digest — `SourcesDigest`, src/types.ts, written by the
+     * `sources-digest` step (src/sources-digest.ts). Plan 261030b.
+     *
+     * **Owner only**, as `situate`: no public projection reads it and no
+     * visitor DTO carries it. It keeps the leads, each search's outcome, each
+     * reader's report with its checked quotes, and only the quoted spans of
+     * the pages — never their whole extracts. No foreign key, on its
+     * neighbours' argument.
+     */
+    sourcesDigest: jsonb("sources_digest").$type<SourcesDigest>(),
 
     /**
      * **Retired: nothing reads or writes this.** Bibliography's column before
@@ -3747,7 +3762,7 @@ export const revisionStepRuns = spideryarn.table(
          contract, so through the deploy both spellings' rows exist, a trigger
          mirroring each write onto the other. The contract migration deletes
          the old rows and narrows this; the test names the allowance. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','explanations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','explanations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','sources-digest','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -4701,14 +4716,17 @@ export const chatThreads = spideryarn.table(
      * - `origin_mode`: which mode. `reception` (a lens), `sources-claims` (a
      *   claim), `glossary`, `bibliography`, `ideas` and `cite-check` (a
      *   citation's *Does it say that?*: a work id, its citing block and the
-     *   title, plan 261024m) are written; `summary` is reserved. `citations` (a cited work) and `debate` (a claim or a
+     *   title, plan 261024m), `quiz`, `situate`, `sources-digest` and
+     *   `summary` (the digest or a paragraph of it, and a summary level, plan
+     *   261030b) are written. `citations` (a cited work) and `debate` (a claim or a
      *   lens) are origins as written before 2026-10-09 (plan 261009w): still
      *   admitted, never written now, and read as `bibliography`, and by shape
      *   as `sources-claims` or `reception`, by `originFromColumns`
      *   (src/thread-origin.ts). The contract migration rewrites those rows and
      *   narrows the CHECKs below.
      * - `origin_item_id`: the item's id where it has a durable one (a glossary
-     *   entry, a cited work, a literature-search finding). Null for a claim,
+     *   entry, a cited work, a literature-search finding, a digest or a
+     *   summary level). Null for a claim,
      *   which has none. Never dereferenced, and no foreign key: the entry may
      *   be regenerated away.
      * - `origin_block_id`: the block the item sits in. Points at the identity,
@@ -4778,7 +4796,7 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check','situate')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check','situate','sources-digest')`,
     ),
     /* No mode, no origin: the original four shape columns mean nothing
        without it. The two Quiz columns have their own null-safe check below. */
@@ -4808,11 +4826,19 @@ export const chatThreads = spideryarn.table(
     ),
     /* A glossary entry, a cited work, an idea or a literature-search finding
        is an id and a snapshot of its name, with no block and no lens (plan
-       261006d, D2; the idea is plan 261009k, the finding plan 261025h). Spelled null-safe: a row with no mode, or another mode, passes
+       261006d, D2; the idea is plan 261009k, the finding plan 261025h, the
+       digest and a summary level plan 261030b). Spelled null-safe: a row with no mode, or another mode, passes
        without the last arm being read. */
     check(
       "chat_threads_origin_item",
-      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas','situate') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas','situate','sources-digest','summary') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+    ),
+    /* The digest's id, or one paragraph's: `SOURCES_DIGEST_ITEM_ID` in
+       src/types.ts, the same pattern (plan 261030b). Null-safe: another mode
+       passes, and a null id is the item check's to refuse. */
+    check(
+      "chat_threads_origin_sources_digest",
+      sql`${t.originMode} is distinct from 'sources-digest' or ${t.originItemId} ~ '^sd-[0-9]{14,17}(-p[1-9][0-9]{0,2})?$'`,
     ),
     /* A citation's *Does it say that?*: the cited work's id, the citing block,
        and the work's title as a snapshot; no lens (plan 261024m). The item
@@ -4849,14 +4875,14 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.originAttemptId, t.originBatchId, t.originItemId],
       foreignColumns: [quizAttempts.articleId, quizAttempts.id, quizAttempts.batchId, quizAttempts.questionId],
     }),
-    /* `summary`, which the list above reserves, has no shape of its own yet,
-       so it carries none of the shape columns and cannot get one by accident
-       before it is built (plan 261009k, GPT Sol's F8). Null-safe, like the
-       item check: any other mode, or none, passes without the last arm. The
-       lens is the next check's. */
+    /* A summary level's id: `SUMMARY_ITEM_ID` in src/types.ts (plan
+       261030b). Until that plan `summary` was reserved with no shape, and
+       this check refused every shape column (plan 261009k, GPT Sol's F8); the
+       item check above now requires the id and the quote, and this one their
+       form. Null-safe, like the digest's. */
     check(
       "chat_threads_origin_summary",
-      sql`${t.originMode} is distinct from 'summary' or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null)`,
+      sql`${t.originMode} is distinct from 'summary' or ${t.originItemId} ~ '^ss-(brief|fuller)-[0-9]{14,17}$'`,
     ),
     /* Only Reception takes a lens (and `debate`, its word before plan 261009w,
        until the contract migration rewrites those rows and renames this). */
@@ -6399,8 +6425,12 @@ export const commandSuggestionDismissals = spideryarn.table(
  * - **No `owner_id`**, like `reading_time`: only the owner writes, and
  *   ownership is inherited through the article, which also takes these rows
  *   with it when it is deleted.
- * - **No verdict column.** Whether the reader got it right is not stored —
- *   docs/project/quiz.md § What is deliberately not here.
+ * - **`verdict` since 2026-10-30**, Greg's option B on q-m9zkx3 (plan
+ *   docs/plans/261030c-quiz-keeps-right-or-wrong-and-spacing-adapts.md): the
+ *   hidden check's word on this mark, which keeps the deeper green across a
+ *   reload and decides when the question comes back (src/quiz-spacing.ts).
+ *   Until then it was deliberately not stored — docs/project/privacy.md §
+ *   Quiz answers says what changed and what the public page now says.
  *
  * The public read never touches this table.
  */
@@ -6425,10 +6455,21 @@ export const quizAttempts = spideryarn.table(
     answer: text("answer").notNull(),
     /** The mark, exactly as the reader saw it. */
     reply: text("reply").notNull(),
+    /**
+     * **Whether the hidden check judged this answer right** — `QuizVerdict`,
+     * or `NULL` when the check failed or declined, and on every row from
+     * before 2026-10-30. **`NULL` is never "wrong"**: the check is a cheap
+     * model, and a failure of it is not a judgement of the reader
+     * (src/quiz-spacing.ts skips it). No `judged_at`: the check finishes
+     * before the row is inserted, so `created_at` is its time (GPT Sol agreed,
+     * plan 261030c's review).
+     */
+    verdict: text("verdict").$type<QuizVerdict>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check("quiz_attempts_answer_length", sql`char_length(${t.answer}) between 1 and 1000000`),
+    check("quiz_attempts_verdict", sql`${t.verdict} in ('right', 'wrong')`),
     /** The one read: this batch's latest answer to each question. */
     index("quiz_attempts_latest").on(t.articleId, t.batchId, t.questionId, t.createdAt.desc()),
     /* Trivially unique, since `id` is the key: it is what
@@ -8894,7 +8935,7 @@ export const rateLimitEvents = spideryarn.table(
        rewrites or deletes those rows, then drops it from this list. */
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate', 'cite-check')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate', 'cite-check', 'sources-digest')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

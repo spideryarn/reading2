@@ -346,7 +346,9 @@ describe.runIf(usable())("against a real tmux server", () => {
     } catch {
       /* already gone */
     }
-    rmSync(dir, { recursive: true, force: true });
+    // kill-server returns before the server's children have exited, so a stub can still be
+    // writing into `dir` here; retry rather than fail the suite on ENOTEMPTY (2026-11-03).
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   // Three waits can each take 10 seconds; leave room for the shell/tmux work too.

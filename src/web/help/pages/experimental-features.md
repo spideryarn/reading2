@@ -15,6 +15,8 @@ With it on, you get:
 - **Start the whole article again**, on an article’s Metadata page.
 - **Two experiments in [Sources](/help/mode-sources)**, Guess first and Evidence first, at the foot
   of Where it sits.
+- **Digest in [Sources](/help/mode-sources)**, a few paragraphs on what the piece cites and who
+  cites it, beside Where it sits.
 
 These can be slow, get things wrong, or change or vanish in a later release. Turning the switch off
 only hides them: nothing you made is deleted.

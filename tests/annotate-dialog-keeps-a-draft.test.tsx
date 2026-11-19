@@ -51,11 +51,14 @@ const mic = { armed: false, readOnly: false };
    without a MediaRecorder. What is under test is what this box does with those
    two flags, not how they come to be set (tests/dictation-recording.test.ts). */
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({
+  useDictationField: (opts: { onDone?(): unknown }) => ({
     dictation: { supported: false, armed: mic.armed },
     readOnly: mic.readOnly,
     busy: mic.readOnly || mic.armed,
     toggle: () => {},
+    submit: () => {
+      if (!(mic.readOnly || mic.armed)) opts.onDone?.();
+    },
   }),
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({

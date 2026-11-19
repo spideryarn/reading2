@@ -274,6 +274,10 @@ async function quizAttemptRows(
     if (row.id !== undefined && typeof row.id !== "string") {
       throw new Error(`${slug}/quiz-attempts.json attempt ${index} has a non-string id`);
     }
+    /* Absent before plan 261030c, `null` when unjudged: both are no verdict. */
+    if (row.verdict !== undefined && row.verdict !== null && row.verdict !== "right" && row.verdict !== "wrong") {
+      throw new Error(`${slug}/quiz-attempts.json attempt ${index} has an unknown verdict`);
+    }
     return {
       ...(typeof row.id === "string" ? { id: row.id } : {}),
       articleId,
@@ -282,6 +286,7 @@ async function quizAttemptRows(
       question: row.question as string,
       answer: row.answer as string,
       reply: row.reply as string,
+      verdict: row.verdict === "right" || row.verdict === "wrong" ? row.verdict : null,
       createdAt,
     };
   });
